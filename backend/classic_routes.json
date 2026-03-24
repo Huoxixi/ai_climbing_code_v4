@@ -1,0 +1,2463 @@
+[
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F6"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "G8"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "E9"
+      },
+      {
+        "step": 4,
+        "limb": "LH",
+        "hold_id": "B15"
+      },
+      {
+        "step": 5,
+        "limb": "RF",
+        "hold_id": "G8"
+      },
+      {
+        "step": 6,
+        "limb": "RH",
+        "hold_id": "D14"
+      },
+      {
+        "step": 7,
+        "limb": "LF",
+        "hold_id": "C12"
+      },
+      {
+        "step": 8,
+        "limb": "LH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "F9"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "H12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "K8"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "G13"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "K8"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "J15"
+      },
+      {
+        "step": 6,
+        "limb": "LH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "G7"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "J6"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H9"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "G12"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "F11"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "J6"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "H9"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "F13"
+      },
+      {
+        "step": 6,
+        "limb": "RH",
+        "hold_id": "D16"
+      },
+      {
+        "step": 7,
+        "limb": "LF",
+        "hold_id": "G12"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "F11"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "E14"
+      },
+      {
+        "step": 10,
+        "limb": "RH",
+        "hold_id": "E17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "D5"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "D8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H11"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E13"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "D8"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "G1"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "F4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "E15"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "D2"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C10"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "F8"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "D12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "C10"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "B14"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "F8"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E5"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H7"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E5"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E9"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "H7"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "G12"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "E9"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "I15"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "G12"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "B3"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "D2"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "B3"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "F9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H7"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "G12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "F9"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "E15"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "G12"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V0标杆",
+    "original_grade": "6B",
+    "is_benchmark": false
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "H9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "G12"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "H9"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "D14"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "G12"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "A17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E5"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "H7"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "E5"
+      },
+      {
+        "step": 4,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 5,
+        "limb": "RF",
+        "hold_id": "H7"
+      },
+      {
+        "step": 6,
+        "limb": "LH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 7,
+        "limb": "LF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 8,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "B2"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "D4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "B10"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 4,
+        "limb": "LH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 5,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 6,
+        "limb": "RH",
+        "hold_id": "H15"
+      },
+      {
+        "step": 7,
+        "limb": "LF",
+        "hold_id": "B10"
+      },
+      {
+        "step": 8,
+        "limb": "LH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "B7"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "D10"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "D10"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G16"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "I13"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "I5"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "E5"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "G7"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "E9"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J1"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "G8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "B10"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E12"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "C14"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "G8"
+      },
+      {
+        "step": 4,
+        "limb": "LH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C6"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "K6"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "F10"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "C6"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "F10"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "H15"
+      },
+      {
+        "step": 8,
+        "limb": "LF",
+        "hold_id": "I13"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "I17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "B6"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "B2"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "B8"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "B10"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "B6"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "F10"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "B8"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "F13"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "F10"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "I15"
+      },
+      {
+        "step": 8,
+        "limb": "LF",
+        "hold_id": "F13"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "F10"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "C9"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "H15"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "F10"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "J12"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "E12"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "K15"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "H15"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "H10"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "J12"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "H10"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "E14"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "E15"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "J12"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "B17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V1标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F6"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E10"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "J9"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "B15"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "F6"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "A17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "F10"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "C12"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "F10"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "G14"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "G14"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "K11"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "F13"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G16"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "F13"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "G12"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "H9"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "D14"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "A17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "D10"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "K8"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "E10"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "D10"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G14"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "E10"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 8,
+        "limb": "LF",
+        "hold_id": "G14"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "B7"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "C13"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "D11"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "I10"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "E10"
+      },
+      {
+        "step": 4,
+        "limb": "LH",
+        "hold_id": "E17",
+        "is_top": true
+      },
+      {
+        "step": 5,
+        "limb": "RF",
+        "hold_id": "B15"
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "B5"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "I9"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "I10"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "I9"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "J12"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "I10"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "H15"
+      },
+      {
+        "step": 10,
+        "limb": "LF",
+        "hold_id": "J12"
+      },
+      {
+        "step": 11,
+        "limb": "LH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "D9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "G8"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "I4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "B12"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "G8"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "D9"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      },
+      {
+        "step": 6,
+        "limb": "LH",
+        "hold_id": "E15"
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "H10"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "I12"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "E14"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "D16"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "H10"
+      },
+      {
+        "step": 5,
+        "limb": "LF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 6,
+        "limb": "RH",
+        "hold_id": "B17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E5"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "J4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "E5"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "H7"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "H7"
+      },
+      {
+        "step": 7,
+        "limb": "RH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 8,
+        "limb": "LF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 9,
+        "limb": "LH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V2标杆",
+    "original_grade": "6B+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F6"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A17"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "B15"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E12"
+      },
+      {
+        "step": 2,
+        "limb": "LH",
+        "hold_id": "E10"
+      },
+      {
+        "step": 3,
+        "limb": "RF",
+        "hold_id": "J9"
+      },
+      {
+        "step": 4,
+        "limb": "RH",
+        "hold_id": "K4",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "F10"
+      },
+      {
+        "step": 2,
+        "limb": "LH",
+        "hold_id": "C12"
+      },
+      {
+        "step": 3,
+        "limb": "RF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 4,
+        "limb": "RH",
+        "hold_id": "G14"
+      },
+      {
+        "step": 5,
+        "limb": "LF",
+        "hold_id": "F10"
+      },
+      {
+        "step": 6,
+        "limb": "LH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 7,
+        "limb": "RF",
+        "hold_id": "C12"
+      },
+      {
+        "step": 8,
+        "limb": "RH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "C11"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "I9"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "D14"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H13"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "A17",
+        "is_top": true
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 3,
+        "limb": "RF",
+        "hold_id": "K4"
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "7A",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E6"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "F4"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A8"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "E11"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "E6"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "K11"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "F13"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "E11"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "G16"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "F13"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "H9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E9"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "H4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "D11"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "H9"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "E9"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "E17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "H10"
+      },
+      {
+        "step": 2,
+        "limb": "LF",
+        "hold_id": "H10"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "E12"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "J7"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "E13"
+      },
+      {
+        "step": 6,
+        "limb": "LF",
+        "hold_id": "E12"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "A13"
+      },
+      {
+        "step": 8,
+        "limb": "RF",
+        "hold_id": "E13"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "E17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C+",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "D9"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "H13"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "K7"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "E17"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "D9"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "G17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "7A",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "E7"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "H8"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 1,
+        "limb": "RH",
+        "hold_id": "K8"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "H8"
+      },
+      {
+        "step": 3,
+        "limb": "LH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "E7"
+      },
+      {
+        "step": 5,
+        "limb": "RH",
+        "hold_id": "J12"
+      },
+      {
+        "step": 6,
+        "limb": "RF",
+        "hold_id": "K8"
+      },
+      {
+        "step": 7,
+        "limb": "LH",
+        "hold_id": "E14"
+      },
+      {
+        "step": 8,
+        "limb": "LF",
+        "hold_id": "I13"
+      },
+      {
+        "step": 9,
+        "limb": "RH",
+        "hold_id": "D17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "7A",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "C4"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "D10"
+      },
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "A4"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "C4"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "A8"
+      },
+      {
+        "step": 2,
+        "limb": "RF",
+        "hold_id": "K8"
+      },
+      {
+        "step": 3,
+        "limb": "RH",
+        "hold_id": "E10"
+      },
+      {
+        "step": 4,
+        "limb": "LF",
+        "hold_id": "D10"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "G14"
+      },
+      {
+        "step": 6,
+        "limb": "RH",
+        "hold_id": "I13"
+      },
+      {
+        "step": 7,
+        "limb": "RF",
+        "hold_id": "E10"
+      },
+      {
+        "step": 8,
+        "limb": "LH",
+        "hold_id": "K17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C",
+    "is_benchmark": true
+  },
+  {
+    "route_name": "Unnamed",
+    "beta_sequence": [
+      {
+        "step": 0,
+        "limb": "LF",
+        "hold_id": "F6"
+      },
+      {
+        "step": 0,
+        "limb": "RF",
+        "hold_id": "K4"
+      },
+      {
+        "step": 0,
+        "limb": "LH",
+        "hold_id": "F13"
+      },
+      {
+        "step": 0,
+        "limb": "RH",
+        "hold_id": "I10"
+      },
+      {
+        "step": 1,
+        "limb": "LH",
+        "hold_id": "D16"
+      },
+      {
+        "step": 2,
+        "limb": "RH",
+        "hold_id": "B17"
+      },
+      {
+        "step": 3,
+        "limb": "LF",
+        "hold_id": "F13"
+      },
+      {
+        "step": 4,
+        "limb": "RF",
+        "hold_id": "I10"
+      },
+      {
+        "step": 5,
+        "limb": "LH",
+        "hold_id": "B17",
+        "is_top": true
+      }
+    ],
+    "difficulty_label": "V3标杆",
+    "original_grade": "6C+",
+    "is_benchmark": true
+  }
+]

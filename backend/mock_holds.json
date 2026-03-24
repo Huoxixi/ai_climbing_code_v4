@@ -1,0 +1,2170 @@
+[
+  {
+    "id": "A1",
+    "x": "A",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "B1",
+    "x": "B",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C1",
+    "x": "C",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D1",
+    "x": "D",
+    "y": 1,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "E1",
+    "x": "E",
+    "y": 1,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F1",
+    "x": "F",
+    "y": 1,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G1",
+    "x": "G",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "H1",
+    "x": "H",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "I1",
+    "x": "I",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J1",
+    "x": "J",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K1",
+    "x": "K",
+    "y": 1,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A2",
+    "x": "A",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B2",
+    "x": "B",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C2",
+    "x": "C",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D2",
+    "x": "D",
+    "y": 2,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "E2",
+    "x": "E",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F2",
+    "x": "F",
+    "y": 2,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "G2",
+    "x": "G",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H2",
+    "x": "H",
+    "y": 2,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I2",
+    "x": "I",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "J2",
+    "x": "J",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K2",
+    "x": "K",
+    "y": 2,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A3",
+    "x": "A",
+    "y": 3,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B3",
+    "x": "B",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "C3",
+    "x": "C",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D3",
+    "x": "D",
+    "y": 3,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E3",
+    "x": "E",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "F3",
+    "x": "F",
+    "y": 3,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G3",
+    "x": "G",
+    "y": 3,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "H3",
+    "x": "H",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "I3",
+    "x": "I",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "J3",
+    "x": "J",
+    "y": 3,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K3",
+    "x": "K",
+    "y": 3,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A4",
+    "x": "A",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "B4",
+    "x": "B",
+    "y": 4,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C4",
+    "x": "C",
+    "y": 4,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D4",
+    "x": "D",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "E4",
+    "x": "E",
+    "y": 4,
+    "hold_type": "Foot",
+    "usable_as": [
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F4",
+    "x": "F",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "G4",
+    "x": "G",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "H4",
+    "x": "H",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "I4",
+    "x": "I",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "J4",
+    "x": "J",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K4",
+    "x": "K",
+    "y": 4,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "A5",
+    "x": "A",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B5",
+    "x": "B",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C5",
+    "x": "C",
+    "y": 5,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D5",
+    "x": "D",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "E5",
+    "x": "E",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F5",
+    "x": "F",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G5",
+    "x": "G",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H5",
+    "x": "H",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "I5",
+    "x": "I",
+    "y": 5,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "J5",
+    "x": "J",
+    "y": 5,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K5",
+    "x": "K",
+    "y": 5,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A6",
+    "x": "A",
+    "y": 6,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B6",
+    "x": "B",
+    "y": 6,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C6",
+    "x": "C",
+    "y": 6,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "D6",
+    "x": "D",
+    "y": 6,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "E6",
+    "x": "E",
+    "y": 6,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "F6",
+    "x": "F",
+    "y": 6,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G6",
+    "x": "G",
+    "y": 6,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H6",
+    "x": "H",
+    "y": 6,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "I6",
+    "x": "I",
+    "y": 6,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J6",
+    "x": "J",
+    "y": 6,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K6",
+    "x": "K",
+    "y": 6,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A7",
+    "x": "A",
+    "y": 7,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "B7",
+    "x": "B",
+    "y": 7,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C7",
+    "x": "C",
+    "y": 7,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D7",
+    "x": "D",
+    "y": 7,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "E7",
+    "x": "E",
+    "y": 7,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "F7",
+    "x": "F",
+    "y": 7,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G7",
+    "x": "G",
+    "y": 7,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "H7",
+    "x": "H",
+    "y": 7,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "I7",
+    "x": "I",
+    "y": 7,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "J7",
+    "x": "J",
+    "y": 7,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "K7",
+    "x": "K",
+    "y": 7,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A8",
+    "x": "A",
+    "y": 8,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "B8",
+    "x": "B",
+    "y": 8,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C8",
+    "x": "C",
+    "y": 8,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "D8",
+    "x": "D",
+    "y": 8,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E8",
+    "x": "E",
+    "y": 8,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "F8",
+    "x": "F",
+    "y": 8,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "G8",
+    "x": "G",
+    "y": 8,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "H8",
+    "x": "H",
+    "y": 8,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I8",
+    "x": "I",
+    "y": 8,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "J8",
+    "x": "J",
+    "y": 8,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "K8",
+    "x": "K",
+    "y": 8,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A9",
+    "x": "A",
+    "y": 9,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "B9",
+    "x": "B",
+    "y": 9,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "C9",
+    "x": "C",
+    "y": 9,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D9",
+    "x": "D",
+    "y": 9,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E9",
+    "x": "E",
+    "y": 9,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F9",
+    "x": "F",
+    "y": 9,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G9",
+    "x": "G",
+    "y": 9,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H9",
+    "x": "H",
+    "y": 9,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "I9",
+    "x": "I",
+    "y": 9,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J9",
+    "x": "J",
+    "y": 9,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K9",
+    "x": "K",
+    "y": 9,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A10",
+    "x": "A",
+    "y": 10,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "B10",
+    "x": "B",
+    "y": 10,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C10",
+    "x": "C",
+    "y": 10,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D10",
+    "x": "D",
+    "y": 10,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "E10",
+    "x": "E",
+    "y": 10,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "F10",
+    "x": "F",
+    "y": 10,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G10",
+    "x": "G",
+    "y": 10,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "H10",
+    "x": "H",
+    "y": 10,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I10",
+    "x": "I",
+    "y": 10,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "J10",
+    "x": "J",
+    "y": 10,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "K10",
+    "x": "K",
+    "y": 10,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A11",
+    "x": "A",
+    "y": 11,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B11",
+    "x": "B",
+    "y": 11,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "C11",
+    "x": "C",
+    "y": 11,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "D11",
+    "x": "D",
+    "y": 11,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E11",
+    "x": "E",
+    "y": 11,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F11",
+    "x": "F",
+    "y": 11,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "G11",
+    "x": "G",
+    "y": 11,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "H11",
+    "x": "H",
+    "y": 11,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "I11",
+    "x": "I",
+    "y": 11,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "J11",
+    "x": "J",
+    "y": 11,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "K11",
+    "x": "K",
+    "y": 11,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A12",
+    "x": "A",
+    "y": 12,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "B12",
+    "x": "B",
+    "y": 12,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "C12",
+    "x": "C",
+    "y": 12,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "D12",
+    "x": "D",
+    "y": 12,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "E12",
+    "x": "E",
+    "y": 12,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F12",
+    "x": "F",
+    "y": 12,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G12",
+    "x": "G",
+    "y": 12,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "H12",
+    "x": "H",
+    "y": 12,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I12",
+    "x": "I",
+    "y": 12,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J12",
+    "x": "J",
+    "y": 12,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "K12",
+    "x": "K",
+    "y": 12,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "A13",
+    "x": "A",
+    "y": 13,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "B13",
+    "x": "B",
+    "y": 13,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C13",
+    "x": "C",
+    "y": 13,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D13",
+    "x": "D",
+    "y": 13,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "E13",
+    "x": "E",
+    "y": 13,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F13",
+    "x": "F",
+    "y": 13,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "G13",
+    "x": "G",
+    "y": 13,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "H13",
+    "x": "H",
+    "y": 13,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I13",
+    "x": "I",
+    "y": 13,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J13",
+    "x": "J",
+    "y": 13,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "K13",
+    "x": "K",
+    "y": 13,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "A14",
+    "x": "A",
+    "y": 14,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B14",
+    "x": "B",
+    "y": 14,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "C14",
+    "x": "C",
+    "y": 14,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D14",
+    "x": "D",
+    "y": 14,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "E14",
+    "x": "E",
+    "y": 14,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F14",
+    "x": "F",
+    "y": 14,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "G14",
+    "x": "G",
+    "y": 14,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "H14",
+    "x": "H",
+    "y": 14,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "I14",
+    "x": "I",
+    "y": 14,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "J14",
+    "x": "J",
+    "y": 14,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "K14",
+    "x": "K",
+    "y": 14,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "A15",
+    "x": "A",
+    "y": 15,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "B15",
+    "x": "B",
+    "y": 15,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "C15",
+    "x": "C",
+    "y": 15,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "D15",
+    "x": "D",
+    "y": 15,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "E15",
+    "x": "E",
+    "y": 15,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F15",
+    "x": "F",
+    "y": 15,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G15",
+    "x": "G",
+    "y": 15,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "H15",
+    "x": "H",
+    "y": 15,
+    "hold_type": "Pinch",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "I15",
+    "x": "I",
+    "y": 15,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "J15",
+    "x": "J",
+    "y": 15,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K15",
+    "x": "K",
+    "y": 15,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "A16",
+    "x": "A",
+    "y": 16,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "B16",
+    "x": "B",
+    "y": 16,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C16",
+    "x": "C",
+    "y": 16,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "D16",
+    "x": "D",
+    "y": 16,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E16",
+    "x": "E",
+    "y": 16,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F16",
+    "x": "F",
+    "y": 16,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G16",
+    "x": "G",
+    "y": 16,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H16",
+    "x": "H",
+    "y": 16,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "I16",
+    "x": "I",
+    "y": 16,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "J16",
+    "x": "J",
+    "y": 16,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K16",
+    "x": "K",
+    "y": 16,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "A17",
+    "x": "A",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "B17",
+    "x": "B",
+    "y": 17,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "C17",
+    "x": "C",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "D17",
+    "x": "D",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "E17",
+    "x": "E",
+    "y": 17,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "F17",
+    "x": "F",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "G17",
+    "x": "G",
+    "y": 17,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "H17",
+    "x": "H",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "I17",
+    "x": "I",
+    "y": 17,
+    "hold_type": "Sloper",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "J17",
+    "x": "J",
+    "y": 17,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "K17",
+    "x": "K",
+    "y": 17,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 0
+  },
+  {
+    "id": "A18",
+    "x": "A",
+    "y": 18,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "B18",
+    "x": "B",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "C18",
+    "x": "C",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "D18",
+    "x": "D",
+    "y": 18,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "E18",
+    "x": "E",
+    "y": 18,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "F18",
+    "x": "F",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 315
+  },
+  {
+    "id": "G18",
+    "x": "G",
+    "y": 18,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "H18",
+    "x": "H",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "I18",
+    "x": "I",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 90
+  },
+  {
+    "id": "J18",
+    "x": "J",
+    "y": 18,
+    "hold_type": "Jug",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  },
+  {
+    "id": "K18",
+    "x": "K",
+    "y": 18,
+    "hold_type": "Crimp",
+    "usable_as": [
+      "hand",
+      "foot"
+    ],
+    "rotation": 45
+  }
+]
