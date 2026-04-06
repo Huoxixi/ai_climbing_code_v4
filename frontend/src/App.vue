@@ -1,101 +1,139 @@
 <template>
   <div class="container">
-    <h1>🧗‍♂️ 智行通途 (AI 智能攀岩定线 V6.0)</h1>
-    <p class="subtitle">商用级数字双生岩板 | 有限岩点极简主义 | 物理规则校验</p>
+    <h1>🧗‍♂️ 智行通途 (AI 智能攀岩定线 V7.5 拟真版)</h1>
+    <p class="subtitle">商用级数字双生岩板 | 真实比例矢量材质 | 物理时序回放</p>
 
     <div class="control-panel">
-      <div class="input-group">
-        <label>攀岩者身高 (cm)</label>
-        <input type="number" v-model="profile.height" placeholder="175"/>
+      <div class="profile-section">
+        <h3 class="section-title">👤 攀岩者参数</h3>
+        <div class="input-grid">
+          <div class="input-group">
+            <label>身高 (cm)</label>
+            <input type="number" v-model="profile.height" placeholder="175"/>
+          </div>
+          <div class="input-group">
+            <label>臂展 (cm)</label>
+            <input type="number" v-model="profile.arm_span" placeholder="180"/>
+          </div>
+          <div class="input-group full-width">
+            <label>目标难度</label>
+            <select v-model="profile.target_difficulty">
+              <option value="V0">V0 (新手 - 稳定爬梯，大把手)</option>
+              <option value="V1">V1 (入门 - 重心转移，大把手为主)</option>
+              <option value="V2">V2 (基础 - 引入抠口与大跨度)</option>
+              <option value="V3">V3 (进阶 - 动态发力与摩擦点折叠)</option> 
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="input-group">
-        <label>攀岩者臂展 (cm)</label>
-        <input type="number" v-model="profile.arm_span" placeholder="180"/>
+
+      <div class="recipe-section">
+        <h3 class="section-title">🧪 定线材料配方</h3>
+        <div class="recipe-grid">
+          <div v-for="type in holdTypes" :key="type" class="recipe-item">
+            <div class="recipe-label">
+              <span class="color-dot" :style="{ backgroundColor: getShapeColor(type) }"></span>
+              {{ type }}
+            </div>
+            <input type="number" v-model.number="recipe[type]" min="0" max="15" />
+          </div>
+        </div>
       </div>
-      <div class="input-group">
-        <label>目标难度</label>
-        <select v-model="profile.target_difficulty">
-          <option value="V0">V0 (新手启蒙 - 如爬梯般稳定)</option>
-          <option value="V1">V1 (入门进阶 - 需注意重心转移)</option>
-          <option value="V2">V2 (基础挑战 - 引入少量侧拉或小跨度)</option>
-          <option value="V3">V3 进阶挑战 (动态发力)</option> 
-        </select>
-      </div>
-      <button @click="generateRoute" :disabled="loading" class="primary-btn">
-        {{ loading ? '🧠 深度演算与纠错中...' : '🚀 生成商用路线' }}
-      </button>
     </div>
 
-    <div v-if="error" class="error-box">⚠️ {{ error }}</div>
+    <div class="action-bar">
+      <button @click="generateRoute" :disabled="loading" class="primary-btn">
+        {{ loading ? '🧠 严格演算与纠错中...' : '🚀 生成商用路线' }}
+      </button>
+      <div v-if="error" class="error-box">⚠️ {{ error }}</div>
+    </div>
 
-    <div class="result-area" v-if="routeSteps.length > 0 || routeName">
-      <h2>📍 路线演算报告: <span class="route-name">{{ routeName || '未命名挑战' }}</span></h2>
+    <div class="result-area" v-if="routeData">
+      <div class="result-header">
+        <h2>📍 路线报告: <span class="route-name">{{ routeData.route_name || '未命名挑战' }}</span></h2>
+        <div class="playback-controls">
+          <label>动作演示: Step {{ currentStep }} / {{ maxStep }}</label>
+          <input type="range" v-model.number="currentStep" min="0" :max="maxStep" class="slider" />
+        </div>
+      </div>
       
       <div class="visual-dashboard">
         <div class="timeline">
           <div class="scroll-container">
-            <div 
-              class="step-card" 
-              v-for="movement in routeSteps" 
-              :key="movement.step + '-' + movement.limb"
-              :class="{ 'start-step': movement.step === 0, 'top-step': movement.is_top }"
-            >
+            <div class="step-card" v-for="m in routeSteps" :key="m.step + '-' + m.limb"
+                 :class="{ 'start-step': m.step === 0, 'top-step': m.is_top, 'active-step': m.step === currentStep }"
+                 @click="currentStep = m.step">
               <div class="step-header">
-                <span class="step-num">{{ movement.step === 0 ? 'START' : `Step ${movement.step}` }}</span>
-                <span class="limb-badge" :class="movement.limb">{{ movement.limb }}</span>
-                <span class="target-hold">➔ {{ movement.hold_id }}</span>
+                <span class="step-num">{{ m.step === 0 ? 'START' : `Step ${m.step}` }}</span>
+                <span class="limb-badge" :class="m.limb">{{ m.limb }}</span>
+                <span class="target-hold">➔ {{ m.hold_id }}</span>
+                <span class="shape-badge" :style="{ color: getShapeColor(m.shape_type) }">{{ m.shape_type || 'Jug' }}</span>
               </div>
-              <p class="reasoning">💡 {{ movement.intent }}</p>
+              <p class="reasoning">💡 {{ m.intent || '起步稳固重心' }}</p>
             </div>
           </div>
         </div>
 
         <div class="wall-container">
           <div class="board-wrapper">
-            
             <div class="y-axis-area">
               <div class="y-axis-inner">
-                <span 
-                  v-for="y in 18" 
-                  :key="'y-'+y" 
-                  class="y-label"
-                  :style="{ bottom: `${8 + ((y-1) / 17) * 84}%` }"
-                >
-                  {{ y }}
-                </span>
+                <span v-for="y in 18" :key="'y-'+y" class="y-label" :style="{ bottom: `${8 + ((y-1) / 17) * 84}%` }">{{ y }}</span>
               </div>
             </div>
             
             <div class="wall-main-col">
-              
               <div class="wall-and-ruler">
                 <div class="wall">
-                  
                   <div class="grid-layer">
                     <template v-for="y in 18" :key="'hole-row-'+y">
-                      <div 
-                        v-for="(char, xIndex) in 'ABCDEFGHIJK'.split('')" 
-                        :key="'hole-'+char+y"
-                        class="t-nut-hole"
-                        :style="{ left: `${8 + (xIndex/10)*84}%`, bottom: `${8 + ((y-1)/17)*84}%` }"
-                      ></div>
+                      <div v-for="(char, xIndex) in 'ABCDEFGHIJK'.split('')" :key="'hole-'+char+y"
+                        class="t-nut-hole" :style="{ left: `${8 + (xIndex/10)*84}%`, bottom: `${8 + ((y-1)/17)*84}%` }">
+                      </div>
                     </template>
                   </div>
                   
-                  <div 
-                    v-for="hold in routeHolds" 
-                    :key="'hold-'+hold.id"
-                    class="mounted-hold"
-                    :class="[
-                      hold.type === 'Jug' || hold.type === 'Sloper' ? 'size-large' : 'size-small',
-                      'type-' + hold.type,
-                      { 'is-start-hold': isStartHold(hold.id), 'is-top-hold': isTopHold(hold.id) }
-                    ]"
+                  <div v-for="hold in uniqueRouteHolds" :key="'hold-'+hold.id"
+                    class="mounted-hold" :class="{ 'is-start': hold.isStart, 'is-top': hold.isTop }"
                     :style="getCoordinateStyle(hold.id)"
                   >
-                    <div class="hold-limbs-row" v-if="hold.type !== 'Sloper'">
-                      <span v-for="limb in getLimbsOnHold(hold.id)" :key="limb" class="limb-dot" :class="limb" :title="getChineseLimb(limb)"></span>
+                    <div class="hold-shape-wrapper" 
+                         :style="{ color: getShapeColor(hold.shape_type), transform: `rotate(${getHoldRotation(hold.id, hold.shape_type)}deg)` }">
+                      <svg viewBox="0 0 100 100" class="organic-hold">
+                        <defs>
+                          <filter id="3d-bevel" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="2" dy="4" stdDeviation="3" flood-opacity="0.6" />
+                            <feComponentTransfer><feFuncA type="linear" slope="0.9"/></feComponentTransfer>
+                          </filter>
+                        </defs>
+                        
+                        <g filter="url(#3d-bevel)">
+                          <path v-if="hold.shape_type === 'Jug'" fill="currentColor" d="M 15 30 Q 50 10 85 30 L 85 70 Q 50 90 15 70 Z" />
+                          
+                          <path v-else-if="hold.shape_type === 'Crimp'" fill="currentColor" d="M 20 40 Q 50 35 80 40 L 75 60 Q 50 65 25 60 Z" />
+                          
+                          <circle v-else-if="hold.shape_type === 'Sloper'" cx="50" cy="50" r="42" fill="currentColor" opacity="0.85" />
+                          
+                          <rect v-else-if="hold.shape_type === 'Pinch'" x="35" y="15" width="30" height="70" rx="15" fill="currentColor" />
+                          
+                          <g v-else-if="hold.shape_type === 'Pocket'">
+                            <circle cx="50" cy="50" r="32" fill="currentColor" />
+                            <circle cx="50" cy="55" r="14" fill="#111" /> </g>
+
+                          <polygon v-else-if="hold.shape_type === 'Foot'" fill="currentColor" points="50,35 65,50 50,65 35,50" />
+                          
+                          <path v-else fill="currentColor" d="M 15 30 Q 50 10 85 30 L 85 70 Q 50 90 15 70 Z" />
+                        </g>
+
+                        <circle v-if="hold.shape_type !== 'Pocket'" cx="50" cy="48" r="3.5" fill="#111" />
+                        <circle v-if="hold.shape_type === 'Pocket'" cx="50" cy="25" r="3" fill="#111" />
+                      </svg>
                     </div>
+                  </div>
+
+                  <div v-for="(limbData, limbName) in currentLimbs" :key="'limb-'+limbName"
+                       class="limb-marker" :class="limbName.toLowerCase()" :style="getCoordinateStyle(limbData.id)">
+                    {{ limbName }}
                   </div>
                 </div>
 
@@ -110,23 +148,9 @@
 
               <div class="x-axis-area">
                 <div class="x-axis-inner">
-                  <span 
-                    v-for="(char, xIndex) in 'ABCDEFGHIJK'.split('')" 
-                    :key="'x-'+char"
-                    class="x-label"
-                    :style="{ left: `${8 + (xIndex / 10) * 84}%` }"
-                  >
-                    {{ char }}
-                  </span>
+                  <span v-for="(char, xIndex) in 'ABCDEFGHIJK'.split('')" :key="'x-'+char" class="x-label" :style="{ left: `${8 + (xIndex / 10) * 84}%` }">{{ char }}</span>
                 </div>
               </div>
-
-              <div class="scale-info">
-                <span class="scale-item">📐 物理比例尺：1 格 = 20 cm</span>
-                <span class="scale-item limit">🧗‍♂️ 当前臂展极限跨度 ≈ {{ Math.floor(profile.arm_span / 20) }} 格</span>
-              </div>
-
-              <p class="wall-caption">🧗‍♀️ 虚拟岩板孪生映射 (11x18 标准网格孔位)</p>
             </div>
           </div>
         </div>
@@ -136,261 +160,139 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import axios from 'axios'
 
 const profile = ref({ height: 175, arm_span: 180, target_difficulty: 'V1' })
+const holdTypes = ['Jug', 'Crimp', 'Sloper', 'Pinch', 'Pocket', 'Foot']
+const recipe = reactive({ Jug: 4, Crimp: 0, Sloper: 0, Pinch: 0, Pocket: 0, Foot: 3 })
+
 const loading = ref(false)
 const error = ref('')
-const routeSteps = ref([])
-const routeName = ref('')
-
-const getChineseLimb = (limbCode) => {
-  const map = { 'LH': '左手', 'RH': '右手', 'LF': '左脚', 'RF': '右脚' };
-  return map[limbCode] || limbCode;
-}
+const routeData = ref(null)
+const currentStep = ref(0)
 
 const generateRoute = async () => {
-  loading.value = true
-  error.value = ''
-  routeSteps.value = []
-  
+  loading.value = true; error.value = ''; routeData.value = null; currentStep.value = 0
+  const cleanRecipe = {}
+  Object.keys(recipe).forEach(k => { if (recipe[k] > 0) cleanRecipe[k] = recipe[k] })
   try {
-    const payload = {
-      climber: { height_cm: profile.value.height, span_cm: profile.value.arm_span },
-      target_difficulty: profile.value.target_difficulty
-    };
-    
-    const response = await axios.post('http://106.14.216.81:8000/api/generate', payload);
-    
+    const apiUrl = import.meta.env.VITE_API_BASE_URL ? `${import.meta.env.VITE_API_BASE_URL}/api/generate` : 'http://106.14.216.81:8000/api/generate'
+    const response = await axios.post(apiUrl, { climber: { height_cm: profile.value.height, span_cm: profile.value.arm_span }, target_difficulty: profile.value.target_difficulty, recipe: cleanRecipe })
     if (response.data && response.data.beta_sequence) {
-      routeSteps.value = response.data.beta_sequence;
-      routeName.value = response.data.route_name || '未命名路线';
-    } else {
-      error.value = "未获取到路线序列，请检查后端返回格式";
-    }
-  } catch (err) {
-    error.value = `请求失败！可能是大模型多次反思失败，或数据校验被拦截（物理不合规）。报错详情: ${err.message}`
-  } finally {
-    loading.value = false
-  }
+      routeData.value = response.data
+      let step = 0; const interval = setInterval(() => { if (step < maxStep.value) { currentStep.value = ++step; } else { clearInterval(interval); } }, 800);
+    } else { error.value = "未获取到路线序列，请检查后端返回格式" }
+  } catch (err) { error.value = `拦截！报错: ${err.response?.data?.detail || err.message}` } 
+  finally { loading.value = false }
 }
 
-// 物理世界映射公式
-const pxPerCm = 580 / 360; 
-const referencePersonHeight = computed(() => {
-  const h = profile.value.height || 175; 
-  return `${h * pxPerCm}px`;
-});
+const routeSteps = computed(() => routeData.value?.beta_sequence || [])
+const maxStep = computed(() => routeSteps.value.length ? Math.max(...routeSteps.value.map(b => b.step)) : 0)
 
-// 视觉岩点生成逻辑 (优化了 Crimp 的分布)
-const getHoldVisualType = (holdId) => {
-  if (!holdId) return 'Jug';
-  const y = parseInt(holdId.substring(1));
-  const charCode = holdId.charCodeAt(0);
-  const hash = y + charCode;
-
-  if (y <= 6) {
-    const startPool = ['Jug', 'Pinch', 'Sloper', 'Jug']; 
-    return startPool[hash % startPool.length];
-  }
-  if (y >= 16) {
-    return hash % 2 === 0 ? 'Crimp' : 'Sloper';
-  }
-  const midPool = ['Jug', 'Sloper', 'Pinch', 'Jug', 'Sloper', 'Pinch', 'Crimp']; 
-  return midPool[hash % midPool.length];
-}
-
-const routeHolds = computed(() => {
-  const uniqueHolds = new Map();
+const uniqueRouteHolds = computed(() => {
+  if (!routeSteps.value.length) return []
+  const holdsMap = new Map()
   routeSteps.value.forEach(step => {
-    if (!uniqueHolds.has(step.hold_id)) {
-      uniqueHolds.set(step.hold_id, {
-        id: step.hold_id,
-        type: getHoldVisualType(step.hold_id),
-        steps: [step.step],
-        movements: [step]
-      });
-    } else {
-      const hold = uniqueHolds.get(step.hold_id);
-      if (!hold.steps.includes(step.step)) hold.steps.push(step.step);
-      hold.movements.push(step);
-    }
-  });
-  return Array.from(uniqueHolds.values());
-});
+    if (!holdsMap.has(step.hold_id)) holdsMap.set(step.hold_id, { id: step.hold_id, shape_type: step.shape_type || 'Jug', isStart: step.step === 0, isTop: step.is_top || false })
+    else if (step.is_top) holdsMap.get(step.hold_id).isTop = true
+  })
+  return Array.from(holdsMap.values())
+})
 
-const isStartHold = (holdId) => routeSteps.value.some(s => s.hold_id === holdId && s.step === 0);
-const isTopHold = (holdId) => routeSteps.value.some(s => s.hold_id === holdId && s.is_top);
-const getLimbsOnHold = (holdId) => {
-  const holdsOnId = routeSteps.value.filter(s => s.hold_id === holdId);
-  const latestLimbs = new Map();
-  holdsOnId.forEach(h => latestLimbs.set(h.limb, h.step));
-  return Array.from(latestLimbs.keys());
-}
+const currentLimbs = computed(() => {
+  const limbs = {}; routeSteps.value.filter(b => b.step <= currentStep.value).forEach(m => { limbs[m.limb] = { id: m.hold_id } }); return limbs
+})
 
-// 🌟 全局统一绝对坐标系转换核心
+const pxPerCm = 580 / 360 
+const referencePersonHeight = computed(() => `${(profile.value.height || 175) * pxPerCm}px`)
+
 const getCoordinateStyle = (hold_id) => {
-  if (!hold_id || hold_id.length < 2) return { left: '50%', bottom: '50%' };
-  const xChar = hold_id.charAt(0).toUpperCase();
-  const yNum = parseInt(hold_id.substring(1));
-  
-  const xIndex = Math.max(0, Math.min(10, xChar.charCodeAt(0) - 65));
-  const yIndex = Math.max(0, Math.min(17, yNum - 1));
-  
-  return {
-    left: `${8 + (xIndex / 10) * 84}%`,
-    bottom: `${8 + (yIndex / 17) * 84}%`
-  };
+  if (!hold_id) return { left: '50%', bottom: '50%' }
+  const xIndex = Math.max(0, Math.min(10, hold_id.charAt(0).toUpperCase().charCodeAt(0) - 65))
+  const yIndex = Math.max(0, Math.min(17, parseInt(hold_id.substring(1)) - 1))
+  return { left: `${8 + (xIndex / 10) * 84}%`, bottom: `${8 + (yIndex / 17) * 84}%` }
 }
+
+// 🌟 修正核心：物理岩点安装角度算法
+const getHoldRotation = (id, shape) => {
+  const hash = id.charCodeAt(0) * 17 + parseInt(id.substring(1)) * 23;
+  if (shape === 'Crimp') return (hash % 10) - 5; // Crimp 绝不能竖着，必须近似水平(-5到5度)
+  if (shape === 'Jug') return (hash % 30) - 15;  // Jug 允许微调
+  if (shape === 'Pinch') return (hash % 40) - 20;// Pinch 主要是垂直方向
+  return hash % 360; // 圆形/脚点随意
+}
+
+const getShapeColor = (type) => ({ Jug: '#4CAF50', Crimp: '#F44336', Sloper: '#FF9800', Pinch: '#9C27B0', Pocket: '#2196F3', Foot: '#9E9E9E' }[type] || '#4CAF50')
 </script>
 
 <style scoped>
-/* ================= 全局排版 ================= */
-.container { max-width: 1000px; margin: 40px auto; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #333; }
+.container { max-width: 1050px; margin: 30px auto; font-family: 'Segoe UI', system-ui, sans-serif; color: #333; }
 h1 { text-align: center; margin-bottom: 5px; font-size: 2.2em; color: #0f172a;}
 .subtitle { text-align: center; color: #64748b; margin-bottom: 30px; font-weight: bold; font-size: 0.9em;}
-.route-name { color: #2563eb; font-weight: 900; }
-
-/* ================= 控制台 ================= */
-.control-panel { 
-  display: flex; gap: 20px; align-items: flex-end; justify-content: space-between;
-  background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-.input-group { display: flex; flex-direction: column; gap: 8px; flex: 1;}
+.control-panel { display: flex; gap: 20px; margin-bottom: 20px; }
+.profile-section, .recipe-section { background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.profile-section { flex: 1; } .recipe-section { flex: 1.2; }
+.section-title { margin-top: 0; margin-bottom: 15px; font-size: 1.1em; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;}
+.input-grid { display: flex; flex-wrap: wrap; gap: 15px; }
+.input-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 120px;}
+.input-group.full-width { min-width: 100%; }
 label { font-weight: 600; font-size: 0.85em; color: #475569; }
-input, select { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95em; outline: none;}
-input:focus, select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-
-.primary-btn {
-  padding: 12px 24px; height: 42px; background: #0f172a; color: white; border: none; border-radius: 6px; 
-  font-weight: bold; font-size: 0.95em; cursor: pointer; transition: all 0.2s; white-space: nowrap;
-}
-.primary-btn:hover:not(:disabled) { background: #1e293b; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15);}
-.primary-btn:disabled { background: #94a3b8; cursor: not-allowed; transform: none; box-shadow: none;}
-.error-box { margin-top: 20px; padding: 15px; background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; border-radius: 8px; font-weight: bold; }
-
-/* ================= 视觉面板分栏布局 ================= */
-.visual-dashboard { display: flex; gap: 30px; margin-top: 20px; align-items: flex-start; }
-
-/* ================= 左侧：文字时间轴 ================= */
-.timeline { 
-  flex: 1; position: relative; height: 650px; 
-}
-.scroll-container { 
-  position: absolute; top:0; left:0; right:0; bottom:0; 
-  overflow-y: auto; padding-right: 10px; 
-  display: flex; flex-direction: column; gap: 10px;
-}
-.step-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; border-left: 4px solid #3b82f6; }
-.step-card.start-step { border-left-color: #10b981; background: #f0fdf4; }
-.step-card.top-step { border-left-color: #ef4444; background: #fef2f2; }
-.step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+input, select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;}
+.recipe-desc { font-size: 0.8em; color: #64748b; margin-top: -10px; margin-bottom: 12px;}
+.recipe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.recipe-item { display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0;}
+.recipe-label { display: flex; align-items: center; gap: 6px; font-size: 0.85em; font-weight: 600; color: #475569;}
+.color-dot { width: 10px; height: 10px; border-radius: 50%; }
+.recipe-item input { width: 50px; padding: 4px; text-align: center; }
+.action-bar { margin-bottom: 30px; }
+.primary-btn { width: 100%; padding: 14px; background: #0f172a; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: all 0.2s;}
+.primary-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.error-box { margin-top: 15px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; border-radius: 8px; font-weight: bold; }
+.result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 15px; background: white; border-radius: 12px; border: 1px solid #e2e8f0;}
+.result-header h2 { margin: 0; font-size: 1.4em; }
+.route-name { color: #2563eb; font-weight: 900; }
+.playback-controls { display: flex; align-items: center; gap: 15px; font-weight: bold; color: #475569;}
+.slider { width: 200px; cursor: pointer; }
+.visual-dashboard { display: flex; gap: 30px; align-items: flex-start; }
+.timeline { flex: 1; position: relative; height: 650px; }
+.scroll-container { position: absolute; top:0; left:0; right:0; bottom:0; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 10px; }
+.step-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; border-left: 4px solid #e2e8f0; cursor: pointer; transition: 0.2s; opacity: 0.6;}
+.step-card.active-step { opacity: 1; border-left-color: #3b82f6; box-shadow: 0 4px 10px rgba(59,130,246,0.15); transform: translateX(5px);}
+.step-card.start-step.active-step { border-left-color: #10b981; }
+.step-card.top-step.active-step { border-left-color: #ef4444; }
+.step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .step-num { font-weight: 900; color: #64748b; font-size: 0.85em; min-width: 45px;}
 .target-hold { font-family: monospace; font-weight: bold; color: #0f172a; font-size: 1em;}
-.reasoning { color: #475569; font-size: 0.85em; line-height: 1.4; margin: 0;}
+.shape-badge { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; border: 1px solid #cbd5e1; font-weight: 900;}
+.reasoning { color: #475569; font-size: 0.85em; margin: 0;}
 .limb-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
 .limb-badge.LF, .limb-badge.RF { background: #dbeafe; color: #1e3a8a; }
 .limb-badge.LH, .limb-badge.RH { background: #fee2e2; color: #991b1b; }
-
-
-/* ================= 🎯 大一统坐标系 (Grand Unified Coordinates) ================= */
 .wall-container { flex: 0 0 540px; display: flex; flex-direction: column; }
-/* 🎯 修复 1：将 align-items 改为 flex-start，严禁父级拉伸 Y 轴 */
-.board-wrapper { 
-  display: flex; 
-  align-items: flex-start; 
-  margin-bottom: 10px; 
-}
-
-/* 🎯 修复 2：将 Y 轴高度死锁为 600px，与岩板外部尺寸分毫不差 */
-.y-axis-area {
-  width: 30px; 
-  height: 600px; /* 强制等高 */
-  flex-shrink: 0; /* 防止被挤压 */
-  margin-right: 10px; 
-  padding: 10px 0; /* 上下扣除 10px 边框，暴露出完美的 580px 内胆空间 */
-  box-sizing: border-box;
-}
+.board-wrapper { display: flex; align-items: flex-start; margin-bottom: 10px; }
+.y-axis-area { width: 30px; height: 600px; margin-right: 10px; padding: 10px 0; box-sizing: border-box;}
 .y-axis-inner { position: relative; width: 100%; height: 100%; }
-.y-label {
-  position: absolute; right: 0;
-  transform: translateY(50%); /* 确保中心对齐 */
-  font-weight: bold; color: #94a3b8; font-size: 0.85em; 
-}
-
+.y-label { position: absolute; right: 0; transform: translateY(50%); font-weight: bold; color: #94a3b8; font-size: 0.85em; }
 .wall-main-col { display: flex; flex-direction: column; }
 .wall-and-ruler { display: flex; align-items: stretch; }
-
-/* 岩板本体 */
-.wall {
-  width: 420px; height: 600px;
-  background: #1e293b; border-radius: 12px; position: relative;
-  box-shadow: inset 0 0 40px rgba(0,0,0,0.8), 0 10px 25px -5px rgba(0,0,0,0.2);
-  border: 10px solid #0f172a; box-sizing: border-box; overflow: hidden;
-}
-
-/* 抛弃 Flexbox 间距，孔位使用与岩点一样的绝对坐标计算 */
+.wall { width: 420px; height: 600px; background: #1e293b; border-radius: 12px; position: relative; box-shadow: inset 0 0 40px rgba(0,0,0,0.8); border: 10px solid #0f172a; overflow: hidden;}
 .grid-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-.t-nut-hole {
-  position: absolute; width: 6px; height: 6px; background: #0f172a; 
-  border-radius: 50%;
-  transform: translate(-50%, 50%); /* 孔位中心严格对齐坐标点 */
-  box-shadow: inset 0 1px 2px rgba(255,255,255,0.1); 
-}
-
-/* 标尺区域跟随岩板高度 */
-.ruler-area {
-  padding: 10px 0; /* 抵消边框，对齐 580px 净高度 */
-  margin-left: 15px; box-sizing: border-box;
-}
+.t-nut-hole { position: absolute; width: 6px; height: 6px; background: #0b1120; border-radius: 50%; transform: translate(-50%, 50%); box-shadow: inset 0 1px 2px rgba(255,255,255,0.15); }
+.mounted-hold { position: absolute; z-index: 10; transform: translate(-50%, 50%); }
+.hold-shape-wrapper { width: 44px; height: 44px; display: flex; justify-content: center; align-items: center; }
+.organic-hold { width: 100%; height: 100%; overflow: visible; }
+.mounted-hold.is-start::before { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width: 60px; height: 60px; border-radius: 50%; border: 3px dashed #10b981; animation: spin 10s linear infinite; z-index: -1;}
+.mounted-hold.is-top::before { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width: 60px; height: 60px; border-radius: 50%; border: 3px dashed #ef4444; animation: spin 10s linear infinite; z-index: -1;}
+@keyframes spin { 100% { transform: translate(-50%,-50%) rotate(360deg); } }
+.limb-marker { position: absolute; z-index: 20; width: 22px; height: 22px; border-radius: 50%; transform: translate(-50%, 50%); display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; color: white; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.6); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.lh { background-color: #E91E63; } .rh { background-color: #9C27B0; } .lf { background-color: #3F51B5; } .rf { background-color: #00BCD4; }
+.ruler-area { padding: 10px 0; margin-left: 15px; box-sizing: border-box;}
 .height-ruler-container { position: relative; width: 60px; height: 100%; }
-.ruler-line {
-  position: absolute; bottom: 0; left: 20px; width: 2px;
-  background: repeating-linear-gradient(to top, #94a3b8, #94a3b8 6px, transparent 6px, transparent 12px);
-  transition: height 0.3s ease;
-}
+.ruler-line { position: absolute; bottom: 0; left: 20px; width: 2px; background: repeating-linear-gradient(to top, #94a3b8, #94a3b8 6px, transparent 6px, transparent 12px); }
 .ruler-line::after { content: ''; position: absolute; top: 0; left: -15px; width: 32px; height: 2px; background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
-.ruler-label {
-  position: absolute; top: -28px; left: 50%; transform: translateX(-50%);
-  background: #0f172a; color: #f8fafc; padding: 4px 8px; border-radius: 4px;
-  font-size: 0.8em; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-}
-
-/* 岩点视图 */
-.mounted-hold {
-  position: absolute; background-color: #3b82f6; border-radius: 50%; 
-  transform: translate(-50%, 50%); /* 岩点中心严格对齐坐标点 */
-  display: flex; align-items: center; justify-content: center; z-index: 10;
-  transition: all 0.2s ease; box-sizing: border-box; 
-}
-.mounted-hold.size-large { width: 28px; height: 28px; }
-.mounted-hold.size-small { width: 14px; height: 14px; }
-.mounted-hold.type-Crimp::after { content: ''; display: block; width: 6px; height: 6px; background-color: #0f172a; border-radius: 50%;}
-.mounted-hold.is-start-hold { box-shadow: inset 0 0 0 2px white, 0 0 0 6px rgba(59, 130, 246, 0.4); z-index: 15; }
-.mounted-hold.is-top-hold { box-shadow: inset 0 0 0 2px white, 0 0 0 5px #ef4444; z-index: 20; }
-
-/* X 轴容器镜像 */
-.x-axis-area {
-  width: 420px; padding: 0 10px; /* 抵消岩板左右 10px 边框，暴露出 400px 的净空间 */
-  box-sizing: border-box; margin-top: 10px;
-}
+.ruler-label { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #f8fafc; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+.x-axis-area { width: 420px; padding: 0 10px; box-sizing: border-box; margin-top: 10px;}
 .x-axis-inner { position: relative; width: 100%; height: 20px; }
-.x-label {
-  position: absolute;
-  transform: translateX(-50%); /* 确保中心对齐 */
-  font-weight: bold; color: #94a3b8; font-size: 0.85em; text-align: center;
-}
-
-/* 比例尺 */
-.scale-info {
-  display: flex; justify-content: space-between;
-  width: 400px; margin-left: 10px; margin-top: 15px; padding: 8px 12px;
-  background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; box-sizing: border-box;
-}
-.scale-item { font-size: 0.85em; font-weight: 700; color: #475569; }
-.scale-item.limit { color: #ef4444; }
-.wall-caption { width: 400px; text-align: center; margin-left: 10px; margin-top: 10px; color: #94a3b8; font-size: 0.8em; }
-
+.x-label { position: absolute; transform: translateX(-50%); font-weight: bold; color: #94a3b8; font-size: 0.85em; }
 </style>

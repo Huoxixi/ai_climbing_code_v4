@@ -1,189 +1,205 @@
 import os
 import json
 import math
-import random
 import asyncio
-from typing import List
+from typing import List, Dict, Optional
 from openai import AsyncOpenAI
 from pydantic import ValidationError
 from dotenv import load_dotenv
 import httpx
 
 load_dotenv()
+# 引入最新 models 中的枚举与模型
 from models import Hold, ClimberProfile, RouteResponse
 
 def calculate_real_distance(hold_1: str, hold_2: str) -> float:
+    """计算物理岩板上两点之间的真实直线距离 (cm)"""
     if not hold_1 or not hold_2: return 0.0
     x1, y1 = ord(hold_1[0].upper()) - ord('A'), int(hold_1[1:]) - 1
     x2, y2 = ord(hold_2[0].upper()) - ord('A'), int(hold_2[1:]) - 1
     return round(math.sqrt((x2 - x1)**2 + (y2 - y1)**2) * 20, 2)
 
-def get_few_shot_example(target_difficulty: str) -> str:
+# ==========================================
+# 🚀 缓存优化区 1：全局预加载，消除磁盘 I/O
+# ==========================================
+def load_and_cache_classic_routes():
+    """在服务器启动时，一次性将经典路线题库读入内存"""
     file_path = "classic_routes.json"
-    
-    fallback_route = """
-    {
-      "route_name": "默认参考线 (标准 V1 动态折返)",
-      "beta_sequence": [
-        {"step": 0, "limb": "LH", "hold_id": "D5"},
-        {"step": 0, "limb": "RH", "hold_id": "E6"},
-        {"step": 0, "limb": "LF", "hold_id": "B2"},
-        {"step": 0, "limb": "RF", "hold_id": "G2"},
-        {"step": 1, "limb": "LH", "hold_id": "D8"},
-        {"step": 2, "limb": "RH", "hold_id": "G10"},
-        {"step": 3, "limb": "LF", "hold_id": "D5"},
-        {"step": 4, "limb": "LH", "hold_id": "E14"},
-        {"step": 5, "limb": "RF", "hold_id": "G6"},
-        {"step": 6, "limb": "RH", "hold_id": "F18", "is_top": true}
-      ]
-    }
-    """
-    
     if not os.path.exists(file_path): 
-        return fallback_route
-        
+        return []
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            routes = json.load(f)
-        # 🌟 修改点：精确匹配难度等级，并为 V3 框定法式难度标准
-        if target_difficulty == "V0":
-            allowed_grades = ["6A", "6A+", "6B"] # V0 对应新手
-        elif target_difficulty == "V1":
-            allowed_grades = ["6B", "6B+"]       # V1 对应入门
-        elif target_difficulty == "V2":
-            allowed_grades = ["6B+", "6C"]       # V2 对应进阶
-        elif target_difficulty == "V3":
-            allowed_grades = ["6C", "6C+", "7A"] # 🌟 V3 对应高级，允许出现 7A 级别的暴击路线！
-        else:
-            allowed_grades = ["6B+"] # 兜底
-
-        # 筛选符合难度等级的路线
-        matching_routes = [r for r in routes if r.get("original_grade") in allowed_grades]
-        
-        # 🌟 针对 V3 或其他难度：截取最符合要求的“Top 10”高质量路线
-        # (假设你的 classic_routes.json 已经按质量/经典程度排过序，这里直接取前10条作为核心基因库)
-        if matching_routes and len(matching_routes) > 10:
-            matching_routes = matching_routes[:10] 
-            
-        if not matching_routes: 
-            matching_routes = routes 
-            
-        chosen_route = random.choice(matching_routes)
-
-
-        extracted_example = {
-            "route_name": chosen_route["route_name"],
-            "beta_sequence": chosen_route["beta_sequence"]
-        }
-        return json.dumps(extracted_example, ensure_ascii=False, indent=2)
+            return json.load(f)
     except Exception as e:
-        print(f"⚠️ 题库读取失败 ({e})，启用兜底路线。")
-        return fallback_route
+        print(f"⚠️ 题库预加载读取失败 ({e})")
+        return []
 
-DIFFICULTY_RULES_MAP = {
-    "V0": """
-【V0 新手启蒙：温和的大空间转移】
-- 🌊 走势限制：路线必须有明显的左右位移，X 轴跨度允许在 3 到 11 列之间。严禁直梯！
-- 🧱 岩点密度：独立岩点总数应在 8-12 个。
-- ⚖️ 发力逻辑：引导新手体验重心的横向流动，保持左右手自然协调，严禁交叉手。
-    """,
-    "V1": """
-【V1 入门进阶：明确的流动感】
-- 🌊 走势限制：路线必须是清晰的斜线或折返！X 轴跨度允许达到 4 到 11 列。
-- 🧱 岩点密度：独立岩点总数应在 8-12 个。
-- ⚖️ 发力逻辑：明确重心的左右转移，保持手部动作顺畅，右手在右、左手在左。
-    """,
-    "V2": """
-【V2 基础挑战：动态张力与复用艺术】
-- 🌊 强制折返与对角张力：X 轴跨度允许在 5 到 11 列之间。必须有大对角线折返。
-- 🧱 岩点密度：独立岩点总数应在 8-12 个。必须高频使用“手点转脚点”的复用技巧。
-- ⚖️ 动作协调：在大跨度转移时，必须保证左右手的逻辑顺畅，严禁双臂打结！
-    """,
-    "V3": """
-【V3 进阶挑战：极致张力与极限发力】
-- 🌊 极限空间调度：包含夸张的大横移或动态发力！X 轴跨度建议在 5 到 11 列满宽展开。
-- 🧱 岩点密度：独立岩点总数应在 8-12 个。
-- ⚖️ 核心爆发：强迫攀岩者进行高难度的身体折叠，严防极端违和的交叉手。
+GLOBAL_ROUTES = load_and_cache_classic_routes()
+
+def get_deterministic_examples(target_difficulty: str) -> str:
     """
+    🚀 缓存优化区 2：生成绝对固定的 Few-Shot 字符串。
+    消除了原来的 random.choice()，确保相同难度的前缀 100% 相同，从而触发大模型的 Prompt Caching。
+    """
+    fallback_route = """
+    [
+      {
+        "route_name": "默认参考线 (标准 V1 动态折返)",
+        "beta_sequence": [
+          {"step": 0, "limb": "LH", "hold_id": "D5", "intent": "", "shape_type": "Jug"},
+          {"step": 0, "limb": "RH", "hold_id": "E6", "intent": "", "shape_type": "Jug"},
+          {"step": 0, "limb": "LF", "hold_id": "B2", "intent": "", "shape_type": "Foot"},
+          {"step": 0, "limb": "RF", "hold_id": "G2", "intent": "", "shape_type": "Foot"},
+          {"step": 1, "limb": "LH", "hold_id": "D8", "intent": "左手向左上方抓握侧拉点", "shape_type": "Crimp"},
+          {"step": 2, "limb": "RH", "hold_id": "G10", "intent": "右手向右上方跨度转移", "shape_type": "Jug"},
+          {"step": 3, "limb": "LF", "hold_id": "D5", "intent": "左脚踩之前左手抓过的起步点", "shape_type": "Jug"},
+          {"step": 4, "limb": "LH", "hold_id": "E14", "intent": "左手大跨度发力抓握大把手", "shape_type": "Jug"},
+          {"step": 5, "limb": "RF", "hold_id": "G6", "intent": "右脚向上调整重心", "shape_type": "Foot"},
+          {"step": 6, "limb": "RH", "hold_id": "F18", "intent": "右手完攀锁定", "is_top": true, "shape_type": "Jug"}
+        ]
+      }
+    ]
+    """
+    
+    if not GLOBAL_ROUTES: return fallback_route
+        
+    grade_map = {
+        "V0": ["6A", "6A+", "6B"],
+        "V1": ["6B", "6B+"],
+        "V2": ["6B+", "6C"],
+        "V3": ["6C", "6C+", "7A"]
+    }
+    allowed_grades = grade_map.get(target_difficulty, ["6B+"])
+    
+    # 筛选符合难度的路线
+    matching_routes = [r for r in GLOBAL_ROUTES if r.get("original_grade") in allowed_grades]
+    
+    # 强制按路线名称排序，并截取前 3 条，彻底消除随机性
+    matching_routes = sorted(matching_routes, key=lambda x: str(x.get("route_name", "")))[:3]
+    
+    if not matching_routes: return fallback_route
+        
+    examples = [{"route_name": r["route_name"], "beta_sequence": r["beta_sequence"]} for r in matching_routes]
+    return json.dumps(examples, ensure_ascii=False, indent=2)
+
+# 在内存中固化 4 个难度的 Few-Shot 前缀
+CACHED_FEW_SHOTS = {
+    "V0": get_deterministic_examples("V0"),
+    "V1": get_deterministic_examples("V1"),
+    "V2": get_deterministic_examples("V2"),
+    "V3": get_deterministic_examples("V3"),
 }
 
-SYSTEM_PROMPT_TEMPLATE = """
-你现在是AI定线引擎的核心大脑。你是一位精通 MoonBoard 风格的顶级定线员。
-你的工作台是一面 11x18 的矩阵打孔岩板（X轴 A-K 对应 1-11，Y轴 1-18，每格 20cm）。
+# 替换原有的 DIFFICULTY_RULES_MAP
+DIFFICULTY_RULES_MAP = {
+    "V0": "V0新手：温和横移，X轴跨度3-11列，禁直梯，重心横向流动，手脚自然不交叉。",
+    "V1": "V1入门：清晰斜线或折返，X轴跨度4-11列，明确重心转移，右手在右/左手在左。",
+    "V2": "V2基础：动态张力，X轴跨度5-11列，含大对角线折返。高频使用“手点转脚点”复用，防双臂交叉。",
+    "V3": "V3进阶：极限空间调度，X轴跨度5-11列满宽，夸张大横移或动态爆发，强迫身体折叠，严防交叉打结。"
+}
 
-【👑 核心数据源 (极其重要) 🚨】
-以下是从真实商业岩馆提取的标杆路线数据。你必须深度参考并模仿它的【横向跨度】、【流动感】以及【手脚复用技巧】。
-⚠️ 警告：受限于数据采集格式，参考数据中可能存在“起步肢体不全”、“乱标 is_top: true”等瑕疵。你必须【自动过滤】这些瑕疵，强行遵守下方的红线！
-{few_shot_example}
+# ==========================================
+# 🚀 缓存优化区 3：绝对纯净、不可变的系统基座提示词
+# ==========================================
+# 替换原有的 BASE_SYSTEM_PROMPT
+BASE_SYSTEM_PROMPT = """
+# 角色
+你是定线大脑，精通11x18矩阵打孔岩板（X轴:A-K对应1-11，Y轴:1-18，每格20cm）的MoonBoard风格定线。仅输出合法JSON。
 
-每个动作对象必须包含 "intent" 字段，用简短的中文描述该动作（如："左手抓握侧拉点"
-=============================================
-【🎯 当前难度专属法则 (必须绝对遵守)】
-当前你要生成的路线难度为 {target_difficulty}。请遵循以下风格：
-{difficulty_specific_rules}
-=============================================
+# 岩点形态物理法则 (Semantic Holds) 🚨
+你必须根据岩点的 `shape_type` 规划动作，严禁违背人类生理学：
+- Jug (大把手): 极易抓握，允许做大跨度动态、爆发性动作。
+- Crimp (小抠口): 极小边缘。仅允许小跨度行进(<=3格)，严禁动态跳跃！
+- Sloper (大斜面): 无明显抓握点。极度依赖摩擦力和重心控制。
+- Pinch (捏点): 需拇指发力对捏。
+- Pocket (指洞): 仅容纳一两根手指。
+- Foot (纯脚点): 🚨绝对严禁用手(LH/RH)抓握！仅能分配给脚(LF/RF)！
+⚠️ 逻辑一致性：若同一个 hold_id 被复用多次，它的 shape_type 必须保持绝对一致！岩壁上的点不会自动变形。
 
-【通用杀虫校验 (力学与坐标红线) 🚨】
-1. 💥 灵活稳固起步：Step 0 允许“三点起步”（双手+单脚，另一脚悬空Flagging平衡）或四肢全上。必须使用 3 到 4 个独立岩点！鼓励重心多变（如高低手起步、侧身起步）。起步手必须在脚上方，若双脚均踩点，横向跨度必须 <= 3 列。
-2. 🎯 唯一完攀点：全线【只能有 1 个】`is_top: true` 的点！最后一步双手 Match 在 y=17 或 18。
-3. 📏 身体空间 (The Box)：行进中手点比脚点高 3~6 格。双脚横向跨度不超过 4 列。
-4. 🔗 轨迹连通与时序防撞：🚨 手绝对不能与脚同时挤在同一点！要想让脚踩之前的手点，必须先在 JSON 里写一步把手移走，腾出空位后，再安排脚踩上来！
-5. 🧗 抱石精神 (No Ladder Rule)：绝对禁止生成完全在 1-2 列内直上直下的路线。
-6. 🤸 左右协调 (Anti-Tangle)：右手/右脚的 X 坐标应在左侧肢体的右侧或同列。严禁四肢严重交叉打结！
-7. 🧮 中下段极简复用 (Mid-Lower Reuse): 全线【独立岩点总数】严格控制在 8-12 个！起步和中段（Y=1-14）必须大量使用“手点转脚点”的复用技巧。**目标完美复用率是 70%，但你的最低及格线是绝不能低于 40%！** 请务必让脚去踩前几步手抓过的坐标，消灭废点！
-8. 🧲 强关联主干：路线必须是一条紧凑的主线！严禁“左手爬左边、右手爬右边”的双轨离散现象。任何动作步中，左右手横向跨度绝不能超过 6 列！
+# 物理与空间强制约束
+1. 起步(Step 0)：
+   - 包含3至4个独立岩点（如双手+单脚/双脚）。
+   - 🚨【起步严格坐标法则】：起步脚点(LF/RF)的 Y 轴【必须且只能】在第 1 到 2 行之间！起步手点(LH/RH)的 Y 轴【必须且只能】在第 3 到 6 行之间！
+   - 起步手必须高于起步脚。若双脚均踩点，横向跨度 <= 3列。
+2. 完攀：全线仅允许1个 `is_top: true` 的点。最后一步必须是双手Match在Y=17或18。
+3. 身体空间(The Box)：
+   - 行进中，手点比脚点高3~6格。
+   - 任何单一Step中，最高手点Y与最低脚点Y的差值 <= 9（防人体撕裂）。
+   - 左右手横向跨度 <= 6列（确保主干紧凑）。
+   - 双脚横向跨度 <= 4列。
+4. 时序防撞(重点)：严禁手脚同点。若脚需踩原手点，必须先插入一个Step将手移走。
+5. 肢体防结：左侧肢体(LH/LF)的X坐标需在右侧肢体(RH/RF)的左侧或同列，严禁双手/双脚交叉劈叉。
+6. 拒绝直梯：禁止全线完全在1-2列内直上直下。
+7. 岩点复用：全线独立岩点总数严格限制在8-12个。起步和中段(Y=1~14)的脚点必须大量踩踏前序手点坐标，复用率 >= 40%。
 
-【致命空间物理防呆指令 🚨🚨🚨】
-你在之前的生成中犯了严重的物理错误，导致系统多次崩溃。你必须在生成每个 step 时，像机器人一样在脑内做以下四步计算，绝不能凭感觉：
-
-1. 🛑 拒绝高空起步：
-   Step 0（起步）的两个手点，其 Y 轴数字（坐标的数字部分）绝对不允许大于 8！起步脚点 Y 轴绝不能大于 4！
-
-2. 🛑 拒绝手脚同点（踩手违规）：
-   如果你要在 step N 把脚（LF/RF）放在某个坐标（如 B9）上，你必须回头检查：你的 LH 或 RH 现在是不是还在 B9 上？！如果是，你必须插入一个 step，先把手挪到别的点上，然后脚才能踩上去！
-
-3. 🛑 拒绝四肢打结：
-   正常人类的左手/左脚（LH/LF）的 X 轴字母，大部分时候应该在右手/右脚（RH/RF）的左侧或同列！绝不允许左脚在 K 列，右脚在 A 列这种把人劈开的动作！
-
-4. 🛑 拒绝人体撕裂（300cm跨度警报）：
-   在任何一个单一的 step 中，找出你当前最高的手点 Y 值，和最低的脚点 Y 值。它们的数学差值（最高 Y - 最低 Y）绝对不能超过 9！超出这个值，人类的身体就会被撕裂！
-
-【JSON 格式绝对红线 🚨】
-你输出的 `beta_sequence` 中的每一个动作对象，都必须严格包含 `intent` 字段！绝不允许省略该 Key！
-1. 对于中段行进和完攀动作（step > 0）：请在 `intent` 中用简短中文描述发力意图（例如："向左上方转移重心"、"右手完攀锁定"）。
-2. 对于起步点（step == 0）：不进行任何说明！`intent` 字段必须严格留空（即输出 `"intent": ""`）。
-
-不要解释思考过程。严格输出合法的 JSON 结构。
+# JSON 字段输出规范
+`beta_sequence` 数组内每个动作对象必需包含 `intent` 和 `shape_type` 字段：
+- step == 0：`intent` 严格留空（即 `""`）。
+- step > 0：`intent` 用简短中文描述发力意图（如"向左上方转移重心"）。
+- `shape_type`：必须是 Jug, Crimp, Sloper, Pinch, Pocket, Foot 之一。
+严禁解释思考过程。
 """
 
-async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Hold], target_difficulty: str = "V1", max_retries: int = 8) -> RouteResponse:
-    max_retries = 8 
+async def generate_route_with_reflection(
+    climber: ClimberProfile, 
+    holds: List[Hold], 
+    target_difficulty: str = "V1", 
+    recipe: Optional[Dict[str, int]] = None, # 🌟 接收前端传入的配方
+    max_retries: int = 8
+) -> RouteResponse:
+    """核心定线工作流 (带自动防碰撞反思与缓存优化)"""
     max_stretch_cm = climber.height_cm + (climber.span_cm / 2)
 
-    user_prompt = f"""
-    【攀岩者真实体征与物理极限】
-    - 身高: {climber.height_cm} cm
-    - 臂展: {climber.span_cm} cm
-    - 🚨 臂展跨度极限: {climber.span_cm} cm
-    - 🚨 手脚拉伸极限: {max_stretch_cm} cm
-
-    请为该攀岩者设计一条 {target_difficulty} 难度的绝佳路线。
-    """
-
-    few_shot_example = get_few_shot_example(target_difficulty)
-    specific_rules = DIFFICULTY_RULES_MAP.get(target_difficulty, DIFFICULTY_RULES_MAP["V1"])
+    # ==========================================
+    # 🧱 组装阶梯式 Prompt 数组 (专为命中 Caching 设计)
+    # ==========================================
+    messages = []
     
-    dynamic_system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        target_difficulty=target_difficulty,
-        few_shot_example=few_shot_example,
-        difficulty_specific_rules=specific_rules
-    )
+    # [前缀区块 1] 核心基础物理规则 (所有请求 100% 相同，极易命中缓存)
+    messages.append({"role": "system", "content": BASE_SYSTEM_PROMPT})
+    
+    # 修改 generate_route_with_reflection 内的拼接逻辑：
+    
+    # [前缀区块 2] 难度专属规则与标杆数据
+    specific_rules = DIFFICULTY_RULES_MAP.get(target_difficulty, DIFFICULTY_RULES_MAP["V1"])
+    few_shot_data = CACHED_FEW_SHOTS.get(target_difficulty, "[]")
+    
+    difficulty_system_prompt = f"""
+# 难度要求: {target_difficulty}
+设计规则: {specific_rules}
 
-    messages = [
-        {"role": "system", "content": dynamic_system_prompt},
-        {"role": "user", "content": user_prompt}
-    ]
+# 标杆参考路线
+模仿以下路线的横向跨度、流动感及复用逻辑（忽略其中的瑕疵）：
+{few_shot_data}
+"""
+    messages.append({"role": "system", "content": difficulty_system_prompt})
+    
+    # 🌟 动态处理用户输入的岩点配方，放入动态 User Prompt 区块
+    recipe_instruction = ""
+    if recipe:
+        recipe_str = "\n".join([f"- {k}: {v} 个" for k, v in recipe.items() if v > 0])
+        if recipe_str:
+            recipe_instruction = f"""
+# 🧪 用户专属岩点配方要求 🚨
+请你在这条路线中，尽可能利用以下形态及其指定数量的岩点进行组合：
+{recipe_str}
+(注：若配方数量无法完美连成合法路线，可自行增减少许岩点以保证物理可行性，但优先遵从上述种类。)
+"""
 
+    # [动态区块] 用户的真实数据
+    user_prompt = f"""
+# 攀岩者物理参数
+- 身高: {climber.height_cm} cm
+- 臂展(横向极限): {climber.span_cm} cm
+- 手脚拉伸(高低极限): {max_stretch_cm} cm
+{recipe_instruction}
+请生成 {target_difficulty} 难度路线。
+"""
+    messages.append({"role": "user", "content": user_prompt})
+
+    # ==========================================
+    # 🔄 Agentic Reflection Loop (反思纠错循环)
+    # ==========================================
     for attempt in range(max_retries):
         load_dotenv()
         api_key = os.getenv("OPENAI_API_KEY")
@@ -195,13 +211,15 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
         try:
             raw_content = ""
             response = await client.chat.completions.create(
-                model="gpt-5.4", 
+                model="gpt-5.4", # 建议后续在此处实现模型路由（如初稿用小模型，反思用大模型）
                 messages=messages,
                 temperature=0.38,
                 response_format={ "type": "json_object" } 
             )
             
             raw_content = response.choices[0].message.content.strip()
+            
+            # 清理 Markdown 代码块标记
             if raw_content.startswith("```json"):
                 raw_content = raw_content[7:-3].strip()
             elif raw_content.startswith("```"):
@@ -211,9 +229,9 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
             parsed_data["target_difficulty"] = target_difficulty
             route_result = RouteResponse(**parsed_data)
             
-            # ==========================================
-            # 🛑 拦截网 1.5：起步四肢与点数绝对校验
-            # ==========================================
+            # ------------------------------------------
+            # 🛑 物理拦截网 1：起步四肢与点数绝对校验
+            # ------------------------------------------
             start_moves = [move for move in route_result.beta_sequence if move.step == 0]
             start_holds = set(move.hold_id for move in start_moves)
             start_limbs = set(move.limb for move in start_moves)
@@ -227,15 +245,13 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
             if not (3 <= len(start_holds) <= 4):
                 raise ValueError(f"起步点数量违规！当前使用了 {len(start_holds)} 个起步点。")
             
-            start_hands_y = [int(move.hold_id[1:]) for move in start_moves if move.limb in ("LH", "RH")]
-            start_feet_y = [int(move.hold_id[1:]) for move in start_moves if move.limb in ("LF", "RF")]
-            if start_hands_y and start_feet_y:
-                min_hand_y = min(start_hands_y)
-                max_foot_y = max(start_feet_y)
-                if min_hand_y <= max_foot_y:
-                    raise ValueError(f"起步手(Y={min_hand_y}) 低于或等于起步脚(Y={max_foot_y})！")
-                if min_hand_y - max_foot_y < 2:
-                    raise ValueError("起步过于蜷缩！手脚高度差太近！")
+            # 🌟 核心修正：严格校验 1-2 行与 3-6 行的起步规则
+            for move in start_moves:
+                y_val = int(move.hold_id[1:])
+                if move.limb in ("LF", "RF") and not (1 <= y_val <= 2):
+                    raise ValueError(f"起步脚点违规！起步脚点({move.limb}) 必须在第 1-2 行，你目前定在了第 {y_val} 行！")
+                if move.limb in ("LH", "RH") and not (3 <= y_val <= 6):
+                    raise ValueError(f"起步手点违规！起步手点({move.limb}) 必须在第 3-6 行，你目前定在了第 {y_val} 行！")
             
             start_lf = next((move.hold_id for move in start_moves if move.limb == "LF"), None)
             start_rf = next((move.hold_id for move in start_moves if move.limb == "RF"), None)
@@ -244,10 +260,9 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
                 rf_x = ord(start_rf[0].upper()) - ord('A')
                 if abs(lf_x - rf_x) > 3:
                     raise ValueError(f"起步左脚与右脚横向跨度达到 {abs(lf_x - rf_x)} 列，严禁起步大劈叉！")
-
-            # ==========================================
-            # 🛑 拦截网 1：复用率与密度校验
-            # ==========================================
+            # ------------------------------------------
+            # 🛑 物理拦截网 2：复用率与密度校验
+            # ------------------------------------------
             unique_holds = set(move.hold_id for move in route_result.beta_sequence)
             hold_count = len(unique_holds)
             x_indices = [ord(h[0].upper()) - ord('A') for h in unique_holds]
@@ -270,11 +285,28 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
             if ml_reuse_rate < 0.40:
                 raise ValueError(f"废点太多！中下段复用率仅 {int(ml_reuse_rate*100)}%。请将脚修改为前一个手点！")
 
-            # ==========================================
-            # 🛑 拦截网 2：人体极限与时序防撞
-            # ==========================================
+            # ------------------------------------------
+            # 🛑 物理拦截网 3：人体极限、时序防撞与形态一致性
+            # ------------------------------------------
             current_limbs = {}
+            shape_consistency_map = {} # 🌟 新增：记录被复用点的固定形态
+            
             for move in route_result.beta_sequence:
+                # 兼容枚举和字符串：提取当前的 limb 和 shape
+                current_limb = move.limb if isinstance(move.limb, str) else move.limb.value
+                current_shape = move.shape_type if isinstance(move.shape_type, str) else move.shape_type.value
+                
+                # 🌟 校验 3.1：形态逻辑一致性 (岩壁上的点不会变形)
+                if move.hold_id in shape_consistency_map:
+                    if shape_consistency_map[move.hold_id] != current_shape:
+                        raise ValueError(f"逻辑错误：点 {move.hold_id} 之前被设定为 {shape_consistency_map[move.hold_id]}，现在却变成了 {current_shape}！岩点在墙上是不会变形的。")
+                else:
+                    shape_consistency_map[move.hold_id] = current_shape
+
+                # 🌟 校验 3.2：非法抓握 (手不能抓 Foot)
+                if current_shape == "Foot" and current_limb in ("LH", "RH"):
+                    raise ValueError(f"违背常理：手 ({current_limb}) 绝对不能抓握纯脚点(Foot) {move.hold_id}！")
+
                 current_limbs[move.limb] = move.hold_id
                 
                 current_hands = [current_limbs.get("LH"), current_limbs.get("RH")]
@@ -316,18 +348,20 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
                 if move.is_top and y_val < 17:
                     raise ValueError("真正的完攀必须在 y=17 或 18！")
 
+            # 校验全部通过，返回成功路线
             return route_result
 
         except (ValidationError, ValueError) as e:
             print(f"⚠️ 校验拦截 (第 {attempt + 1} 次尝试): {e}")
-            error_msg = f"""物理拦截报错：{e}
-【修复建议】：
-1. 若拉伸超限：说明你忘了移动脚！
-2. 若手脚同点：请在脚踩上去的那一步之前，先插入动作移走手！
-3. 若跨度报错：收拢离群点！
-4. 若打结：互换左右侧目标！
-5. 若起步蜷缩：起步手调高，脚调低。
-6. 若复用率低：检查 Y=1~14，将脚踩过一次的点改成手抓过的坐标！"""
+            # 替换为极简的反思提示词，加入形态错误指引
+            error_msg = f"""校验失败: {e}
+修复指南:
+1. 形态矛盾: 确保复用的 hold_id 拥有完全相同的 shape_type。
+2. 抓握非法: 手绝不能抓 Foot，请将 shape_type 改为 Jug、Crimp 等。
+3. 拉伸超限: 补充移动脚的 Step。
+4. 手脚同点: 在踩脚的 Step 前插入移手 Step。
+5. 跨度超限: 聚拢离群点坐标。
+6. 肢体打结: 调整左右侧目标 X 坐标。"""
             if raw_content:
                 messages.append({"role": "assistant", "content": raw_content})
                 messages.append({"role": "user", "content": error_msg})
@@ -340,4 +374,4 @@ async def generate_route_with_reflection(climber: ClimberProfile, holds: List[Ho
             print(f"🔄 网络保护，等待 {sleep_time} 秒后重连...")
             await asyncio.sleep(sleep_time)
             
-    raise Exception(f"经过 {max_retries} 次反思，仍未能生成合法路线。请检查账户余额。")
+    raise Exception(f"经过 {max_retries} 次反思，仍未能生成合法路线。请检查难度设置或账户余额。")

@@ -1,6 +1,6 @@
 # backend/models.py
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 # ==========================================
@@ -38,6 +38,11 @@ class Hold(BaseModel):
     hold_type: HoldType = Field(..., description="岩点形态")
     usable_as: List[UsageType] = Field(..., description="可用性：['hand', 'foot'] 或仅 ['foot']")
     rotation: int = Field(0, description="安装角度 (0-360)。0为正朝上，180为倒扣(Undercling)")
+    
+    # --- 新增：用于前端视觉渲染与 A* 物理计算的扩展字段 ---
+    shape_variant: str = Field("default.png", description="映射的图片文件名或形状编号 (如 jug_01.png)")
+    scale: float = Field(1.0, description="图片缩放比例，结合原图尺寸确定前端实际渲染大小")
+    base_score: float = Field(5.0, description="基础得分(1-10分)，分数越高代表越好抓/耗能越低")
 
 # ==========================================
 # 📡 3. 客户端请求与响应契约 (API Contracts)
@@ -51,6 +56,9 @@ class RouteRequest(BaseModel):
     """AI 定线请求包"""
     climber: ClimberProfile
     target_difficulty: str = Field(..., description="目标难度 (如 V1, V3, V5)")
+    
+    # --- 新增：攀岩风格偏好，方便大模型和 A* 调整权重 ---
+    preferred_style: Optional[str] = Field("balanced", description="偏好风格：dynamic(动态), static(静态), balanced(均衡)")
 
 class BetaStep(BaseModel):
     """单步动作拆解模型 (包含严格的状态机设定)"""
@@ -64,8 +72,10 @@ class RouteResponse(BaseModel):
     """AI 定线结果响应包"""
     route_name: str = Field(..., description="AI 为这条路线起的炫酷名字")
     status: str = Field("success")
-    
-    # 🌟 唯一的新增核心：让后端把最终决定的难度传回给前端
     target_difficulty: str = Field("V1", description="AI 降维匹配后的 V 难度") 
+    
+    # --- 新增：为了方便前端一键高亮路线，以及记录 A* 的评分 ---
+    total_score: float = Field(0.0, description="系统对该路线的总评分 (结合难度、流畅度)")
+    route_holds: List[str] = Field(..., description="该路线包含的所有岩点 ID 列表 (如 ['C5', 'F5', 'G9'])")
     
     beta_sequence: List[BetaStep] = Field(..., description="动作解析时间轴")

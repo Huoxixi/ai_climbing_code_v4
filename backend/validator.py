@@ -1,51 +1,64 @@
+# backend/validator.py
 import math
 from typing import List, Tuple, Dict
-from models import ClimberProfile, RouteStep, Hold
+from models import ClimberProfile, BetaStep, HoldBase
 
 class PhysicsValidator:
     """
-    攀岩物理规则引擎 (核心裁判系统)
-    负责拦截 LLM 生成的反人类/超常规物理动作
+    攀岩物理规则引擎 (动态造物主版本)
+    负责拦截 LLM 生成的反人类动作以及不合理的岩点摆放
     """
-    def __init__(self, climber: ClimberProfile, holds_db: List[Hold]):
+    def __init__(self, climber: ClimberProfile):
         self.climber = climber
-        # 将岩点列表转化为 Hash Map，实现 O(1) 的极速坐标查询
-        self.holds_map: Dict[str, Tuple[float, float]] = {
-            hold.hold_id: (hold.x_m, hold.y_m) for hold in holds_db
-        }
+        # 假设标准岩板孔位间距为 20cm (0.2米)，用于将 A-K/1-18 转化为物理距离
+        self.GRID_SPACING = 0.2 
+
+    def _coord_to_meters(self, x_label: str, y_label: int) -> Tuple[float, float]:
+        """将 A-K, 1-18 的网格坐标转化为物理米数"""
+        x_idx = ord(x_label.upper()) - ord('A')
+        y_idx = y_label - 1 # 假设第1排底部为 0 米
+        return (x_idx * self.GRID_SPACING, y_idx * self.GRID_SPACING)
 
     def _calc_distance(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
         """计算两点间的欧氏距离(米)"""
         return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
-    def validate_sequence(self, sequence: List[RouteStep]) -> Tuple[bool, str]:
+    def validate_route(self, placed_holds: List[HoldBase], sequence: List[BetaStep]) -> Tuple[bool, str]:
         """
-        校验一整套攀爬序列是否合法
-        返回格式: (是否通过校验, 错误详情/成功日志)
+        核心校验：同时校验岩点的放置布局与动作序列
         """
-        # 初始化四肢当前所在的坐标 (None 表示悬空或尚未起步)
-        current_limbs = {"LH": None, "RH": None, "LF": None, "RF": None}
+        # --- 阶段一：校验空间布局逻辑 ---
+        placed_ids = set()
+        holds_map: Dict[str, Tuple[float, float]] = {}
         
-        # 将厘米转化为米，方便与坐标系统一计算
+        for hold in placed_holds:
+            if hold.id in placed_ids:
+                return False, f"空间重叠错误：孔位 {hold.id} 上被重复放置了多个岩点！"
+            placed_ids.add(hold.id)
+            # 动态生成本次路线的物理坐标地图
+            holds_map[hold.id] = self._coord_to_meters(hold.x, hold.y)
+
+        # --- 阶段二：校验攀爬动作逻辑 ---
+        current_limbs = {"LH": None, "RH": None, "LF": None, "RF": None}
         span_m = self.climber.span_cm / 100.0
         height_m = self.climber.height_cm / 100.0
 
         for i, step in enumerate(sequence):
-            # 1. 幻觉拦截：检查大模型生成的岩点是否存在于数据库中
-            if step.hold_id not in self.holds_map:
-                return False, f"第 {step.step} 步物理错误：目标岩点 {step.hold_id} 在岩壁面上不存在（发生幻觉）。"
+            # 1. 空点拦截：大模型让你抓的这个孔位上，它之前有没有放点？
+            if step.hold_id not in holds_map:
+                return False, f"第 {step.step} 步逻辑错误：目标孔位 {step.hold_id} 上是空的，没有拧岩点！"
             
-            # 更新该肢体的当前位置
-            target_coord = self.holds_map[step.hold_id]
-            current_limbs[step.limb] = target_coord
+            # 更新肢体坐标
+            target_coord = holds_map[step.hold_id]
+            current_limbs[step.limb.value] = target_coord
 
-            # 2. 臂展极限校验 (检查左右手绝对距离)
+            # 2. 臂展极限校验
             if current_limbs["LH"] and current_limbs["RH"]:
                 hand_dist = self._calc_distance(current_limbs["LH"], current_limbs["RH"])
                 if hand_dist > span_m:
-                    return False, f"第 {step.step} 步物理错误：左右手跨度达到 {hand_dist:.2f} 米，超过了攀爬者臂展极限 ({span_m:.2f} 米)。"
+                    return False, f"第 {step.step} 步物理错误：左右手跨度 {hand_dist:.2f}米，超过了臂展极限 ({span_m:.2f}米)。"
 
-            # 3. 身高延展极限校验 (检查最高的手与最低的脚之间的距离)
+            # 3. 身高延展极限校验
             active_hands = [coord for limb, coord in current_limbs.items() if limb in ["LH", "RH"] and coord]
             active_feet = [coord for limb, coord in current_limbs.items() if limb in ["LF", "RF"] and coord]
             
@@ -54,8 +67,8 @@ class PhysicsValidator:
                 min_foot_y = min(coord[1] for coord in active_feet)
                 stretch_dist = max_hand_y - min_foot_y
                 
-                # 允许一定程度的踮脚和身体拉伸，设定宽容系数为 1.15
+                # 宽容系数 1.15
                 if stretch_dist > height_m * 1.15:
-                    return False, f"第 {step.step} 步物理错误：手脚上下拉伸达到 {stretch_dist:.2f} 米，超出身高延展极限。"
+                    return False, f"第 {step.step} 步物理错误：手脚上下拉伸 {stretch_dist:.2f}米，超出身高极限。"
 
-        return True, "全序列物理校验通过。动作合理。"
+        return True, "造物主定线方案校验完美通过：布局无冲突，动作在生理极限内。"
