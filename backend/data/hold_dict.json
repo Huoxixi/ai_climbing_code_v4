@@ -1,0 +1,38 @@
+[
+  {
+    "hold_type": "Jug",
+    "description": "大把手：最好抓，新手友好",
+    "shape_variants": ["jug_01.png", "jug_02.png", "jug_03.png", "jug_04.png"],
+    "base_score": 10.0
+  },
+  {
+    "hold_type": "Sloper",
+    "description": "大斜面：无明显抓握点，全靠摩擦力和重心",
+    "shape_variants": ["sloper_01.png", "sloper_02.png", "sloper_03.png", "sloper_04.png"],
+    "base_score": 6.5
+  },
+  {
+    "hold_type": "Pinch",
+    "description": "捏点：需要大拇指对位发力捏住",
+    "shape_variants": ["pinch_01.png", "pinch_02.png", "pinch_03.png", "pinch_04.png"],
+    "base_score": 7.0
+  },
+  {
+    "hold_type": "Crimp",
+    "description": "小抠口：需要指力，边缘锋利",
+    "shape_variants": ["crimp_01.png", "crimp_02.png", "crimp_03.png", "crimp_04.png"],
+    "base_score": 4.0
+  },
+  {
+    "hold_type": "Pocket",
+    "description": "指洞：只能塞进一根或两根手指",
+    "shape_variants": ["pocket_01.png", "pocket_02.png", "pocket_03.png", "pocket_04.png"],
+    "base_score": 3.0
+  },
+  {
+    "hold_type": "Foot",
+    "description": "纯脚点：极小，绝对无法用手抓握",
+    "shape_variants": ["foot_01.png", "foot_02.png", "foot_03.png", "foot_04.png"],
+    "base_score": 1.0
+  }
+]
