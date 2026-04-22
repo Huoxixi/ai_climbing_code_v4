@@ -27,6 +27,8 @@ class Hold(BaseModel):
     y: int = Field(..., description="纵轴：1到18")
     hold_type: HoldType = Field(..., description="岩点形态")
     rotation: int = Field(0, description="安装角度 (0-360)")
+    is_start: bool = Field(False, description="是否为起步点")
+    variant: str = Field("default", description="岩点形状变体")
 
 class BetaStep(BaseModel):
     """单个攀爬动作步骤"""
@@ -44,16 +46,25 @@ class RouteCandidate(BaseModel):
     flow_score: float = Field(default=0.0, description="路线流畅度评分")
     crux_step: Optional[str] = Field(None, description="关键步骤描述")
 
+class RecipeItem(BaseModel):
+    count: int
+    variant: str
+
 class RouteRequest(BaseModel):
     climber_height_cm: int = Field(..., description="攀爬者身高 (厘米)")
     climber_span_cm: int = Field(..., description="攀爬者臂展 (厘米)")
     target_difficulty: str = Field(..., description="目标难度 (如 V1, V3, V5)")
-    recipe: Dict[HoldType, int] = Field(..., description="岩点配方，Key为HoldType，Value为数量")
+    recipe: Dict[HoldType, RecipeItem] = Field(default_factory=dict, description="岩点配方预算 (如 {'Jug': {'count': 4, 'variant': 'random'}})")
 
+
+class FinalRoute(BaseModel):
+    """最终呈现给用户的单条路线"""
+    route_name: str
+    setter_commentary: str
+    placed_holds: List[Hold]
+    beta_sequence: List[BetaStep]
 
 class RouteResponse(BaseModel):
-    """AI 定线结果响应包"""
-    route_name: str = Field(..., description="路线名称")
-    setter_commentary: str = Field(..., description="定线员寄语")
-    placed_holds: List[Hold] = Field(..., description="该路线放置的岩点列表")
-    beta_sequence: List[BetaStep] = Field(..., description="动作解析时间轴")
+    """AI 定线结果响应包，可能包含多条精选路线"""
+    selected_routes: List[FinalRoute] = Field(..., description="经过 AI 精选的路线列表")
+    failure_suggestion: Optional[str] = Field(None, description="如果生成失败，给用户的建议")

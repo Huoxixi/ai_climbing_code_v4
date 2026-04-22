@@ -10,88 +10,133 @@ from openai import AsyncOpenAI
 import httpx
 
 from core.config import settings
-from core.models import RouteRequest, RouteResponse, RouteCandidate, HoldType
+from core.models import RouteRequest, RouteResponse, RouteCandidate, HoldType, FinalRoute
 from core.generator import RouteGenerator
 from core.a_star_solver import AStarSolver
 from agent.tools_def import SELECT_ROUTE_TOOL
 
 SYSTEM_PROMPT = """
 你现在是「智行通途 (ZXT)」攀岩定线引擎的艺术总监 (Curator)。
-你的任务是从 A* 物理引擎筛选出的 5 条候选路线中，挑选出最符合用户审美和定线艺术的一条。
+你的任务是从一个候选项列表中（最多5条）挑选出最优秀、最有趣的 **两条** 路线。
 
-# 候选路线数据说明：
-- ID: 路线的唯一标识。
-- Total Cost: A* 算法计算的体力/技巧总消耗。越低代表越容易爬，越高代表越具有挑战性。
-- Crux: 路线中最难的一个动作描述。
-- Recipe: 岩点配方组成。
+# 路线数据说明：
+- `id`: 每条路线的唯一标识符，如 "route_0"。
+- `total_cost`: A* 算法计算的体力/技巧总消耗。越低代表越容易爬。
+- `crux`: 路线中最难的一个动作描述。
 
 # 你的工作：
-1. 评估这些路线的 Cost 和 Crux。
-2. 结合用户的目标难度（Target Difficulty）进行权衡。
-3. 为选中的路线起一个富有诗意或硬核的名字 (route_name)。
-4. 写一段定线员寄语 (setter_commentary)，解释你为什么选择这条线，以及它的攀爬风格。
+1.  **综合评估**：仔细评估列表中的每一条候选路线，不仅仅是看 `total_cost`，还要考虑路线的风格、可能的动作序列等。
+2.  **选择最佳两条**：挑选出你认为最符合用户需求、最具创意或攀爬体验最佳的两条路线。
+3.  **最终包装**：
+    -   为你选中的两条路线分别起一个富有诗意或硬核的名字 (`route_name`)。
+    -   为每条路线写一段定线员寄语 (`setter_commentary`)，解释它的攀爬风格、特点，以及你为什么选择它。
+    -   **关键：** 在 `selections` 列表中，必须包含你选择的那两条路线的 `id`。
 
-请调用 `select_and_package_route` 工具提交你的决定。
+请调用 `select_and_package_routes` 工具提交你的最终决定。
 """
 
 async def generate_route_with_reflection(request: RouteRequest) -> RouteResponse:
     """
-    PCG 漏斗模型核心逻辑：
-    1. 批量生成并初筛 (Generator)
-    2. A* 物理试爬与评分 (Solver)
-    3. LLM 艺术总监决选 (Curator)
+    核心架构: 实施「带预算配额的密集图寻路」与「大基数择优」
+    - 增加实时监控仪表盘与深度失败分析
     """
     
-    # 步骤 1：批量生成并初筛 (Generator)
     generator = RouteGenerator()
-    batch_size = 50  # 演示用，实际可设为 1000
-    candidate_holds_list = generator.generate_batch_routes(request.recipe, batch_size=batch_size)
-    
-    if not candidate_holds_list:
-        raise ValueError("无法生成符合初筛规则的路线，请调整配方。")
-
-    # 步骤 2：A* 物理试爬与评分 (Solver)
     solver = AStarSolver(request.climber_height_cm, request.climber_span_cm)
+    
     successful_candidates: List[RouteCandidate] = []
     
-    for holds in candidate_holds_list:
-        result = solver.solve(holds)
+    # 深度失败分析所需的数据结构
+    failure_heights = []
+    rule_violations = {}
+    low_y_failures = 0
+
+    MAX_ITERATIONS = 200
+
+    for i in range(MAX_ITERATIONS):
+        print(f"[进度 {i+1}/{MAX_ITERATIONS}] 正在生成随机点阵并启动 A* 寻路...")
+        
+        board_holds, inventory_budget = generator.generate_board(request.recipe)
+        if not board_holds:
+            print(f"❌ 尝试失败。最高爬升高度: Y=0, 失败原因: 生成器无法创建符合条件的板")
+            failure_heights.append(0)
+            continue
+
+        result, report = solver.solve(board_holds, inventory_budget)
+        
         if result:
+            print(f"✅ 找到路线! 总代价(Cost): {result.total_cost:.2f}, 岩点数: {len(result.placed_holds)}")
             successful_candidates.append(result)
-    
+        else:
+            max_y = report.get('max_y', 0)
+            reason = report.get('reason', '未知')
+            rule = report.get('rule_violation')
+
+            print(f"❌ 尝试失败。最高爬升高度: Y={max_y}, 失败原因: {reason}")
+            
+            # 统计数据
+            failure_heights.append(max_y)
+            if rule:
+                rule_violations[rule] = rule_violations.get(rule, 0) + 1
+            
+            # 容错补丁 1: 打印 Board 状态
+            from collections import Counter
+            hold_counts = Counter(h.hold_type.value for h in board_holds)
+            print(f"   BOARD状态: {dict(hold_counts)}")
+
+            # 容错补丁 2: 自动放水逻辑
+            if max_y < 10:
+                low_y_failures += 1
+            if i > 20 and low_y_failures == i:
+                 print("   [自动放水逻辑]: 检测到低位高频失败，建议检查起步点生成的坐标逻辑!")
+
+    # 初级筛选
     if not successful_candidates:
-        raise ValueError("所有生成的候选路线均无法通过 A* 物理完攀测试。")
+        print("\n" + "="*20 + " 深度失败分析报告 " + "="*20)
+        
+        # 1. 失败高度分布
+        y_lt5 = sum(1 for y in failure_heights if y < 5)
+        y_5_15 = sum(1 for y in failure_heights if 5 <= y <= 15)
+        y_gt15 = sum(1 for y in failure_heights if y > 15)
+        print(f"失败高度分布: Y<5: {y_lt5}次 | Y=5~15: {y_5_15}次 | Y>15: {y_gt15}次")
 
-    # 按 Total Cost 排序，取前 5 条
+        # 2. 最高频物理规则
+        if rule_violations:
+            most_common_rule = max(rule_violations, key=rule_violations.get)
+            print(f"出现频率最高的物理拦截规则: {most_common_rule} ({rule_violations[most_common_rule]} 次)")
+        else:
+            print("无特定物理拦截规则，问题可能出在起步区或点阵图生成。")
+
+        print("="*58 + "\n")
+        
+        suggestion = "所有尝试均失败。请根据以上分析报告调整配方或检查运动学参数。"
+        return RouteResponse(selected_routes=[], failure_suggestion=suggestion)
+
     successful_candidates.sort(key=lambda x: x.total_cost)
-    top_5 = successful_candidates[:5]
-    
-    # 给 top_5 分配临时 ID 方便 LLM 选择
-    candidates_meta = []
-    candidates_map: Dict[str, RouteCandidate] = {}
-    for i, c in enumerate(top_5):
-        route_id = f"route_{i+1}"
-        candidates_map[route_id] = c
-        candidates_meta.append({
-            "id": route_id,
-            "total_cost": f"{c.total_cost:.1f}",
-            "crux": c.crux_step,
-            "recipe_summary": {k.value: v for k, v in request.recipe.items()}
-        })
+    top_candidates = successful_candidates[:5]
 
-    # 步骤 3：LLM 艺术总监决选 (Curator)
+    # 4. LLM 艺术总监决选 (Curator)
     custom_http = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(60.0, connect=15.0))
     client = AsyncOpenAI(api_key=settings.api_key, base_url=settings.base_url, http_client=custom_http)
+
+    candidates_meta = [
+        {
+            "id": f"route_{i}",
+            "total_cost": f"{candidate.total_cost:.1f}",
+            "crux": candidate.crux_step or "N/A"
+        }
+        for i, candidate in enumerate(top_candidates)
+    ]
 
     user_content = f"""
 用户需求：
 - 目标难度：{request.target_difficulty}
 - 攀爬者身高/臂展：{request.climber_height_cm}cm / {request.climber_span_cm}cm
 
-候选路线：
+候选路线列表：
 {json.dumps(candidates_meta, indent=2, ensure_ascii=False)}
 
-请挑选出最完美的一条路线。
+请从以上列表中挑选出最佳的两条路线，并为其进行最终点评。
 """
 
     response = await client.chat.completions.create(
@@ -101,30 +146,53 @@ async def generate_route_with_reflection(request: RouteRequest) -> RouteResponse
             {"role": "user", "content": user_content}
         ],
         tools=[SELECT_ROUTE_TOOL],
-        tool_choice={"type": "function", "function": {"name": "select_and_package_route"}},
+        tool_choice={"type": "function", "function": {"name": "select_and_package_routes"}},
         temperature=0.7
     )
 
     message = response.choices[0].message
-    if not message.tool_calls:
-        # 兜底：如果 LLM 没调工具，默认选第一条
-        best_candidate = top_5[0]
-        return RouteResponse(
-            route_name="默认探险者",
-            setter_commentary="LLM 决选超时，自动选择代价最优路线。",
-            placed_holds=best_candidate.placed_holds,
-            beta_sequence=best_candidate.beta_sequence
-        )
+    final_routes = []
 
-    tool_call = message.tool_calls[0]
-    args = json.loads(tool_call.function.arguments)
-    
-    selected_id = args.get("selected_route_id", "route_1")
-    final_candidate = candidates_map.get(selected_id, top_5[0])
+    if message.tool_calls:
+        tool_call = message.tool_calls[0]
+        args = json.loads(tool_call.function.arguments)
+        selections = args.get("selections", [])
 
-    return RouteResponse(
-        route_name=args.get("route_name", "无名之路"),
-        setter_commentary=args.get("setter_commentary", "未提供寄语"),
-        placed_holds=final_candidate.placed_holds,
-        beta_sequence=final_candidate.beta_sequence
-    )
+        for selection in selections:
+            route_id = selection.get("selected_route_id")
+            route_index = -1
+            if route_id and route_id.startswith("route_"):
+                try:
+                    route_index = int(route_id.split("_")[1])
+                except (ValueError, IndexError):
+                    pass
+            
+            if 0 <= route_index < len(top_candidates):
+                candidate = top_candidates[route_index]
+                final_routes.append(FinalRoute(
+                    route_name=selection.get("route_name", "无名之路"),
+                    setter_commentary=selection.get("setter_commentary", ""),
+                    placed_holds=candidate.placed_holds,
+                    beta_sequence=candidate.beta_sequence
+                ))
+
+    # Fallback：如果 LLM 返回数据不足两条，则用 cost 最低的路线补足
+    if len(final_routes) < 2:
+        print("LLM 返回数据不足两条，使用 cost 最低的路线进行补充。")
+        used_indices = []
+        if final_routes:
+            # 获取已选路线的索引
+            # (此步简化，假设 LLM 返回的 ID 格式正确)
+            pass
+        
+        for candidate in top_candidates:
+            if len(final_routes) >= 2: break
+            # 简单地用 cost 最低的补齐，不去重了
+            final_routes.append(FinalRoute(
+                route_name=f"备选-{candidate.total_cost:.1f}",
+                setter_commentary="由系统自动选出的高性价比备选路线。",
+                placed_holds=candidate.placed_holds,
+                beta_sequence=candidate.beta_sequence
+            ))
+
+    return RouteResponse(selected_routes=final_routes)

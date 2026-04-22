@@ -104,34 +104,6 @@
             </button>
             <div v-if="error" class="error-toast">{{ error }}</div>
           </footer>
-
-          <section v-if="routeSteps.length" class="timeline-section">
-            <h3 class="group-title">📜 攀爬动作序列 (Beta)</h3>
-            <div class="step-scroll-area">
-              <div v-for="(m, idx) in routeSteps" :key="idx"
-                   class="step-item"
-                   :class="{ 
-                     'is-active': idx === currentIndex, 
-                     'is-top': m.is_top,
-                     'is-start': m.step === 0 
-                   }"
-                   @click="currentIndex = idx">
-                <div class="step-indicator">
-                   <div class="step-line"></div>
-                   <div class="step-number">{{ m.step }}</div>
-                </div>
-                <div class="step-content">
-                  <div class="step-meta">
-                    <span class="limb-tag" :class="m.limb.toLowerCase()">{{ getLimbName(m.limb) }}</span>
-                    <span class="hold-id">{{ m.hold_id }}</span>
-                  </div>
-                  <p class="intent" v-if="m.intent">{{ m.intent }}</p>
-                  <p class="intent" v-else-if="m.step === 0">上墙起步</p>
-                </div>
-                <div v-if="m.is_top" class="top-medal">🏆</div>
-              </div>
-            </div>
-          </section>
         </div>
       </aside>
 
@@ -147,13 +119,6 @@
               <span class="quote-icon">"</span>
               <p>{{ routeData.setter_commentary }}</p>
             </div>
-          </div>
-          <div class="controls">
-            <div class="control-labels">
-              <span class="step-counter">动作序列 {{ routeSteps.length > 0 ? currentIndex + 1 : 0 }} / {{ routeSteps.length }}</span>
-              <span class="difficulty-tag">{{ profile.target_difficulty }}</span>
-            </div>
-            <input type="range" v-model.number="currentIndex" min="0" :max="maxIndex" class="modern-slider" />
           </div>
         </div>
 
@@ -173,15 +138,6 @@
                      class="hole" :style="getCoord(x+y)"></div>
               </template>
             </div>
-
-            <!-- 骨架连线 -->
-            <svg class="skeleton-layer">
-              <line v-if="skeletonLines.body" v-bind="skeletonLines.body" class="bone body-bone" />
-              <line v-if="skeletonLines.lh" v-bind="skeletonLines.lh" class="bone limb-bone" />
-              <line v-if="skeletonLines.rh" v-bind="skeletonLines.rh" class="bone limb-bone" />
-              <line v-if="skeletonLines.lf" v-bind="skeletonLines.lf" class="bone limb-bone" />
-              <line v-if="skeletonLines.rf" v-bind="skeletonLines.rf" class="bone limb-bone" />
-            </svg>
 
             <div v-for="hold in placedHolds" :key="hold.id"
                  class="hold-entity"
@@ -214,8 +170,50 @@
               <span class="limb-icon">{{ getLimbEmoji(limb) }}</span>
             </div>
           </div>
+
+          <!-- 移到岩板下方 -->
+          <div class="controls" v-if="routeData">
+            <div class="control-labels">
+              <span class="step-counter">动作序列 {{ routeSteps.length > 0 ? currentIndex + 1 : 0 }} / {{ routeSteps.length }}</span>
+              <span class="difficulty-tag">{{ profile.target_difficulty }}</span>
+            </div>
+            <input type="range" v-model.number="currentIndex" min="0" :max="maxIndex" class="modern-slider" />
+          </div>
         </div>
       </main>
+
+      <!-- 右侧边栏: 攀爬动作序列 -->
+      <aside v-if="routeSteps.length" class="sidebar right-sidebar">
+        <div class="sidebar-content">
+          <section class="timeline-section">
+            <h3 class="group-title">📜 攀爬动作序列</h3>
+            <div class="step-scroll-area">
+              <div v-for="(m, idx) in routeSteps" :key="idx"
+                   class="step-item"
+                   :class="{ 
+                     'is-active': idx === currentIndex, 
+                     'is-top': m.is_top,
+                     'is-start': m.step === 0 
+                   }"
+                   @click="currentIndex = idx">
+                <div class="step-indicator">
+                   <div class="step-line"></div>
+                   <div class="step-number">{{ m.step }}</div>
+                </div>
+                <div class="step-content">
+                  <div class="step-meta">
+                    <span class="limb-tag" :class="m.limb.toLowerCase()">{{ getLimbName(m.limb) }}</span>
+                    <span class="hold-id">{{ m.hold_id }}</span>
+                  </div>
+                  <p class="intent" v-if="m.intent">{{ m.intent }}</p>
+                  <p class="intent" v-else-if="m.step === 0">上墙起步</p>
+                </div>
+                <div v-if="m.is_top" class="top-medal">🏆</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -324,7 +322,10 @@ const generateRoute = async () => {
   const backendRecipePayload = {}
   Object.keys(recipeConfig).forEach(type => {
     if (recipeConfig[type].count > 0) {
-      backendRecipePayload[type] = recipeConfig[type].count
+      backendRecipePayload[type] = {
+        count: recipeConfig[type].count,
+        variant: recipeConfig[type].variant
+      }
     }
   })
 
@@ -335,7 +336,12 @@ const generateRoute = async () => {
       target_difficulty: profile.value.target_difficulty,
       recipe: backendRecipePayload
     })
-    routeData.value = response.data
+    if (response.data.selected_routes && response.data.selected_routes.length > 0) {
+      routeData.value = response.data.selected_routes[0];
+    } else {
+      routeData.value = null; // 或者处理没有路线的情况
+      error.value = response.data.failure_suggestion || '未能生成有效路线。';
+    }
     
     // 🌟 核心修复：严格按照动作数组的长度，一秒只走一步！
     let idx = 0
@@ -352,8 +358,8 @@ const generateRoute = async () => {
 }
 
 // --- 计算属性 ---
-const placedHolds = computed(() => routeData.value?.placed_holds || [])
-const routeSteps = computed(() => routeData.value?.beta_sequence || [])
+const placedHolds = computed(() => routeData.value?.placed_holds || []);
+const routeSteps = computed(() => routeData.value?.beta_sequence || []);
 
 // 🌟 核心修复：最大帧数就是数组长度减一
 const maxIndex = computed(() => Math.max(0, routeSteps.value.length - 1))
@@ -361,67 +367,27 @@ const maxIndex = computed(() => Math.max(0, routeSteps.value.length - 1))
 const isStart = (id) => routeSteps.value.some(s => s.step === 0 && s.hold_id === id)
 const isTop = (id) => routeSteps.value.some(s => s.is_top && s.hold_id === id)
 
-// 🌟 核心修复：按数组切片 (slice) 截取肢体位置，彻底解决多步杂糅问题
+// 🌟 核心修复：按数组切片 (slice) 截取肢体位置，并修正起步阶段显示
 const currentLimbs = computed(() => {
-  const limbs = {}
-  routeSteps.value.slice(0, currentIndex.value + 1).forEach(m => {
-    limbs[m.limb] = { id: m.hold_id }
-  })
-  return limbs
-})
+  const limbs = {};
+  const currentMove = routeSteps.value[currentIndex.value];
 
-// 计算骨架连线
-const skeletonLines = computed(() => {
-  const limbs = currentLimbs.value
-  if (!limbs.LH && !limbs.RH && !limbs.LF && !limbs.RF) return {}
-
-  const getPos = (id) => {
-    const coords = getCoord(id)
-    return {
-      x: parseFloat(coords.left),
-      y: 100 - parseFloat(coords.bottom)
-    }
+  // 修正逻辑：如果当前是起步动作 (step 0)，则显示所有起步点
+  if (currentMove && currentMove.step === 0) {
+    routeSteps.value.forEach(m => {
+      if (m.step === 0) {
+        limbs[m.limb] = { id: m.hold_id };
+      }
+    });
+  } else {
+    // 正常播放后续动作
+    routeSteps.value.slice(0, currentIndex.value + 1).forEach(m => {
+      limbs[m.limb] = { id: m.hold_id };
+    });
   }
-
-  const res = {}
-  const p = {
-    lh: limbs.LH ? getPos(limbs.LH.id) : null,
-    rh: limbs.RH ? getPos(limbs.RH.id) : null,
-    lf: limbs.LF ? getPos(limbs.LF.id) : null,
-    rf: limbs.RF ? getPos(limbs.RF.id) : null
-  }
-
-  // 虚拟重心 (Center of Mass) - 简化为四肢中心
-  const activeLimbs = [p.lh, p.rh, p.lf, p.rf].filter(i => i)
-  if (activeLimbs.length < 2) return {}
   
-  const com = {
-    x: activeLimbs.reduce((acc, curr) => acc + curr.x, 0) / activeLimbs.length,
-    y: activeLimbs.reduce((acc, curr) => acc + curr.y, 0) / activeLimbs.length
-  }
-
-  if (p.lh) res.lh = { x1: `${com.x}%`, y1: `${com.y}%`, x2: `${p.lh.x}%`, y2: `${p.lh.y}%` }
-  if (p.rh) res.rh = { x1: `${com.x}%`, y1: `${com.y}%`, x2: `${p.rh.x}%`, y2: `${p.rh.y}%` }
-  if (p.lf) res.lf = { x1: `${com.x}%`, y1: `${com.y}%`, x2: `${p.lf.x}%`, y2: `${p.lf.y}%` }
-  if (p.rf) res.rf = { x1: `${com.x}%`, y1: `${com.y}%`, x2: `${p.rf.x}%`, y2: `${p.rf.y}%` }
-
-  // 躯干：连接手重心和脚重心
-  const hands = [p.lh, p.rh].filter(i => i)
-  const feet = [p.lf, p.rf].filter(i => i)
-  if (hands.length && feet.length) {
-    const handCom = {
-      x: hands.reduce((acc, curr) => acc + curr.x, 0) / hands.length,
-      y: hands.reduce((acc, curr) => acc + curr.y, 0) / hands.length
-    }
-    const footCom = {
-      x: feet.reduce((acc, curr) => acc + curr.x, 0) / feet.length,
-      y: feet.reduce((acc, curr) => acc + curr.y, 0) / feet.length
-    }
-    res.body = { x1: `${handCom.x}%`, y1: `${handCom.y}%`, x2: `${footCom.x}%`, y2: `${footCom.y}%` }
-  }
-
-  return res
-})
+  return limbs;
+});
 
 const getCoord = (id) => {
   if (!id) return { left: '50%', bottom: '50%' }
@@ -443,10 +409,15 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 .main-layout { display: flex; height: 100%; position: relative; }
 
 .sidebar {
-  width: 350px; background: #1e293b; border-right: 1px solid #334155;
+  width: 350px; background: #1e293b;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-y: auto; overflow-x: hidden; position: relative;
   flex-shrink: 0;
+}
+.sidebar.left-sidebar { border-right: 1px solid #334155; }
+.sidebar.right-sidebar { 
+  width: 320px; 
+  border-left: 1px solid #334155;
 }
 .sidebar.is-collapsed { width: 0; border-right: none; }
 
@@ -516,10 +487,12 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 .upload-section input[type="file"] { font-size: 0.8rem; }
 
 /* 时间轴样式 */
-.timeline-section { margin-top: 30px; }
+.timeline-section { margin-top: 0; height: 100%; display: flex; flex-direction: column; }
+.group-title { margin-top: 10px; }
 .step-scroll-area { 
+  flex-grow: 1; /* 占据剩余空间 */
   display: flex; flex-direction: column; gap: 10px; margin-top: 15px; 
-  max-height: 450px; overflow-y: auto; padding-right: 10px;
+  overflow-y: auto; padding-right: 10px;
   scrollbar-width: thin; scrollbar-color: #334155 transparent;
 }
 .step-scroll-area::-webkit-scrollbar { width: 6px; }
@@ -561,22 +534,27 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 .top-medal { font-size: 1.2rem; }
 
 /* 舞台样式 */
-.stage { flex: 1; display: flex; flex-direction: column; padding: 30px; position: relative; overflow-y: auto; }
-.stage-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; gap: 40px; }
+.stage { 
+  flex: 1; display: flex; flex-direction: column; padding: 20px; 
+  position: relative; overflow-y: auto; min-width: 0; /* 防止 flex item 溢出 */
+}
+.stage-header { display: flex; justify-content: center; text-align: center; align-items: flex-start; margin-bottom: 20px; gap: 20px; }
 
 .route-info { flex: 1; }
 .route-info h2 { font-size: 1.8rem; margin: 0 0 15px 0; background: linear-gradient(90deg, #f8fafc, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
 
 .commentary-card {
   background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-left: 4px solid #3b82f6;
-  padding: 15px 20px; border-radius: 0 12px 12px 0; position: relative; max-width: 600px;
+  padding: 15px 20px; border-radius: 0 12px 12px 0; position: relative; max-width: 600px; margin: 0 auto;
 }
 .quote-icon { position: absolute; top: -10px; left: 10px; font-size: 3rem; color: #3b82f6; opacity: 0.2; font-family: serif; }
 .commentary-card p { margin: 0; font-size: 0.95rem; line-height: 1.6; color: #cbd5e1; font-style: italic; }
 
 .controls {
-  background: #1e293b; padding: 20px; border-radius: 16px; border: 1px solid #334155;
-  width: 300px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  background: #1e293b; padding: 15px 20px; border-radius: 16px; border: 1px solid #334155;
+  width: 100%; max-width: 450px; /* 与岩板同宽 */
+  display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  margin-top: 20px; /* 与岩板间距 */
 }
 .control-labels { display: flex; justify-content: space-between; align-items: center; }
 .step-counter { font-size: 0.85rem; color: #94a3b8; font-weight: 600; }
@@ -590,9 +568,12 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 }
 .modern-slider::-webkit-slider-thumb:hover { transform: scale(1.2); box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
 
-.wall-display { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px 0; }
+.wall-display { 
+  flex: 1; display: flex; flex-direction: column; 
+  justify-content: center; align-items: center; padding: 0;
+}
 .wall-frame {
-  width: 450px; height: 650px; 
+  width: 450px; height: 650px; flex-shrink: 0; /* 防止岩板被压缩 */
   background: #2a1e12; /* 木纹底色 */
   background-image: 
     repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 10px),
@@ -614,13 +595,6 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
   background: #1a120b; border-radius: 50%; transform: translate(-50%, 50%); 
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 1px 1px rgba(255,255,255,0.1);
 }
-
-.skeleton-layer {
-  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15;
-}
-.bone { stroke: rgba(255, 255, 255, 0.3); stroke-width: 4; stroke-linecap: round; transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
-.limb-bone { stroke-dasharray: 4 6; stroke: rgba(255, 255, 255, 0.2); }
-.body-bone { stroke: rgba(255, 255, 255, 0.5); stroke-width: 6; }
 
 .hold-entity { 
   position: absolute; transform: translate(-50%, 50%); z-index: 10; 

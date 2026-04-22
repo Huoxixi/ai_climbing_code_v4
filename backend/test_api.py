@@ -1,32 +1,28 @@
-import os
-import asyncio
-from openai import AsyncOpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
+import requests
+import json
 
-async def test_connection():
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.apiyi.com/v1")
-    
-    print(f"📡 正在尝试连接 API...\nURL: {base_url}\nKey: {api_key[:8]}...")
-    
-    import httpx
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        timeout=10.0,
-        # 🌟 免疫系统升级：新版 httpx 的强行直连语法
-        http_client=httpx.AsyncClient(trust_env=False)
-    )
-    
-    try:
-        response = await client.chat.completions.create(
-            model="gpt-5.4", # 根据你的实际模型名称修改
-            messages=[{"role": "user", "content": "Ping!"}]
-        )
-        print("✅ 连接成功！大模型回复:", response.choices[0].message.content)
-    except Exception as e:
-        print("❌ 连接失败！错误信息:", type(e).__name__, "-", e)
+url = "http://127.0.0.1:8008/api/generate"
 
-asyncio.run(test_connection())
+payload = {
+    "climber_height_cm": 175,
+    "climber_span_cm": 175,
+    "target_difficulty": "V3",
+    "recipe": {
+        "Jug": {"count": 4, "variant": "random"},
+        "Crimp": {"count": 6, "variant": "random"},
+        "Sloper": {"count": 4, "variant": "random"},
+        "Pinch": {"count": 2, "variant": "random"},
+        "Pocket": {"count": 2, "variant": "random"},
+        "Foot": {"count": 6, "variant": "random"}
+    }
+}
+
+headers = {
+    "Content-Type": "application/json"
+}
+
+response = requests.post(url, headers=headers, data=json.dumps(payload))
+
+print(response.status_code)
+print(response.json())

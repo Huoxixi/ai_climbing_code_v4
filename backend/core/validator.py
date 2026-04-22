@@ -57,9 +57,11 @@ class PhysicsValidator:
         # 规则 4: 任意 2x2 极小区域内包含 >= 4 个点 (拓扑过度拥挤)。
         # 将 holds 转换为 (x_idx, y) 方便计算
         hold_coords: Set[Tuple[int, int]] = set()
+        x_indices = set()
         for hold in holds:
             x_idx = ord(hold.x.upper()) - ord('A')
             hold_coords.add((x_idx, hold.y))
+            x_indices.add(x_idx)
 
         for x_base in range(self.GRID_WIDTH - 1):
             for y_base in range(self.GRID_HEIGHT - 1):
@@ -73,4 +75,8 @@ class PhysicsValidator:
                 if count >= 4:
                     return False, f"({chr(ord('A')+x_base)}{y_base+1}) 附近的 2x2 区域过度拥挤 (>=4个点)。"
 
+        # 规则 5: 抱石精神 (No Ladder Rule)
+        if len(x_indices) <= 2:
+            return False, "路线过于垂直，违反“No Ladder Rule”。"
+            
         return True, "初筛通过：路线符合基本的物理布局规则。"

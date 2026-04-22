@@ -10,12 +10,13 @@ from core.models import Hold, HoldType, Limb, BetaStep, RouteCandidate
 
 class State:
     """A* 搜索中的单个状态节点"""
-    def __init__(self, limbs: Dict[Limb, Optional[Hold]], g_cost: float, h_cost: float, step_count: int, sequence: List[BetaStep]):
+    def __init__(self, limbs: Dict[Limb, Optional[Hold]], g_cost: float, h_cost: float, step_count: int, sequence: List[BetaStep], last_moved_limb: Optional[Limb] = None):
         self.limbs = limbs
         self.g_cost = g_cost
         self.h_cost = h_cost
         self.step_count = step_count
         self.sequence = sequence
+        self.last_moved_limb = last_moved_limb
 
     @property
     def f_cost(self) -> float:
@@ -86,162 +87,269 @@ class AStarSolver:
             return 5.0 * ((ratio - 0.6) ** 2)
 
     def _get_start_holds(self, holds: List[Hold]) -> List[Hold]:
-        return [h for h in holds if 1 <= h.y <= 6]
+        return [h for h in holds if 1 <= h.y <= 8]
 
     def _get_top_holds(self, holds: List[Hold]) -> List[Hold]:
-        return [h for h in holds if 17 <= h.y <= 18]
+        return [h for h in holds if h.y == 18]
 
-    def _is_cross_body(self, limbs: Dict[Limb, Optional[Hold]]) -> bool:
-        """检查身体是否过度打结/交叉 (肢体防结)"""
-        def get_x_idx(h): return ord(h.x.upper()) - ord('A') if h else None
+    def _check_kinematics(self, limbs: Dict[Limb, Optional[Hold]]) -> Tuple[bool, Optional[str]]:
+        """
+        替代 _is_cross_body，并整合所有运动学红线校验。
+        返回 (True, None) 表示校验通过, (False, "原因") 表示违反物理规则。
+        """
+        def get_hold(limb): return limbs.get(limb)
+        def get_y(limb): return get_hold(limb).y if get_hold(limb) else 0
+        def get_x_idx(limb): return ord(get_hold(limb).x.upper()) - ord('A') if get_hold(limb) else -1
+
+        lh, rh = get_hold(Limb.LH), get_hold(Limb.RH)
+        lf, rf = get_hold(Limb.LF), get_hold(Limb.RF)
+
+        if lh and rh and lh.id != rh.id and get_x_idx(Limb.LH) > get_x_idx(Limb.RH): 
+            return False, "交叉手"
         
-        lx, rx = get_x_idx(limbs[Limb.LH]), get_x_idx(limbs[Limb.RH])
-        lfx, rfx = get_x_idx(limbs[Limb.LF]), get_x_idx(limbs[Limb.RF])
+        if lf and rf and lf.id != rf.id and get_x_idx(Limb.LF) > get_x_idx(Limb.RF): 
+            return False, "交叉脚"
+
+        active_feet_y = [y for y in [get_y(Limb.LF), get_y(Limb.RF)] if y > 0]
+        if not active_feet_y: 
+            return False, "双脚离地"
         
-        # 左侧肢体的 X 坐标需在右侧肢体的左侧或同列
-        if lx is not None and rx is not None and lx > rx: return True
-        if lfx is not None and rfx is not None and lfx > rfx: return True
-        return False
+        min_hand_y = min(get_y(Limb.LH), get_y(Limb.RH)) if get_hold(Limb.LH) and get_hold(Limb.RH) else (get_y(Limb.LH) or get_y(Limb.RH))
+        max_foot_y = max(active_feet_y)
+        if max_foot_y > min_hand_y: 
+            return False, "脚高于手"
 
-    def solve(self, placed_holds: List[Hold]) -> Optional[RouteCandidate]:
-        if not placed_holds: return None
-
-        start_holds = self._get_start_holds(placed_holds)
-        top_holds = self._get_top_holds(placed_holds)
-
-        # 1. 寻找合法起步点 (3-4点起步)
-        # 起步脚 Y: 1-2, 起步手 Y: 3-6
-        start_hands = [h for h in start_holds if 3 <= h.y <= 6 and h.hold_type != HoldType.FOOT]
-        start_feet = [h for h in start_holds if 1 <= h.y <= 2]
-
-        if len(start_hands) < 1 or len(start_feet) < 1: return None
-
-        # 选取最底部的点作为起步
-        lh_start = start_hands[0]
-        rh_start = start_hands[1] if len(start_hands) > 1 else start_hands[0]
-        lf_start = start_feet[0]
-        rf_start = start_feet[1] if len(start_feet) > 1 else start_feet[0]
-
-        initial_limbs = {Limb.LH: lh_start, Limb.RH: rh_start, Limb.LF: lf_start, Limb.RF: rf_start}
+        max_hand_y = max(get_y(Limb.LH), get_y(Limb.RH))
+        min_foot_y = min(active_feet_y)
+        if not (3 <= (max_hand_y - min_foot_y) <= 6): 
+            return False, "核心区失衡"
         
-        # 初始 beta 序列 (Step 0)
-        start_sequence = []
-        for limb, hold in initial_limbs.items():
-            start_sequence.append(BetaStep(step=0, limb=limb, hold_id=hold.id, intent=""))
+        if (max_hand_y - min_foot_y) > 9: 
+            return False, "身体过度伸展"
 
-        initial_state = State(
-            limbs=initial_limbs,
-            g_cost=0.0,
-            h_cost=0.0,
-            step_count=0,
-            sequence=start_sequence
-        )
+        if lh and rh and abs(get_x_idx(Limb.LH) - get_x_idx(Limb.RH)) > 6: 
+            return False, "手部横向跨度过大"
+        if lf and rf and abs(get_x_idx(Limb.LF) - get_x_idx(Limb.RF)) > 4: 
+            return False, "脚部横向跨度过大"
+
+        return True, None
+
+    def solve(self, board_holds: List[Hold], inventory_budget: Dict[HoldType, int] = None) -> Tuple[Optional[RouteCandidate], Dict]:
+        max_y_reached = 0
+        
+        def failure_report(reason: str, rule: Optional[str] = None):
+            return None, {"reason": reason, "max_y": max_y_reached, "rule_violation": rule}
+
+        if not board_holds:
+            return failure_report("传入的板为空")
+
+        all_holds_map = {h.id: h for h in board_holds}
+        top_holds = self._get_top_holds(board_holds)
+        if not top_holds:
+            return failure_report("没有找到完攀点")
+
+        start_hands = sorted([h for h in board_holds if h.y <= 8 and h.hold_type != HoldType.FOOT], key=lambda h: h.y)
+        start_feet = sorted([h for h in board_holds if h.y <= 4], key=lambda h: h.y)
+
+        if len(start_hands) < 1 or len(start_feet) < 1:
+            return failure_report("起步区手点或脚点数量不足")
+
+        from itertools import combinations
+        possible_starts = []
+        # 兼容双手同点起步
+        if len(start_hands) == 1:
+            for feet_combo in combinations(start_feet, 1):
+                possible_starts.append(((start_hands[0], start_hands[0]), feet_combo))
+            for feet_combo in combinations(start_feet, 2):
+                 possible_starts.append(((start_hands[0], start_hands[0]), feet_combo))
+
+        for hands in combinations(start_hands, 2):
+            for feet_combo in combinations(start_feet, 1):
+                possible_starts.append((hands, feet_combo))
+            for feet_combo in combinations(start_feet, 2):
+                possible_starts.append((hands, feet_combo))
+
+        initial_state = None
+        for hands, feet in possible_starts:
+            lh, rh = (hands[0], hands[1]) if ord(hands[0].x) <= ord(hands[1].x) else (hands[1], hands[0])
+            
+            if not all(h.y > f.y for h in hands for f in feet): continue
+            if len(feet) == 2 and abs(ord(feet[0].x) - ord(feet[1].x)) > 3: continue
+
+            initial_limbs = {Limb.LH: lh, Limb.RH: rh}
+            if len(feet) == 1:
+                initial_limbs.update({Limb.LF: feet[0], Limb.RF: None})
+            else:
+                lf, rf = (feet[0], feet[1]) if ord(feet[0].x) <= ord(feet[1].x) else (feet[1], feet[0])
+                initial_limbs.update({Limb.LF: lf, Limb.RF: rf})
+
+            is_kinematic, _ = self._check_kinematics(initial_limbs)
+            if not is_kinematic: continue
+            
+            active_limbs = {l: h for l, h in initial_limbs.items() if h}
+            if len(active_limbs) < 3: continue
+
+            start_sequence = [BetaStep(step=0, limb=limb, hold_id=hold.id, intent="") for limb, hold in active_limbs.items()]
+            initial_state = State(limbs=initial_limbs, g_cost=0.0, h_cost=0.0, step_count=0, sequence=start_sequence, last_moved_limb=None)
+            break
+
+        if not initial_state:
+            return failure_report("无法构造合法的起步姿态")
 
         open_list = [initial_state]
         closed_set = set()
-        max_iterations = 3000
+        max_iterations = 5000
         iterations = 0
         max_single_step_cost = 0.0
+        
+        kinematic_failure_counts = {}
 
         while open_list and iterations < max_iterations:
             iterations += 1
             current = heapq.heappop(open_list)
             
-            # 状态防重 (4肢组合)
-            ids = [current.limbs[l].id if current.limbs[l] else "None" for l in Limb]
-            state_key = "-".join(ids)
-            if state_key in closed_set: continue
-            closed_set.add(state_key)
+            # 更新最高高度
+            current_max_y = 0
+            for limb, hold in current.limbs.items():
+                if hold:
+                    current_max_y = max(current_max_y, hold.y)
+            max_y_reached = max(max_y_reached, current_max_y)
+            
+            ids = tuple(sorted((l.name, h.id) for l, h in current.limbs.items() if h))
+            if ids in closed_set: continue
+            closed_set.add(ids)
 
             # 检查完攀：双手 Match 在同一个顶峰点
-            lh_hold = current.limbs[Limb.LH]
-            rh_hold = current.limbs[Limb.RH]
+            lh_hold = current.limbs.get(Limb.LH)
+            rh_hold = current.limbs.get(Limb.RH)
             if lh_hold and rh_hold and lh_hold.id == rh_hold.id and lh_hold in top_holds:
-                current.sequence[-1].is_top = True
+                final_sequence = current.sequence
+                
+                # 精准提取路径点
+                used_hold_ids = {step.hold_id for step in final_sequence}
+                final_holds = [h for h in board_holds if h.id in used_hold_ids]
+
+                # 校验最终路线岩点数量
+                if not (5 <= len(final_holds) <= 15):
+                    return failure_report(f"最终路线岩点数不在 5-15 之间 (实际: {len(final_holds)})")
+
+                has_top = False
+                for step in reversed(final_sequence):
+                    if not has_top and all_holds_map.get(step.hold_id) in top_holds:
+                        step.is_top = True
+                        has_top = True
+                    else:
+                        step.is_top = False
+                
                 return RouteCandidate(
-                    placed_holds=placed_holds,
-                    beta_sequence=current.sequence,
+                    placed_holds=final_holds,
+                    beta_sequence=final_sequence,
                     total_cost=current.g_cost,
                     flow_score=100.0 / (current.g_cost + 1.0),
                     crux_step=f"最大动作代价: {max_single_step_cost:.1f}"
-                )
+                ), {"reason": "成功", "max_y": 18, "rule_violation": None}
 
-            # 生成子节点：尝试移动 LH, RH, LF, RF
+            # 生成子节点
             for limb in Limb:
-                for target_hold in placed_holds:
-                    # 规则 0: 不能移动到当前所在点
-                    if current.limbs[limb] and current.limbs[limb].id == target_hold.id: continue
-                    # 规则 1: Foot 类型岩点不能分给手
+                for target_hold in board_holds:
+                    if current.limbs.get(limb) and current.limbs[limb].id == target_hold.id: continue
                     if target_hold.hold_type == HoldType.FOOT and limb in [Limb.LH, Limb.RH]: continue
-                    # 规则 2: 时序防撞 - 脚不能踩当前手正抓着的点
+                    
+                    # 规则：时序防撞 - 脚不能踩当前手正抓着的点
                     if limb in [Limb.LF, Limb.RF]:
-                        if (current.limbs[Limb.LH] and target_hold.id == current.limbs[Limb.LH].id) or \
-                           (current.limbs[Limb.RH] and target_hold.id == current.limbs[Limb.RH].id):
+                        if (current.limbs.get(Limb.LH) and target_hold.id == current.limbs[Limb.LH].id) or \
+                           (current.limbs.get(Limb.RH) and target_hold.id == current.limbs[Limb.RH].id):
                             continue
 
                     new_limbs = current.limbs.copy()
                     new_limbs[limb] = target_hold
 
-                    # 物理红线校验 (The Box & Constraints)
-                    def get_y(l): return new_limbs[l].y if new_limbs[l] else 0
-                    def get_x(l): return ord(new_limbs[l].x.upper()) - ord('A') if new_limbs[l] else 0
+                    # 物理红线校验
+                    def get_y(l): return new_limbs.get(l).y if new_limbs.get(l) else 0
+                    def get_x(l): return ord(new_limbs.get(l).x) if new_limbs.get(l) else -1
                     
-                    ly, ry, lfy, rfy = get_y(Limb.LH), get_y(Limb.RH), get_y(Limb.LF), get_y(Limb.RF)
-                    lx, rx, lfx, rfx = get_x(Limb.LH), get_x(Limb.RH), get_x(Limb.LF), get_x(Limb.RF)
+                    ly, ry = get_y(Limb.LH), get_y(Limb.RH)
+                    lfy, rfy = get_y(Limb.LF), get_y(Limb.RF)
+                    
+                    active_feet_y = [y for y in [lfy, rfy] if y > 0]
+                    if not active_feet_y: continue # 不能双脚离地
 
-                    # 1. 肢体防结
-                    if self._is_cross_body(new_limbs): continue
-                    # 2. 手必须高于脚 3-6 格
-                    max_hand_y = max(ly, ry)
-                    min_foot_y = min(lfy, rfy)
-                    if not (3 <= (max_hand_y - min_foot_y) <= 8): continue
-                    # 3. 跨度警报 (人体撕裂)
-                    if (max_hand_y - min_foot_y) > 9: continue
-                    # 4. 横向跨度限制
-                    if abs(lx - rx) > 7: continue # 左右手 <= 7 (放宽)
-                    if abs(lfx - rfx) > 5: continue # 双脚 <= 5 (放宽)
+                    max_hand_y = max(ly, ry) if ly > 0 or ry > 0 else 0
+                    min_foot_y = min(active_feet_y)
 
+                    is_kinematic, reason = self._check_kinematics(new_limbs)
+                    if not is_kinematic:
+                        kinematic_failure_counts[reason] = kinematic_failure_counts.get(reason, 0) + 1
+                        continue
+                    
+                    # --- V6 核心逻辑：引入稳定性、交替性和动作合理性惩罚 ---
+                    
+                    # 1. 稳定性强化
+                    stability_penalty = 0
+                    active_feet = [h for l, h in new_limbs.items() if l in [Limb.LF, Limb.RF] and h]
+                    if len(active_feet) == 1:
+                        stability_penalty += 15.0  # 单脚站立惩罚
+                    elif len(active_feet) == 2:
+                        foot_dist = self._distance(active_feet[0], active_feet[1])
+                        if foot_dist < 0.2:
+                            stability_penalty += 10.0 # 双脚间距过小惩罚
+
+                    # 2. 手部交替流
+                    fatigue_penalty = 0
+                    if current.last_moved_limb and current.last_moved_limb == limb and limb in [Limb.LH, Limb.RH]:
+                        fatigue_penalty = 20.0 # 单手死磕惩罚
+
+                    # 3. Match 逻辑检查
+                    match_penalty = 0
+                    is_match = any(h and h.id == target_hold.id for l, h in current.limbs.items() if l != limb)
+                    if is_match and target_hold.hold_type != HoldType.JUG:
+                        match_penalty = 25.0 # 在非 Jug 点 Match 难度极高
+                        
                     # 计算代价
-                    prev_hold = current.limbs[limb]
+                    prev_hold = current.limbs.get(limb)
                     dist_to_prev = self._distance(target_hold, prev_hold) if prev_hold else 0.5
-                    
-                    # 距离代价 (V2 优化版)
-                    # 鼓励更有冲刺感的动作
                     limit_m = self.span_m * 0.8 if limb in [Limb.LH, Limb.RH] else self.height_m * 0.5
                     dist_cost = self._calculate_distance_cost(dist_to_prev, limit_m)
 
-                    # 岩点自身难度
                     hold_type_cost = self.HOLD_COST_WEIGHTS.get(target_hold.hold_type, 1.0)
                     rotation_penalty = self._calculate_rotation_penalty(target_hold)
                     
-                    # 惩罚连续移动同一肢体 (减弱惩罚)
-                    flow_penalty = 5.0 if current.sequence and current.sequence[-1].limb == limb else 0.0
+                    step_cost = dist_cost + hold_type_cost + rotation_penalty + stability_penalty + fatigue_penalty + match_penalty
                     
-                    # 鼓励横向移动 (x_diff)
-                    x_diff = abs(get_x(limb) - (ord(prev_hold.x.upper()) - ord('A') if prev_hold else get_x(limb)))
-                    x_diff_bonus = -2.0 * x_diff if x_diff > 2 else 0.0
-                    
-                    step_cost = dist_cost + hold_type_cost + rotation_penalty + flow_penalty + x_diff_bonus
                     if step_cost > max_single_step_cost: max_single_step_cost = step_cost
 
                     new_sequence = current.sequence.copy()
-                    intent = "向上推进" if target_hold.y > (current.limbs[limb].y if current.limbs[limb] else 0) else "调整姿态"
-                    if target_hold.y >= 17: intent = "右手完攀锁定" if limb == Limb.RH else "左手完攀锁定"
                     
+                    # 意图描述
+                    prev_y = prev_hold.y if prev_hold else 0
+                    intent_map = {
+                        (True, True): "向右上方转移重心", (True, False): "向左上方转移重心",
+                        (False, True): "向右调整姿态", (False, False): "向左调整姿态"
+                    }
+                    is_upward = target_hold.y > prev_y
+                    is_rightward = ord(target_hold.x) > (ord(prev_hold.x) if prev_hold else -1)
+                    intent = intent_map.get((is_upward, is_rightward), "调整姿态")
+                    if target_hold in top_holds: intent = f"{limb.value}完攀锁定"
+
                     new_sequence.append(BetaStep(
-                        step=current.step_count + 1,
-                        limb=limb,
-                        hold_id=target_hold.id,
-                        intent=intent
+                        step=current.step_count + 1, limb=limb, hold_id=target_hold.id, intent=intent
                     ))
 
-                    h_cost = (18 - max_hand_y) * 5.0
+                    # 启发函数：鼓励向上，并加入手部交替奖励
+                    h_cost = (18 - max_hand_y) * 3.5
+                    if limb in [Limb.LH, Limb.RH]:
+                        other_hand = Limb.RH if limb == Limb.LH else Limb.LH
+                        if new_limbs.get(other_hand) and get_y(limb) < get_y(other_hand):
+                            h_cost -= 5.0 # 鼓励移动较低的那只手
+                            
                     heapq.heappush(open_list, State(
                         limbs=new_limbs,
                         g_cost=current.g_cost + step_cost,
                         h_cost=h_cost,
                         step_count=current.step_count + 1,
-                        sequence=new_sequence
+                        sequence=new_sequence,
+                        last_moved_limb=limb
                     ))
 
-        return None
+        most_common_violation = max(kinematic_failure_counts, key=kinematic_failure_counts.get) if kinematic_failure_counts else "无"
+        return failure_report(f"A* 搜索超时 ({max_iterations} 次迭代)", most_common_violation)
