@@ -4,7 +4,7 @@ backend/core/generator.py
 """
 
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set
 from collections import Counter
 from core.models import Hold, HoldType, RecipeItem
 
@@ -31,9 +31,8 @@ class RouteGenerator:
             inventory_budget[HoldType.JUG] = inventory_budget.get(HoldType.JUG, 0) - 1
             
             # 第一步：生成起步点
-            start_mode = random.choice([1, 2, 3])
-            if start_mode in [1, 2] and inventory_budget.get(HoldType.JUG, 0) < 2:
-                start_mode = 3
+            # 共有 5 种起步模式
+            start_mode = random.choice([1, 2, 3, 4, 5])
 
             start_holds = self._generate_start_anchors(start_mode, inventory_budget, recipe)
             for hold in start_holds:
@@ -68,85 +67,84 @@ class RouteGenerator:
             board_holds.append(finish_hold)
 
             # 第四步：在走廊内撒点
-            scatter_holds = self._proportional_scattering(inventory_budget, 5, recipe, left_bound, right_bound)
+            start_hold_ids = {h.id for h in start_holds}
+            scatter_holds = self._proportional_scattering(inventory_budget, 5, recipe, left_bound, right_bound, start_hold_ids)
             board_holds.extend(scatter_holds)
 
             if self._is_vertically_coherent(board_holds):
-                for hold_type in inventory_budget:
-                    inventory_budget[hold_type] = max(0, inventory_budget[hold_type])
-                return board_holds, inventory_budget
+                # 返回原始配额，让 Solver 统一处理扣除逻辑
+                original_budget = {ht: item.count for ht, item in recipe.items()}
+                return board_holds, original_budget
         
         # 如果重试后仍然失败，返回一个空的结果或抛出异常
         # print("警告: 无法生成符合垂直连续性要求的岩点布局。")
         return [], {}
 
     def _generate_start_anchors(self, mode: int, budget: Dict[HoldType, int], recipe: Dict[HoldType, RecipeItem]) -> List[Hold]:
-        """根据3种模式生成底部姿态"""
+        """根据5种模式生成确定的起步姿态"""
         holds = []
-        occupied_coords = set()
         
-        def get_unique_coord(y_range, x_range=(0, self.GRID_WIDTH - 1)):
-            for _ in range(50): # 尝试50次
-                x = self.X_LABELS[random.randint(*x_range)]
-                y = random.randint(*y_range)
-                if (x, y) not in occupied_coords:
-                    occupied_coords.add((x, y))
-                    return x, y
-            # 如果50次都失败，返回一个随机坐标（可能重复，但不应发生）
-            return self.X_LABELS[random.randint(*x_range)], random.randint(*y_range)
-
-        if mode == 1: # 双手同点
-            variant_jug = recipe.get(HoldType.JUG, RecipeItem(count=0, variant='default')).variant
-            variant_foot = recipe.get(HoldType.FOOT, RecipeItem(count=0, variant='default')).variant
+        # 辅助函数：根据预算确定手点类型
+        def get_hand_types(count: int) -> List[HoldType]:
+            res = []
+            temp_budget = {ht: c for ht, c in budget.items()}
             
-            hx, hy = get_unique_coord((3, 4))
-            holds.append(Hold(id=f"{hx}{hy}", x=hx, y=hy, hold_type=HoldType.JUG, is_start=True, variant=variant_jug if variant_jug != 'random' else 'default'))
-            
-            fx1, fy1 = get_unique_coord((1, 2), (0, 4))
-            holds.append(Hold(id=f"{fx1}{fy1}", x=fx1, y=fy1, hold_type=HoldType.FOOT, is_start=True, variant=variant_foot if variant_foot != 'random' else 'default'))
-            
-            fx2, fy2 = get_unique_coord((1, 2), (6, 10))
-            holds.append(Hold(id=f"{fx2}{fy2}", x=fx2, y=fy2, hold_type=HoldType.FOOT, is_start=True, variant=variant_foot if variant_foot != 'random' else 'default'))
+            for _ in range(count):
+                if temp_budget.get(HoldType.JUG, 0) > 0:
+                    res.append(HoldType.JUG)
+                    temp_budget[HoldType.JUG] -= 1
+                else:
+                    others = [ht for ht, c in temp_budget.items() if ht != HoldType.FOOT and c > 0]
+                    if others:
+                        others.sort(key=lambda x: temp_budget[x], reverse=True)
+                        chosen = others[0]
+                        res.append(chosen)
+                        temp_budget[chosen] -= 1
+                    else:
+                        res.append(HoldType.CRIMP)
+            return res
 
-        elif mode == 2: # 双脚同点
-            variant_jug = recipe.get(HoldType.JUG, RecipeItem(count=0, variant='default')).variant
-            variant_foot = recipe.get(HoldType.FOOT, RecipeItem(count=0, variant='default')).variant
+        def get_variant(ht: HoldType) -> str:
+            v = recipe.get(ht, RecipeItem(count=0, variant='default')).variant
+            return v if v != 'random' else 'default'
 
-            hx1, hy1 = get_unique_coord((3, 4), (0, 4))
-            holds.append(Hold(id=f"{hx1}{hy1}", x=hx1, y=hy1, hold_type=HoldType.JUG, is_start=True, variant=variant_jug if variant_jug != 'random' else 'default'))
-            
-            hx2, hy2 = get_unique_coord((3, 4), (6, 10))
-            holds.append(Hold(id=f"{hx2}{hy2}", x=hx2, y=hy2, hold_type=HoldType.JUG, is_start=True, variant=variant_jug if variant_jug != 'random' else 'default'))
-            
-            fx, fy = get_unique_coord((1, 2))
-            holds.append(Hold(id=f"{fx}{fy}", x=fx, y=fy, hold_type=HoldType.FOOT, is_start=True, variant=variant_foot if variant_foot != 'random' else 'default'))
+        hand_types = get_hand_types(2)
+        foot_type = HoldType.FOOT if budget.get(HoldType.FOOT, 0) > 0 else HoldType.FOOT
 
-        else: # 模式 3 (四点独立)
-            available_hand_types = [ht for ht, count in budget.items() if ht not in [HoldType.JUG, HoldType.FOOT] and count > 0]
+        if mode == 1:
+            # 模式 1：经典双手同点（稳固张脚）
+            ht = hand_types[0]
+            holds.append(Hold(id="F5", x='F', y=5, hold_type=ht, is_start=True, variant=get_variant(ht)))
+            holds.append(Hold(id="D2", x='D', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+            holds.append(Hold(id="H2", x='H', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+        elif mode == 2:
+            # 模式 2：经典双脚同点（宽阔展臂）
+            ht1, ht2 = hand_types[0], hand_types[1]
+            holds.append(Hold(id="D5", x='D', y=5, hold_type=ht1, is_start=True, variant=get_variant(ht1)))
+            holds.append(Hold(id="H5", x='H', y=5, hold_type=ht2, is_start=True, variant=get_variant(ht2)))
+            holds.append(Hold(id="F2", x='F', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+        elif mode == 3:
+            # 模式 3：左高右低（不对称动态发力）
+            ht1, ht2 = hand_types[0], hand_types[1]
+            holds.append(Hold(id="E6", x='E', y=6, hold_type=ht1, is_start=True, variant=get_variant(ht1)))
+            holds.append(Hold(id="G5", x='G', y=5, hold_type=ht2, is_start=True, variant=get_variant(ht2)))
+            holds.append(Hold(id="D2", x='D', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+            holds.append(Hold(id="F1", x='F', y=1, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+        elif mode == 4:
+            # 模式 4：右高左低（不对称发力）
+            ht1, ht2 = hand_types[0], hand_types[1]
+            holds.append(Hold(id="D5", x='D', y=5, hold_type=ht1, is_start=True, variant=get_variant(ht1)))
+            holds.append(Hold(id="F6", x='F', y=6, hold_type=ht2, is_start=True, variant=get_variant(ht2)))
+            holds.append(Hold(id="E1", x='E', y=1, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+            holds.append(Hold(id="G2", x='G', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+        else:
+            # 模式 5：极端宽距（大字型延展）
+            ht1, ht2 = hand_types[0], hand_types[1]
+            holds.append(Hold(id="C5", x='C', y=5, hold_type=ht1, is_start=True, variant=get_variant(ht1)))
+            holds.append(Hold(id="I5", x='I', y=5, hold_type=ht2, is_start=True, variant=get_variant(ht2)))
+            holds.append(Hold(id="B2", x='B', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
+            holds.append(Hold(id="J2", x='J', y=2, hold_type=foot_type, is_start=True, variant=get_variant(foot_type)))
 
-            if not available_hand_types:
-                hand_type_1, hand_type_2 = HoldType.CRIMP, HoldType.CRIMP
-            elif len(available_hand_types) == 1:
-                hand_type_1 = hand_type_2 = available_hand_types[0]
-            else:
-                hand_type_1, hand_type_2 = random.sample(available_hand_types, 2)
-
-            variant1 = recipe.get(hand_type_1, RecipeItem(count=0, variant='default')).variant
-            variant2 = recipe.get(hand_type_2, RecipeItem(count=0, variant='default')).variant
-            variant_foot = recipe.get(HoldType.FOOT, RecipeItem(count=0, variant='default')).variant
-
-            hx1, hy1 = get_unique_coord((3, 4), (0, 4))
-            holds.append(Hold(id=f"{hx1}{hy1}", x=hx1, y=hy1, hold_type=hand_type_1, is_start=True, variant=variant1 if variant1 != 'random' else 'default'))
-
-            hx2, hy2 = get_unique_coord((3, 4), (6, 10))
-            holds.append(Hold(id=f"{hx2}{hy2}", x=hx2, y=hy2, hold_type=hand_type_2, is_start=True, variant=variant2 if variant2 != 'random' else 'default'))
-
-            fx1, fy1 = get_unique_coord((1, 2), (0, 4))
-            holds.append(Hold(id=f"{fx1}{fy1}", x=fx1, y=fy1, hold_type=HoldType.FOOT, is_start=True, variant=variant_foot if variant_foot != 'random' else 'default'))
-
-            fx2, fy2 = get_unique_coord((1, 2), (6, 10))
-            holds.append(Hold(id=f"{fx2}{fy2}", x=fx2, y=fy2, hold_type=HoldType.FOOT, is_start=True, variant=variant_foot if variant_foot != 'random' else 'default'))
-        
         return holds
 
     def _is_vertically_coherent(self, holds: List[Hold], segment_height: int = 3, min_holds_per_segment: int = 2) -> bool:
@@ -171,8 +169,8 @@ class RouteGenerator:
         return True
 
 
-    def _proportional_scattering(self, budget: Dict[HoldType, int], multiplier: int, recipe: Dict[HoldType, RecipeItem], left_bound: int, right_bound: int) -> List[Hold]:
-        """按配额比例在中间区域撒点"""
+    def _proportional_scattering(self, budget: Dict[HoldType, int], multiplier: int, recipe: Dict[HoldType, RecipeItem], left_bound: int, right_bound: int, start_hold_ids: Set[str]) -> List[Hold]:
+        """按配额比例在全区域撒点（避开起步层和起步点）"""
         
         total_holds_to_scatter = sum(budget.values()) * multiplier
         if total_holds_to_scatter <= 0:
@@ -191,14 +189,19 @@ class RouteGenerator:
         
         random.shuffle(scatter_list)
 
-        # 在岩板中间区域撒点 (Y in [5, 17])
+        # 在全区域撒点 (Y in [1, 17])
         placed_holds = []
         
         # 获取所有可能的坐标点并随机打乱
         available_coords = []
-        for y in range(5, self.GRID_HEIGHT):
+        avoid_y = {1, 2, 5, 6}
+        for y in range(1, self.GRID_HEIGHT):
+            if y in avoid_y:
+                continue
             for x_idx in range(left_bound, right_bound + 1):
-                available_coords.append((self.X_LABELS[x_idx], y))
+                coord_id = f"{self.X_LABELS[x_idx]}{y}"
+                if coord_id not in start_hold_ids:
+                    available_coords.append((self.X_LABELS[x_idx], y))
         random.shuffle(available_coords)
 
         # 放置岩点

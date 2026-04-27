@@ -10,7 +10,7 @@ from core.models import Hold, HoldType, Limb, BetaStep, RouteCandidate
 
 class State:
     """A* 搜索中的单个状态节点"""
-    def __init__(self, limbs: Dict[Limb, Optional[Hold]], g_cost: float, h_cost: float, step_count: int, sequence: List[BetaStep], inventory_left: Dict[HoldType, int], last_moved_limb: Optional[Limb] = None, moves_since_foot_move: int = 0, consecutive_hand_moves: int = 0, y_progress_since_foot_move: float = 0.0):
+    def __init__(self, limbs: Dict[Limb, Optional[Hold]], g_cost: float, h_cost: float, step_count: int, sequence: List[BetaStep], inventory_left: Dict[HoldType, int], last_moved_limb: Optional[Limb] = None, limb_idle_steps: Dict[Limb, int] = None, consecutive_hand_moves: int = 0, y_progress_since_foot_move: float = 0.0):
         self.limbs = limbs
         self.g_cost = g_cost
         self.h_cost = h_cost
@@ -18,7 +18,7 @@ class State:
         self.sequence = sequence
         self.inventory_left = inventory_left
         self.last_moved_limb = last_moved_limb
-        self.moves_since_foot_move = moves_since_foot_move
+        self.limb_idle_steps = limb_idle_steps or {l: 0 for l in Limb}
         self.consecutive_hand_moves = consecutive_hand_moves
         self.y_progress_since_foot_move = y_progress_since_foot_move
 
@@ -37,6 +37,17 @@ class State:
             if hold:
                 current_max_y = max(current_max_y, hold.y)
         return current_max_y
+
+    def to_dict(self) -> Dict[str, Optional[str]]:
+        """导出当前肢体状态 ID"""
+        # 严格检查，确保 rf 不会因为 limbs.get 失败而消失
+        res = {
+            "lh": self.limbs.get(Limb.LH).id if self.limbs.get(Limb.LH) else None,
+            "rh": self.limbs.get(Limb.RH).id if self.limbs.get(Limb.RH) else None,
+            "lf": self.limbs.get(Limb.LF).id if self.limbs.get(Limb.LF) else None,
+            "rf": self.limbs.get(Limb.RF).id if self.limbs.get(Limb.RF) else None,
+        }
+        return res
 
 class AStarSolver:
     """A* 物理评分引擎"""
@@ -187,6 +198,14 @@ class AStarSolver:
         lh, rh = get_hold(Limb.LH), get_hold(Limb.RH)
         lf, rf = get_hold(Limb.LF), get_hold(Limb.RF)
 
+        # 拒绝手脚同时在一个点
+        hands = [h for h in [lh, rh] if h]
+        feet = [f for f in [lf, rf] if f]
+        for h in hands:
+            for f in feet:
+                if h.id == f.id:
+                    return False, "手脚同点"
+
         if lh and rh and lh.id != rh.id and get_x_idx(Limb.LH) > get_x_idx(Limb.RH): 
             return False, "交叉手"
         
@@ -208,11 +227,18 @@ class AStarSolver:
         body_span = max_hand_y - min_foot_y
         max_extension_units = (self.height_m * 1.25) / self.GRID_SPACING
 
-        if body_span < 4:
+        if body_span < 3:
             return False, "身体过度蜷缩"
         
+        # 动态放宽过度伸展拦截：如果有另一只脚在更高位提供支撑，允许极度伸展而不拦截
         if body_span > max_extension_units:
-            return False, "身体过度伸展"
+            other_foot_y = max(active_feet_y)
+            # 如果最高脚比最低脚高出 3 格以上，认为有高位支撑，放宽到 1.5 倍身高
+            if other_foot_y > min_foot_y + 3:
+                if body_span > max_extension_units * 1.2:
+                    return False, "身体过度伸展(极限)"
+            else:
+                return False, "身体过度伸展"
 
         if lh and rh and abs(get_x_idx(Limb.LH) - get_x_idx(Limb.RH)) > 6: 
             return False, "手部横向跨度过大"
@@ -235,8 +261,8 @@ class AStarSolver:
         if not top_holds:
             return failure_report("没有找到完攀点")
 
-        start_hands = sorted([h for h in board_holds if h.y <= 8 and h.hold_type != HoldType.FOOT], key=lambda h: h.y)
-        start_feet = sorted([h for h in board_holds if h.y <= 4], key=lambda h: h.y)
+        start_hands = sorted([h for h in board_holds if 5 <= h.y <= 6 and h.hold_type != HoldType.FOOT], key=lambda h: h.y)
+        start_feet = sorted([h for h in board_holds if 1 <= h.y <= 2], key=lambda h: h.y)
 
         if len(start_hands) < 1 or len(start_feet) < 1:
             return failure_report("起步区手点或脚点数量不足")
@@ -244,11 +270,11 @@ class AStarSolver:
         from itertools import combinations
         possible_starts = []
         # 兼容双手同点起步
-        if len(start_hands) == 1:
+        for hand in start_hands:
             for feet_combo in combinations(start_feet, 1):
-                possible_starts.append(((start_hands[0], start_hands[0]), feet_combo))
+                possible_starts.append(((hand, hand), feet_combo))
             for feet_combo in combinations(start_feet, 2):
-                 possible_starts.append(((start_hands[0], start_hands[0]), feet_combo))
+                possible_starts.append(((hand, hand), feet_combo))
 
         for hands in combinations(start_hands, 2):
             for feet_combo in combinations(start_feet, 1):
@@ -265,7 +291,8 @@ class AStarSolver:
 
             initial_limbs = {Limb.LH: lh, Limb.RH: rh}
             if len(feet) == 1:
-                initial_limbs.update({Limb.LF: feet[0], Limb.RF: None})
+                # 即使只有一个脚点，也尝试寻找附近（1.5格内）的脚点作为另一只脚，或者强制分配
+                initial_limbs.update({Limb.LF: feet[0], Limb.RF: feet[0]}) # 允许双脚踩同一点起步，防止肢体丢失
             else:
                 lf, rf = (feet[0], feet[1]) if ord(feet[0].x) <= ord(feet[1].x) else (feet[1], feet[0])
                 initial_limbs.update({Limb.LF: lf, Limb.RF: rf})
@@ -285,7 +312,21 @@ class AStarSolver:
             if any(count < 0 for count in initial_inventory.values()):
                 continue
 
-            start_sequence = [BetaStep(step=0, limb=limb, hold_id=hold.id, intent="") for limb, hold in active_limbs.items()]
+            # 在起步 Step 中也记录全肢体状态
+            start_sequence = []
+            for limb, hold in active_limbs.items():
+                step_obj = BetaStep(
+                    step=0, 
+                    limb=limb, 
+                    hold_id=hold.id, 
+                    intent="Start",
+                    lh=initial_limbs.get(Limb.LH).id if initial_limbs.get(Limb.LH) else None,
+                    rh=initial_limbs.get(Limb.RH).id if initial_limbs.get(Limb.RH) else None,
+                    lf=initial_limbs.get(Limb.LF).id if initial_limbs.get(Limb.LF) else None,
+                    rf=initial_limbs.get(Limb.RF).id if initial_limbs.get(Limb.RF) else None
+                )
+                start_sequence.append(step_obj)
+                
             initial_state = State(
                 limbs=initial_limbs, 
                 g_cost=0.0, 
@@ -293,7 +334,8 @@ class AStarSolver:
                 step_count=0, 
                 sequence=start_sequence, 
                 inventory_left=initial_inventory,
-                last_moved_limb=None
+                last_moved_limb=None,
+                limb_idle_steps={l: 0 for l in Limb}
             )
             break
 
@@ -319,9 +361,14 @@ class AStarSolver:
             if best_state_so_far is None or current_max_y > best_state_so_far.max_y:
                 best_state_so_far = current
 
-            ids = tuple(sorted((l.name, h.id) for l, h in current.limbs.items() if h))
-            if ids in closed_set: continue
-            closed_set.add(ids)
+            # 优化存储：确保 closed_set 记录的状态包含 (肢体配置, 剩余配方) 的元组
+            # 目的：防止 AI 在相同的岩点组合上反复进行无效的换手/换脚尝试
+            limb_config = tuple(sorted((l.name, h.id) for l, h in current.limbs.items() if h))
+            inventory_config = tuple(sorted(current.inventory_left.items()))
+            state_hash = (limb_config, inventory_config)
+            
+            if state_hash in closed_set: continue
+            closed_set.add(state_hash)
 
             # 检查完攀：双手 Match 在同一个顶峰点
             lh_hold = current.limbs.get(Limb.LH)
@@ -334,6 +381,9 @@ class AStarSolver:
                 # V10: 长度软上限 (Soft Cap)
                 if len(final_holds) > 15:
                     current.g_cost += (len(final_holds) - 15) * 10.0
+
+                # 赋予极高的完攀奖励 (Finishing Lust)
+                current.g_cost -= 5000.0
 
                 # 计算配额违规
                 quota_violations = {}
@@ -376,11 +426,25 @@ class AStarSolver:
                 if is_hand_move and current.y_progress_since_foot_move <= 0 and current.consecutive_hand_moves >= 2:
                     continue
 
-                for target_hold in board_holds:
-                    current_limb_hold = current.limbs.get(limb)
+                # 空间剪枝：预先计算坐标范围，避免对全量岩点进行昂贵的距离计算
+                current_limb_hold = current.limbs.get(limb)
+                dist_limit = 1.1 if is_hand_move else 0.8
+                
+                # 预过滤：仅处理在当前肢体合理半径范围内的岩点 (Grid Units 粗算)
+                potential_holds = []
+                if current_limb_hold:
+                    limit_units = (dist_limit / self.GRID_SPACING) + 1
+                    for h in board_holds:
+                        dx = abs(ord(h.x) - ord(current_limb_hold.x))
+                        dy = abs(h.y - current_limb_hold.y)
+                        if dx <= limit_units and dy <= limit_units:
+                            potential_holds.append(h)
+                else:
+                    potential_holds = board_holds
+
+                for target_hold in potential_holds:
                     if current_limb_hold:
                         dist = self._distance(current_limb_hold, target_hold)
-                        dist_limit = 1.1 if is_hand_move else 0.8
                         if dist > dist_limit: continue
                     
                     if current_limb_hold and current_limb_hold.id == target_hold.id: continue
@@ -421,8 +485,21 @@ class AStarSolver:
                     if y_progress_since_foot_move > 0.6: 
                         total_penalty += 20.0
 
+                    # 肢体静止惩罚 (Lazy Penalty)
+                    for l in Limb:
+                        if l != limb and current.limb_idle_steps[l] >= 3:
+                            total_penalty += 10.0
+                    
+                    # 交替移动奖励 (Alternating Reward)
+                    is_foot_move = limb in [Limb.LF, Limb.RF]
+                    if is_foot_move and current.last_moved_limb in [Limb.LF, Limb.RF] and current.last_moved_limb != limb:
+                        total_penalty -= 5.0
+
                     predicted_cg = self._get_center_of_gravity(new_limbs)
-                    min_foot_y_m = min(self._coord_to_meters(h.x, h.y)[1] for h in new_limbs.values() if h and h.hold_type == HoldType.FOOT) if any(h and h.hold_type == HoldType.FOOT for h in new_limbs.values()) else 0
+                    
+                    active_feet = [new_limbs.get(Limb.LF), new_limbs.get(Limb.RF)]
+                    active_feet = [f for f in active_feet if f]
+                    min_foot_y_m = min(self._coord_to_meters(f.x, f.y)[1] for f in active_feet) if active_feet else 0
                     
                     reach_cost = self._calculate_reach_cost(predicted_cg, target_hold, limb, min_foot_y_m)
                     hold_type_cost = self.HOLD_COST_WEIGHTS.get(target_hold.hold_type, 1.0)
@@ -432,18 +509,83 @@ class AStarSolver:
                     if step_cost > max_single_step_cost: max_single_step_cost = step_cost
                     
                     new_sequence = current.sequence[:]
-                    new_sequence.append(BetaStep(step=current.step_count + 1, limb=limb, hold_id=target_hold.id, intent="Move"))
+                    # 抓取当前所有肢体位置，确保 rf 等数据不丢失
+                    limb_state = {
+                        "lh": new_limbs.get(Limb.LH).id if new_limbs.get(Limb.LH) else None,
+                        "rh": new_limbs.get(Limb.RH).id if new_limbs.get(Limb.RH) else None,
+                        "lf": new_limbs.get(Limb.LF).id if new_limbs.get(Limb.LF) else None,
+                        "rf": new_limbs.get(Limb.RF).id if new_limbs.get(Limb.RF) else None,
+                    }
+                    new_sequence.append(BetaStep(
+                        step=current.step_count + 1, 
+                        limb=limb, 
+                        hold_id=target_hold.id, 
+                        intent="Move",
+                        **limb_state
+                    ))
                     
-                    highest_hand_hold = max((h for h in new_limbs.values() if h and h.hold_type != HoldType.FOOT), key=lambda h: self._coord_to_meters(h.x, h.y)[1], default=None)
+                    active_hands = [new_limbs.get(Limb.LH), new_limbs.get(Limb.RH)]
+                    active_hands = [h for h in active_hands if h]
+                    highest_hand_hold = max(active_hands, key=lambda h: self._coord_to_meters(h.x, h.y)[1], default=None)
                     
+                    # 启发式函数演进：引入「协同重力」 (h_cost)
+                    # 修改公式：h_cost = (左手至顶距离 + 右手至顶距离) * 权重 + (重心至顶垂直距离) * 权重
                     h_cost = 0.0
-                    if highest_hand_hold and top_holds:
-                        dist_to_top = min(self._distance(highest_hand_hold, top) for top in top_holds)
-                        h_cost += dist_to_top * 35.0
+                    if top_holds:
+                        lh_hold = new_limbs.get(Limb.LH)
+                        rh_hold = new_limbs.get(Limb.RH)
+                        
+                        dist_lh = min(self._distance(lh_hold, top) for top in top_holds) if lh_hold else self.GRID_HEIGHT * self.GRID_SPACING
+                        dist_rh = min(self._distance(rh_hold, top) for top in top_holds) if rh_hold else self.GRID_HEIGHT * self.GRID_SPACING
+                        
+                        # 动态权重：当 Y_max >= 12 时，平滑增加 h_cost 的占比，增加紧迫感
+                        current_y_max = max(h.y for h in new_limbs.values() if h)
+                        if current_y_max >= 12:
+                            # 提前从 12 开始增加权重，而非 15
+                            hand_weight = 35.0 + (current_y_max - 12) * (150.0 / 6.0) 
+                            cg_weight = 25.0 + (current_y_max - 12) * (100.0 / 6.0)
+                        else:
+                            hand_weight = 35.0
+                            cg_weight = 15.0
+                            
+                        h_cost = (dist_lh + dist_rh) * hand_weight
+                        h_cost += (self.GRID_HEIGHT * self.GRID_SPACING - predicted_cg[1]) * cg_weight
+                        
+                        # 引入脚部引导：强迫 AI 提升留在底部的脚
+                        # 将 None 视为高度 0，强制双脚都必须上墙并提升高度
+                        lf_y = new_limbs.get(Limb.LF).y if new_limbs.get(Limb.LF) else 0
+                        rf_y = new_limbs.get(Limb.RF).y if new_limbs.get(Limb.RF) else 0
+                        min_foot_y = min(lf_y, rf_y)
+                        # 脚部高度的惩罚系数大幅提高
+                        h_cost += (self.GRID_HEIGHT * self.GRID_SPACING - min_foot_y * self.GRID_SPACING) * (cg_weight * 2.0)
 
-                    h_cost += (self.GRID_HEIGHT * self.GRID_SPACING - predicted_cg[1]) * 15.0
+                    # 完攀奖金 (Match Bonus)
+                    if lh_hold and rh_hold and lh_hold.id == rh_hold.id and lh_hold in top_holds:
+                        step_cost -= 2000.0
+
+                    # 动作合理性：奖励「重心推进」而非「肢体跨越」
+                    # 重心奖励：如果动作导致重心（CG）向上移动，给予小额奖励（-5.0）
+                    if predicted_cg[1] > current_cg[1] + 0.01: # 稍微显著的移动
+                        step_cost -= 5.0
                     
+                    # --- 高位提脚奖励 (High-Level Foot Move Reward) ---
+                    # 当身在高处且身体跨度较大时，只要向上提脚，就给予巨额代金券
+                    if not is_hand_move and y_progress > 0:
+                        current_max_y = max(h.y for h in current.limbs.values() if h)
+                        current_body_span = max(h.y for h in current.limbs.values() if h) - min(h.y for h in current.limbs.values() if h)
+                        if current_max_y > 12:
+                            # 跨度越大，提脚奖励越高
+                            span_bonus = max(0, (current_body_span - 6) * 15.0)
+                            step_cost -= (30.0 + span_bonus)
+
+                    # 双脚支撑奖金：当两只脚都处于 Y > 1 的活跃状态时，降低整体动作代价
+                    lf_hold = new_limbs.get(Limb.LF)
+                    rf_hold = new_limbs.get(Limb.RF)
+                    if lf_hold and rf_hold and lf_hold.y > 1 and rf_hold.y > 1:
+                        step_cost *= 0.8 # 20% 的动作代价减免
+
                     new_consecutive_hand_moves = (current.consecutive_hand_moves + 1) if is_hand_move else 0
+                    new_limb_idle_steps = {l: (0 if l == limb else current.limb_idle_steps[l] + 1) for l in Limb}
 
                     heapq.heappush(open_list, State(
                         limbs=new_limbs,
@@ -453,6 +595,7 @@ class AStarSolver:
                         sequence=new_sequence,
                         inventory_left=new_inventory,
                         last_moved_limb=limb,
+                        limb_idle_steps=new_limb_idle_steps,
                         consecutive_hand_moves=new_consecutive_hand_moves,
                         y_progress_since_foot_move=y_progress_since_foot_move
                     ))

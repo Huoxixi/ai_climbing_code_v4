@@ -37,6 +37,12 @@ class BetaStep(BaseModel):
     hold_id: str = Field(..., description="目标岩点ID")
     intent: str = Field(..., description="动作意图描述")
     is_top: bool = Field(default=False, description="是否为完攀动作")
+    
+    # 冗余记录当前所有肢体的位置，方便前端渲染
+    lh: Optional[str] = Field(None, description="左手当前岩点ID")
+    rh: Optional[str] = Field(None, description="右手当前岩点ID")
+    lf: Optional[str] = Field(None, description="左脚当前岩点ID")
+    rf: Optional[str] = Field(None, description="右脚当前岩点ID")
 
 class RouteCandidate(BaseModel):
     """初筛后的路线候选模型"""

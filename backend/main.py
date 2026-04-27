@@ -6,6 +6,7 @@ backend/main.py
 import os
 import json
 import asyncio
+import logging
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +19,15 @@ import numpy as np
 # 加载环境变量 (.env)
 load_dotenv()
 
+# --- Logging Filter ---
+class EndpointFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # 拦截并隐藏所有路径包含 /api/result/ 的 access 日志
+        return "/api/result/" not in record.getMessage()
+
+# 获取 uvicorn.access 日志器并添加过滤器
+logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+
 from core.models import RouteRequest, RouteResponse, FinalRoute, GenerationInitiated
 from agent.controller import generate_route_with_reflection
 
@@ -27,9 +37,7 @@ app = FastAPI(
 )
 
 # --- App State ---
-# active_tasks 用于跟踪所有任务的状态、结果或错误
-# 格式: {task_id: {"status": "RUNNING" | "SUCCESS" | "ERROR", "result": RouteResponse | None, "error": str | None}}
-active_tasks: Dict[str, Dict[str, Any]] = {}
+from core.state import active_tasks
 tasks: Dict[str, asyncio.Task] = {} # 存储后台任务对象，用于取消操作
 
 

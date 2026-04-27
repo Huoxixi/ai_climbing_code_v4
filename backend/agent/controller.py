@@ -11,7 +11,7 @@ import httpx
 import traceback
 
 # 从 main.py 引入 active_tasks
-from main import active_tasks
+from core.state import active_tasks
 
 from core.config import settings
 from core.models import RouteRequest, RouteResponse, RouteCandidate, HoldType, FinalRoute
@@ -139,9 +139,23 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
         ))
 
     result_response = RouteResponse(selected_routes=final_routes)
+
+    # 打印调试信息：确认后端发出的 JSON 里确实有右脚数据
+    if result_response.selected_routes:
+        sample_route = result_response.selected_routes[0]
+        if sample_route.beta_sequence:
+            print(f"Sample RF path: {sample_route.beta_sequence[0].rf}")
     
-    # 状态锁定：立即写入 active_tasks
+    # 解决 404 与结果丢失 (System Level)
+    # 结果持久化：一旦寻路成功，立即通过 asyncio.create_task 将结果写入 active_tasks，并设置 status="SUCCESS"
+    async def persist_result():
+        active_tasks[task_id] = {"status": "SUCCESS", "result": result_response}
+        print(f"[Task ID: {task_id}] 结果已通过异步任务持久化")
+
+    asyncio.create_task(persist_result())
+    
+    # 为了防止 main.py 中的 race condition (在 persist_result 运行前检查状态)，
+    # 我们在这里也直接同步设置一次，双重保险
     active_tasks[task_id] = {"status": "SUCCESS", "result": result_response}
-    print(f"[Task ID: {task_id}] 双重策略路线已锁定")
 
     return result_response
