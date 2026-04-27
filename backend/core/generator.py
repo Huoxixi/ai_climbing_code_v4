@@ -17,7 +17,7 @@ class RouteGenerator:
         self.GRID_HEIGHT = 18 # 1-18
         self.X_LABELS = [chr(ord('A') + i) for i in range(self.GRID_WIDTH)]
 
-    def generate_board(self, recipe: Dict[HoldType, RecipeItem]) -> Tuple[List[Hold], Dict[HoldType, int]]:
+    def generate_board(self, recipe: Dict[HoldType, RecipeItem], target_difficulty: str) -> Tuple[List[Hold], Dict[HoldType, int]]:
         """
         核心方法：生成一个远大于实际需求的“候选点阵图 (Board)”。
         返回 (点阵图, 剩余预算)
@@ -26,17 +26,11 @@ class RouteGenerator:
         for _ in range(max_retries):
             board_holds = []
             inventory_budget = {ht: item.count for ht, item in recipe.items()}
-            
-            finish_x = self.X_LABELS[random.randint(4, 6)]
-            finish_variant = recipe.get(HoldType.JUG, RecipeItem(count=0, variant='random')).variant
-            finish_hold = Hold(
-                id=f"{finish_x}{self.GRID_HEIGHT}", x=finish_x, y=self.GRID_HEIGHT,
-                hold_type=HoldType.JUG, rotation=0, 
-                variant=finish_variant if finish_variant != 'random' else 'default' 
-            )
-            board_holds.append(finish_hold)
-            inventory_budget[HoldType.JUG] = inventory_budget.get(HoldType.JUG, 0) - 1
 
+            # 预先为完攀点扣除一个 JUG 配额
+            inventory_budget[HoldType.JUG] = inventory_budget.get(HoldType.JUG, 0) - 1
+            
+            # 第一步：生成起步点
             start_mode = random.choice([1, 2, 3])
             if start_mode in [1, 2] and inventory_budget.get(HoldType.JUG, 0) < 2:
                 start_mode = 3
@@ -46,7 +40,35 @@ class RouteGenerator:
                 board_holds.append(hold)
                 inventory_budget[hold.hold_type] -= 1
             
-            scatter_holds = self._proportional_scattering(inventory_budget, 5, recipe)
+            # 第二步：基于起步点计算重心走廊
+            sum_x = sum(self.X_LABELS.index(h.x) for h in start_holds)
+            count = len(start_holds)
+            center_x = int(round(sum_x / count)) if count > 0 else self.GRID_WIDTH // 2
+
+            difficulty_offset = 2  # Default for V0
+            if target_difficulty == "V1":
+                difficulty_offset = 3
+            elif target_difficulty == "V2":
+                difficulty_offset = 4
+            
+            left_bound = max(0, center_x - difficulty_offset)
+            right_bound = min(self.GRID_WIDTH - 1, center_x + difficulty_offset)
+            
+            print(f"[走廊锁定] 中心点: {self.X_LABELS[center_x]}, 有效列范围: {self.X_LABELS[left_bound]} 到 {self.X_LABELS[right_bound]}")
+
+            # 第三步：在走廊内生成完攀点
+            finish_x_idx = random.randint(left_bound, right_bound)
+            finish_x = self.X_LABELS[finish_x_idx]
+            finish_variant = recipe.get(HoldType.JUG, RecipeItem(count=0, variant='random')).variant
+            finish_hold = Hold(
+                id=f"{finish_x}{self.GRID_HEIGHT}", x=finish_x, y=self.GRID_HEIGHT,
+                hold_type=HoldType.JUG, rotation=0, 
+                variant=finish_variant if finish_variant != 'random' else 'default' 
+            )
+            board_holds.append(finish_hold)
+
+            # 第四步：在走廊内撒点
+            scatter_holds = self._proportional_scattering(inventory_budget, 5, recipe, left_bound, right_bound)
             board_holds.extend(scatter_holds)
 
             if self._is_vertically_coherent(board_holds):
@@ -149,7 +171,7 @@ class RouteGenerator:
         return True
 
 
-    def _proportional_scattering(self, budget: Dict[HoldType, int], multiplier: int, recipe: Dict[HoldType, RecipeItem]) -> List[Hold]:
+    def _proportional_scattering(self, budget: Dict[HoldType, int], multiplier: int, recipe: Dict[HoldType, RecipeItem], left_bound: int, right_bound: int) -> List[Hold]:
         """按配额比例在中间区域撒点"""
         
         total_holds_to_scatter = sum(budget.values()) * multiplier
@@ -175,7 +197,7 @@ class RouteGenerator:
         # 获取所有可能的坐标点并随机打乱
         available_coords = []
         for y in range(5, self.GRID_HEIGHT):
-            for x_idx in range(self.GRID_WIDTH):
+            for x_idx in range(left_bound, right_bound + 1):
                 available_coords.append((self.X_LABELS[x_idx], y))
         random.shuffle(available_coords)
 

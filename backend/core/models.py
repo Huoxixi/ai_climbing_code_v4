@@ -45,6 +45,7 @@ class RouteCandidate(BaseModel):
     total_cost: float = Field(default=0.0, description="A* 算法计算出的总代价")
     flow_score: float = Field(default=0.0, description="路线流畅度评分")
     crux_step: Optional[str] = Field(None, description="关键步骤描述")
+    quota_violations: Dict[HoldType, int] = Field(default_factory=dict, description="配额违规详情")
 
 class RecipeItem(BaseModel):
     count: int

@@ -27,20 +27,39 @@
                     <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
                   </select>
                 </div>
-                <div class="field">
-                  <label>变体</label>
-                  <select v-model="uploadInfo.variant">
-                    <option value="default">默认</option>
-                    <option value="01">01</option>
-                    <option value="02">02</option>
-                    <option value="03">03</option>
-                    <option value="04">04</option>
-                  </select>
+                 <div class="field">
+                   <label>变体名称 (英文/数字)</label>
+                   <input type="text" v-model="uploadInfo.variant" placeholder="例如: large_crimp_01">
+                 </div>
+                 <input type="file" @change="onFileChange" accept="image/*" />
+                 <button @click="uploadImage" :disabled="!uploadInfo.file || !uploadInfo.variant">上传新岩点</button>
+              </div>
+
+              <div class="hold-library">
+                <div v-for="hold in managedHolds" :key="hold.key" class="library-item">
+                   <div class="library-item-thumbnail">
+                      <div class="thumbnail-visual">
+                        <template v-if="hold.svgPath">
+                          <svg viewBox="0 0 100 100" class="vector-svg">
+                            <path :d="hold.svgPath" :fill="getShapeColor(hold.hold_type)" />
+                          </svg>
+                        </template>
+                        <template v-else-if="hold.imageUrl">
+                          <img :src="hold.imageUrl" class="hold-image" />
+                        </template>
+                      </div>
+                   </div>
+                   <div class="library-item-info">
+                      <span class="info-type">{{ hold.hold_type }}</span>
+                      <span class="info-variant">{{ hold.variant }}</span>
+                   </div>
+                   <button @click="deleteHold(hold.hold_type, hold.variant)" class="library-item-delete-btn">🗑️</button>
                 </div>
-                <input type="file" @change="onFileChange" accept="image/*" />
-                <button @click="uploadImage" :disabled="!uploadInfo.file">上传</button>
-             </div>
-          </div>
+                 <div v-if="managedHolds.length === 0" class="pool-empty-state">
+                    岩点库是空的，请上传新岩点。
+                  </div>
+              </div>
+           </div>
 
           <header class="brand">
             <div class="logo">🧗‍♂️</div>
@@ -74,29 +93,81 @@
           </section>
 
           <section class="config-group">
-            <h3 class="group-title">🧪 物质配方投影</h3>
-            <div class="recipe-list">
-              <div v-for="type in holdTypes" :key="type" class="recipe-item-container">
-                <div class="recipe-row">
-                  <div class="hold-indicator">
-                    <span class="dot" :style="{ backgroundColor: getShapeColor(type) }"></span>
-                    <span class="name">{{ type }}</span>
-                  </div>
-                  <input type="number" v-model.number="recipeConfig[type].count" min="0" max="20" />
-                </div>
-                
-                <div class="shape-variant-select" v-if="recipeConfig[type].count > 0">
-                  <select v-model="recipeConfig[type].variant">
-                    <option value="random">随机形状 (AI 推断)</option>
-                    <option value="01">经典型 01 {{ holdImageMap[type] && holdImageMap[type]['01'] ? ' (已录入)' : ' (暂未录入)' }}</option>
-                    <option value="02">变体型 02 {{ holdImageMap[type] && holdImageMap[type]['02'] ? ' (已录入)' : ' (暂未录入)' }}</option>
-                    <option value="03">变体型 03 {{ holdImageMap[type] && holdImageMap[type]['03'] ? ' (已录入)' : ' (暂未录入)' }}</option>
-                    <option value="04">变体型 04 {{ holdImageMap[type] && holdImageMap[type]['04'] ? ' (已录入)' : ' (暂未录入)' }}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </section>
+  <h3 class="group-title">🧪 岩点造物台 (Hold Creator)</h3>
+  <div class="hold-creator-console">
+    <div class="creator-grid">
+      <!-- 左侧：参数控制 -->
+      <div class="creator-controls">
+        <div class="field">
+          <label>类型 (Type)</label>
+          <select v-model="draftHold.type">
+            <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>形状 (Variant)</label>
+          <select v-model="draftHold.variant">
+            <option value="random">随机</option>
+            <option v-for="v in availableVariants" :key="v" :value="v">{{ v }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>缩放 (Scale): {{ draftHold.scale.toFixed(1) }}x</label>
+          <input type="range" min="0.5" max="2" step="0.1" v-model.number="draftHold.scale" />
+        </div>
+        <div class="field">
+          <label>旋转 (Rotation): {{ draftHold.rotation }}°</label>
+          <input type="range" min="0" max="360" step="5" v-model.number="draftHold.rotation" />
+        </div>
+      </div>
+      <!-- 右侧：可视化预览 -->
+      <div class="creator-preview">
+        <div class="preview-visual-large" :style="{ transform: `rotate(${draftHold.rotation}deg) scale(${draftHold.scale})` }">
+          <template v-if="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })">
+            <svg viewBox="0 0 100 100" class="vector-svg">
+              <path :d="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })" :fill="getShapeColor(draftHold.type)" />
+            </svg>
+          </template>
+          <template v-else-if="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })">
+            <img :src="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })" class="hold-image" />
+          </template>
+          <template v-else>
+            <span class="no-preview-text">暂无预览</span>
+          </template>
+        </div>
+      </div>
+    </div>
+    <button @click="addHoldToPool" class="add-to-pool-btn">➕ 添加到岩点池</button>
+  </div>
+</section>
+
+<section class="config-group">
+  <h3 class="group-title">📦 岩点池 (Hold Pool)</h3>
+  <div class="hold-pool-roster">
+    <div v-if="!holdPool.length" class="pool-empty-state">
+      岩点池是空的，请从上方造物台添加。
+    </div>
+    <div v-for="hold in holdPool" :key="hold.id" class="pool-item-card">
+      <div class="pool-item-thumbnail">
+        <div class="thumbnail-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(${hold.scale})` }">
+          <template v-if="getHoldSvg({ hold_type: hold.type, variant: hold.variant })">
+            <svg viewBox="0 0 100 100" class="vector-svg">
+              <path :d="getHoldSvg({ hold_type: hold.type, variant: hold.variant })" :fill="getShapeColor(hold.type)" />
+            </svg>
+          </template>
+          <template v-else-if="getHoldImage({ hold_type: hold.type, variant: hold.variant })">
+            <img :src="getHoldImage({ hold_type: hold.type, variant: hold.variant })" class="hold-image" />
+          </template>
+        </div>
+      </div>
+      <div class="pool-item-info">
+        <span class="info-type">{{ hold.type }} - {{ hold.variant }}</span>
+        <span class="info-params">{{ hold.rotation }}°, {{ hold.scale.toFixed(1) }}x</span>
+      </div>
+      <button @click="removeHoldFromPool(hold.id)" class="pool-item-remove-btn">✖</button>
+    </div>
+  </div>
+</section>
 
           <footer class="actions">
             <button @click="generateRoute" :disabled="loading" class="generate-btn">
@@ -139,13 +210,20 @@
               </template>
             </div>
 
-            <div v-for="hold in placedHolds" :key="hold.id"
-                 class="hold-entity"
-                 :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id) }"
-                 :style="getCoord(hold.id)">
-              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg)` }">
-                <!-- 优先显示图片 -->
-                <div v-if="getHoldImage(hold)" class="hold-image-container">
+             <div v-for="hold in placedHolds" :key="hold.id"
+                  class="hold-entity"
+                  :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id) }"
+                  :style="getCoord(hold.id)">
+              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(1.0)` }">
+                <!-- 优先渲染 SVG 矢量 -->
+                <div v-if="getHoldSvg(hold)" class="hold-vector-container">
+                  <svg :viewBox="'0 0 100 100'" class="vector-svg">
+                    <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.hold_type)" />
+                  </svg>
+                </div>
+
+                <!-- 其次显示图片 -->
+                <div v-else-if="getHoldImage(hold)" class="hold-image-container">
                   <img :src="getHoldImage(hold)" class="hold-image" />
                 </div>
                 
@@ -219,7 +297,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, watch } from 'vue'
 import axios from 'axios'
 
 // --- 基础状态 ---
@@ -229,64 +307,168 @@ const holdTypes = ['Jug', 'Crimp', 'Sloper', 'Pinch', 'Pocket', 'Foot']
 
 // --- 🌟 岩点图片映射 ---
 const holdImageMap = reactive({})
+const holdVectorMap = reactive({})
 
 // 从后端加载映射
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
 const fetchHoldMapping = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/holds/mapping`)
-    Object.assign(holdImageMap, response.data)
+    const response = await axios.get(`${API_BASE_URL}/api/holds/mapping`);
+    // 创建一个新的空对象，然后分配，以确保响应性
+    const newMap = {};
+    Object.assign(newMap, response.data);
+    Object.keys(holdImageMap).forEach(key => delete holdImageMap[key]);
+    Object.assign(holdImageMap, newMap);
   } catch (error) {
-    console.error("无法加载岩点图片映射:", error)
+    console.error("无法加载岩点图片映射:", error);
   }
+};
+
+const fetchHoldVectors = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/holds/vectors`);
+    const newMap = {};
+    Object.assign(newMap, response.data);
+    Object.keys(holdVectorMap).forEach(key => delete holdVectorMap[key]);
+    Object.assign(holdVectorMap, newMap);
+  } catch (error) {
+    console.error("无法加载岩点矢量映射:", error);
+  }
+};
+
+const fetchAllHoldData = async () => {
+  await fetchHoldMapping();
+  await fetchHoldVectors();
 }
-fetchHoldMapping() // 初始化时加载
+
+fetchAllHoldData(); // 初始化时加载
 
 const uploadInfo = reactive({
   hold_type: 'Jug',
-  variant: 'default',
+  variant: '',
   file: null
-})
+});
 
 const onFileChange = (e) => {
-  uploadInfo.file = e.target.files[0]
-}
+  uploadInfo.file = e.target.files[0];
+};
 
 const uploadImage = async () => {
-  if (!uploadInfo.file) return
+  if (!uploadInfo.file || !uploadInfo.variant.trim()) {
+    alert('请确保已选择文件并填写了变体名称。');
+    return;
+  }
 
-  const formData = new FormData()
-  formData.append('hold_type', uploadInfo.hold_type)
-  formData.append('variant', uploadInfo.variant)
-  formData.append('file', uploadInfo.file)
+  const formData = new FormData();
+  formData.append('hold_type', uploadInfo.hold_type);
+  formData.append('variant', uploadInfo.variant.trim());
+  formData.append('file', uploadInfo.file);
 
   try {
-    await axios.post(`${API_BASE_URL}/api/holds/upload`, formData)
-    // Refresh mapping
-    await fetchHoldMapping()
-    alert('上传成功!')
+    const response = await axios.post(`${API_BASE_URL}/api/holds/upload`, formData);
+    if (response.data.success) {
+      alert('上传成功!');
+      await fetchAllHoldData(); // 重新加载所有数据
+      // 清空上传表单
+      uploadInfo.variant = '';
+      uploadInfo.file = null;
+      // 重置文件输入，以便可以再次选择相同的文件
+      const fileInput = document.querySelector('input[type="file"]');
+      if(fileInput) fileInput.value = '';
+
+    } else {
+      alert('上传失败。');
+    }
   } catch (error) {
-    console.error('上传失败:', error)
-    alert('上传失败!')
+    console.error('上传处理失败:', error);
+    alert(`上传失败: ${error.response?.data?.detail || error.message}`);
   }
-}
+};
+
+const deleteHold = async (hold_type, variant) => {
+  if (!confirm(`确定要删除岩点 '${hold_type} - ${variant}' 吗? 这个操作不可逆。`)) {
+    return;
+  }
+  try {
+    await axios.delete(`${API_BASE_URL}/api/holds/${hold_type}/${variant}`);
+    alert('删除成功!');
+    await fetchAllHoldData();
+  } catch (error) {
+    console.error('删除失败:', error);
+    alert(`删除失败: ${error.response?.data?.detail || error.message}`);
+  }
+};
 
 const getHoldImage = (hold) => {
-  const typeMap = holdImageMap[hold.hold_type]
-  if (!typeMap) return null
-  const imageUrl = typeMap[hold.variant] || typeMap['default']
-  return imageUrl ? `${API_BASE_URL}${imageUrl}` : null
+  const typeMap = holdImageMap[hold.hold_type];
+  if (!typeMap) return null;
+
+  let imageUrl = typeMap[hold.variant];
+  if (hold.variant === 'random' || !imageUrl) {
+    const availableVariants = Object.keys(typeMap).filter(v => v !== 'default');
+    imageUrl = typeMap['default'] || (availableVariants.length > 0 ? typeMap[availableVariants[0]] : null);
+  }
+  
+  return imageUrl ? `${API_BASE_URL}${imageUrl}` : null;
 }
 
-const recipeConfig = reactive({
-  Jug: { count: 4, variant: 'random' },    // 4个把手：2起步+1中继+1完攀
-  Crimp: { count: 2, variant: 'random' },  // 2个抠口：中段难点
-  Sloper: { count: 1, variant: 'random' }, // 1个斜面：打破发力惯性
-  Pinch: { count: 1, variant: 'random' },  // 1个捏点：增加姿态张力
-  Pocket: { count: 0, variant: 'random' }, // 指洞容易受伤，默认关闭
-  Foot: { count: 4, variant: 'random' }    // 4个脚点：配合手脚复用足够了
+const getHoldSvg = (hold) => {
+  const typeMap = holdVectorMap[hold.hold_type];
+  if (!typeMap) return null;
+  
+  let svgPath = typeMap[hold.variant];
+  if (hold.variant === 'random' || !svgPath) {
+    const availableVariants = Object.keys(typeMap).filter(v => v !== 'default');
+    svgPath = typeMap['default'] || (availableVariants.length > 0 ? typeMap[availableVariants[0]] : null);
+  }
+  
+  return svgPath;
+}
+
+const getHoldScale = (hold) => {
+  // 在新模式下，每个岩点实例自带缩放属性
+  const poolHold = holdPool.value.find(h => h.id === hold.id)
+  return poolHold ? poolHold.scale : 1.0
+}
+
+// --- 购物车模式重构 ---
+const holdPool = ref([]) // 岩点池，存放最终配置
+const draftHold = reactive({ // 造物台，用于编辑单个岩点
+  type: 'Jug',
+  variant: 'random',
+  scale: 1.0,
+  rotation: 0
 })
+
+const availableVariants = computed(() => {
+  const imageVariants = holdImageMap[draftHold.type] ? Object.keys(holdImageMap[draftHold.type]) : [];
+  const vectorVariants = holdVectorMap[draftHold.type] ? Object.keys(holdVectorMap[draftHold.type]) : [];
+  // 合并并去重，同时过滤掉 'default'
+  return [...new Set([...imageVariants, ...vectorVariants])].filter(v => v !== 'default');
+});
+
+watch(() => draftHold.type, (newType) => {
+  const variantsForNewType = availableVariants.value;
+  if (draftHold.variant !== 'random' && !variantsForNewType.includes(draftHold.variant)) {
+    draftHold.variant = 'random';
+  }
+});
+
+// 添加到岩点池
+const addHoldToPool = () => {
+  const newHold = {
+    ...draftHold,
+    id: Date.now() // 使用时间戳作为唯一ID
+  }
+  holdPool.value.push(newHold)
+}
+
+// 从岩点池移除
+const removeHoldFromPool = (id) => {
+  holdPool.value = holdPool.value.filter(hold => hold.id !== id)
+}
+// --- 重构结束 ---
 
 const loading = ref(false)
 const error = ref('')
@@ -318,16 +500,23 @@ const generateRoute = async () => {
     msgIdx++
   }, 1200)
 
-  // 整理传给后端的 Payload：为了避免后端 Pydantic 报错，目前仅提取数量
-  const backendRecipePayload = {}
-  Object.keys(recipeConfig).forEach(type => {
-    if (recipeConfig[type].count > 0) {
-      backendRecipePayload[type] = {
-        count: recipeConfig[type].count,
-        variant: recipeConfig[type].variant
-      }
+  // --- 新的 Payload 组装逻辑 ---
+  // 后端当前 recipe 格式为: { "Jug": { "count": 4, "variant": "random" }, ... }
+  // 注意: 当前后端模型还不支持为每个岩点单独指定 scale 和 rotation。
+  // 因此，我们在这里进行数据聚合，将 holdPool 转换为后端期望的格式。
+  // 我们选择同类型中第一个岩点的 variant, scale, rotation 作为代表。
+  const backendRecipePayload = holdPool.value.reduce((acc, hold) => {
+    if (!acc[hold.type]) {
+      acc[hold.type] = {
+        count: 0,
+        variant: hold.variant,
+        scale: hold.scale,
+        rotation: hold.rotation,
+      };
     }
-  })
+    acc[hold.type].count++;
+    return acc;
+  }, {});
 
   try {
     const response = await axios.post('http://127.0.0.1:8000/api/generate', {
@@ -358,6 +547,22 @@ const generateRoute = async () => {
 }
 
 // --- 计算属性 ---
+const managedHolds = computed(() => {
+  const holds = [];
+  for (const hold_type in holdImageMap) {
+    for (const variant in holdImageMap[hold_type]) {
+      holds.push({
+        key: `${hold_type}-${variant}`,
+        hold_type,
+        variant,
+        imageUrl: `${API_BASE_URL}${holdImageMap[hold_type][variant]}`,
+        svgPath: holdVectorMap[hold_type]?.[variant] || null
+      });
+    }
+  }
+  return holds.sort((a,b) => a.key.localeCompare(b.key));
+});
+
 const placedHolds = computed(() => routeData.value?.placed_holds || []);
 const routeSteps = computed(() => routeData.value?.beta_sequence || []);
 
@@ -455,18 +660,149 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
   padding: 8px; border-radius: 6px; outline: none; font-size: 0.85rem;
 }
 
-.recipe-list { display: flex; flex-direction: column; gap: 12px; }
-.recipe-item-container { background: #1e293b; padding: 8px 10px; border-radius: 8px; border: 1px solid #334155; }
-.recipe-row { display: flex; justify-content: space-between; align-items: center; }
-.hold-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: bold;}
-.dot { width: 8px; height: 8px; border-radius: 50%; }
-.recipe-row input { width: 45px; background: #0f172a; border: 1px solid #334155; color: white; text-align: center; border-radius: 4px; padding: 4px; }
-
-.shape-variant-select { margin-top: 8px; border-top: 1px dashed #334155; padding-top: 8px; }
-.shape-variant-select select {
-  width: 100%; background: #0f172a; border: 1px solid #334155; color: #94a3b8; 
-  padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; outline: none;
+/* --- 岩点池重构样式 --- */
+.hold-creator-console {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
 }
+.creator-grid {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  gap: 20px;
+  align-items: center;
+}
+.creator-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.creator-preview {
+  width: 100px;
+  height: 100px;
+  background: #1e293b;
+  border: 1px dashed #334155;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-visual-large {
+  width: 60px;
+  height: 60px;
+}
+.preview-visual-large .vector-svg,
+.preview-visual-large .hold-image {
+  width: 100%; height: 100%; object-fit: contain;
+}
+
+.add-to-pool-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.add-to-pool-btn:hover {
+  background: #3b82f6;
+}
+
+.hold-pool-roster {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0f172a;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+}
+.pool-empty-state {
+  text-align: center;
+  color: #64748b;
+  padding: 20px;
+  font-size: 0.8rem;
+}
+
+.pool-item-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1e293b;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+.pool-item-card:hover {
+  border-color: #3b82f6;
+  background: #334155;
+}
+
+.pool-item-thumbnail {
+  width: 40px;
+  height: 40px;
+  background: #0f172a;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.thumbnail-visual {
+  width: 30px;
+  height: 30px;
+}
+.thumbnail-visual .vector-svg,
+.thumbnail-visual .hold-image {
+  width: 100%; height: 100%; object-fit: contain;
+}
+
+.pool-item-info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.info-type {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #f1f5f9;
+}
+.info-params {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.pool-item-remove-btn {
+  width: 24px;
+  height: 24px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: all 0.2s;
+}
+.pool-item-card:hover .pool-item-remove-btn {
+  opacity: 1;
+}
+.pool-item-remove-btn:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+/* --- 样式结束 --- */
 
 .generate-btn {
   width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
@@ -483,8 +819,56 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 .generate-btn:active:not(:disabled) { transform: translateY(0); }
 .generate-btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; box-shadow: none; }
 
-.upload-section { display: flex; flex-direction: column; gap: 10px; }
+.upload-section { display: flex; flex-direction: column; gap: 12px; }
 .upload-section input[type="file"] { font-size: 0.8rem; }
+.upload-section input[type="text"] { margin-bottom: 0px; } /* 修正间距 */
+.upload-section button {
+  background: #3b82f6; color: white; border: none; padding: 10px; border-radius: 6px;
+  font-weight: bold; cursor: pointer; transition: background 0.2s;
+}
+.upload-section button:hover:not(:disabled) { background: #2563eb; }
+.upload-section button:disabled { background: #475569; cursor: not-allowed; }
+
+.hold-library {
+  margin-top: 20px;
+  max-height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0f172a;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1e293b;
+  padding: 8px;
+  border-radius: 6px;
+}
+.library-item-thumbnail {
+  width: 32px; height: 32px; background: #0f172a; border-radius: 4px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.library-item-thumbnail .thumbnail-visual { width: 26px; height: 26px; }
+.library-item-thumbnail .vector-svg, .library-item-thumbnail .hold-image {
+  width: 100%; height: 100%; object-fit: contain;
+}
+.library-item-info { flex-grow: 1; display: flex; flex-direction: column; gap: 2px; }
+.info-type { font-size: 0.8rem; font-weight: bold; color: #f1f5f9; }
+.info-variant { font-size: 0.7rem; color: #94a3b8; font-family: monospace; }
+
+.library-item-delete-btn {
+  width: 28px; height: 28px; background: #ef4444; color: white;
+  border: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+  opacity: 0.6; transition: all 0.2s;
+}
+.library-item:hover .library-item-delete-btn { opacity: 1; }
+.library-item-delete-btn:hover { background: #dc2626; transform: scale(1.1); }
 
 /* 时间轴样式 */
 .timeline-section { margin-top: 0; height: 100%; display: flex; flex-direction: column; }
@@ -607,6 +991,14 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 }
 .hold-image {
   max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+}
+
+.hold-vector-container {
+  width: 42px; height: 42px;
+}
+.vector-svg {
+  width: 100%; height: 100%;
+  filter: drop-shadow(3px 5px 5px rgba(0,0,0,0.5));
 }
 
 .hold-tooltip {

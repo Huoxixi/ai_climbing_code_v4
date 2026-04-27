@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import uuid
+import cv2
+import numpy as np
 
 # 加载环境变量 (.env)
 load_dotenv()
@@ -57,13 +59,62 @@ async def get_wall_grid():
     return empty_wall
 
 HOLDS_MAPPING_FILE = "data/holds_mapping.json"
+HOLDS_VECTORS_FILE = "data/holds_vectors.json"
+
+# --- Helper Functions for Data Persistence ---
+def get_json_data(file_path: str) -> Dict:
+    if not os.path.exists(file_path):
+        return {}
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_json_data(file_path: str, data: Dict):
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 @app.get("/api/holds/mapping")
 async def get_holds_mapping():
-    if not os.path.exists(HOLDS_MAPPING_FILE):
-        return {}
-    with open(HOLDS_MAPPING_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return get_json_data(HOLDS_MAPPING_FILE)
+
+@app.get("/api/holds/vectors")
+async def get_holds_vectors():
+    return get_json_data(HOLDS_VECTORS_FILE)
+
+def extract_svg_path_from_image(image_bytes: bytes) -> str:
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return ""
+
+    largest_contour = max(contours, key=cv2.contourArea)
+    arc_length = cv2.arcLength(largest_contour, True)
+    epsilon = 0.0005 * arc_length
+    approx_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+
+    x, y, w, h = cv2.boundingRect(approx_contour)
+    if w == 0 or h == 0: return ""
+    
+    points = approx_contour.reshape(-1, 2)
+    scale = 100 / max(w, h)
+    new_w, new_h = w * scale, h * scale
+    offset_x = (100 - new_w) / 2
+    offset_y = (100 - new_h) / 2
+
+    normalized_points = [
+        (((p[0] - x) * scale) + offset_x, ((p[1] - y) * scale) + offset_y)
+        for p in points
+    ]
+
+    if not normalized_points:
+        return ""
+    
+    return "M " + " ".join(f"{p[0]:.2f},{p[1]:.2f}" for p in normalized_points) + " Z"
 
 @app.post("/api/holds/upload")
 async def upload_hold_image(
@@ -72,29 +123,62 @@ async def upload_hold_image(
     file: UploadFile = File(...)
 ):
     try:
-        # 生成唯一文件名
+        image_bytes = await file.read()
+        
+        # --- Image File Persistence ---
         ext = os.path.splitext(file.filename)[1]
         filename = f"{uuid.uuid4()}{ext}"
-        
-        # 保存文件
         save_path = os.path.join("data", "holds_images", filename)
         with open(save_path, "wb") as buffer:
-            buffer.write(await file.read())
+            buffer.write(image_bytes)
 
-        # 更新映射文件
-        mapping = await get_holds_mapping()
-        if hold_type not in mapping:
-            mapping[hold_type] = {}
-        
-        # /images/ 是挂载的静态目录
-        mapping[hold_type][variant] = f"/images/{filename}" 
+        # --- Image Path Mapping Persistence ---
+        mapping = get_json_data(HOLDS_MAPPING_FILE)
+        if hold_type not in mapping: mapping[hold_type] = {}
+        mapping[hold_type][variant] = f"/images/{filename}"
+        save_json_data(HOLDS_MAPPING_FILE, mapping)
 
-        with open(HOLDS_MAPPING_FILE, "w", encoding="utf-8") as f:
-            json.dump(mapping, f, indent=2)
+        # --- Vector Path Persistence ---
+        svg_path = extract_svg_path_from_image(image_bytes)
+        vectors = get_json_data(HOLDS_VECTORS_FILE)
+        if hold_type not in vectors: vectors[hold_type] = {}
+        vectors[hold_type][variant] = svg_path
+        save_json_data(HOLDS_VECTORS_FILE, vectors)
 
-        return {"success": True, "path": mapping[hold_type][variant]}
+        return {"success": True, "image_path": mapping[hold_type][variant], "svg_path": svg_path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"图片上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"图片上传及矢量化处理失败: {e}")
+
+@app.delete("/api/holds/{hold_type}/{variant}")
+async def delete_hold(hold_type: str, variant: str):
+    try:
+        # --- Delete from Image Mapping ---
+        mapping = get_json_data(HOLDS_MAPPING_FILE)
+        image_path_to_delete = None
+        if hold_type in mapping and variant in mapping[hold_type]:
+            image_path_to_delete = mapping[hold_type].pop(variant)
+            if not mapping[hold_type]: # Remove type if empty
+                del mapping[hold_type]
+            save_json_data(HOLDS_MAPPING_FILE, mapping)
+
+        # --- Delete from Vector Mapping ---
+        vectors = get_json_data(HOLDS_VECTORS_FILE)
+        if hold_type in vectors and variant in vectors[hold_type]:
+            vectors[hold_type].pop(variant)
+            if not vectors[hold_type]:
+                 del vectors[hold_type]
+            save_json_data(HOLDS_VECTORS_FILE, vectors)
+
+        # --- Delete Physical Image File ---
+        if image_path_to_delete:
+            # image_path_to_delete is like "/images/filename.jpg", convert to "data/holds_images/filename.jpg"
+            physical_path = os.path.join("data", "holds_images", os.path.basename(image_path_to_delete))
+            if os.path.exists(physical_path):
+                os.remove(physical_path)
+        
+        return {"success": True, "message": f"岩点 '{hold_type} - {variant}' 已删除"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除岩点失败: {e}")
 
 @app.post("/api/generate", response_model=RouteResponse)
 async def generate_route(request: RouteRequest):
