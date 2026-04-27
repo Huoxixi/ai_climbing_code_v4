@@ -5,10 +5,11 @@ backend/main.py
 
 import os
 import json
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+import asyncio
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 import uuid
 import cv2
@@ -17,13 +18,35 @@ import numpy as np
 # 加载环境变量 (.env)
 load_dotenv()
 
-from core.models import RouteRequest, RouteResponse
+from core.models import RouteRequest, RouteResponse, FinalRoute, GenerationInitiated
 from agent.controller import generate_route_with_reflection
 
 app = FastAPI(
-    title="智行通途 (ZXT) - AI 攀岩定线引擎", 
-    version="6.0" 
+    title="智行通途 (ZXT) - AI 攀岩定线引擎",
+    version="6.0"
 )
+
+# --- App State ---
+tasks: Dict[str, asyncio.Task] = {}
+results: Dict[str, Any] = {}
+
+
+# --- Background Task Runner ---
+async def run_and_store_generation(task_id: str, request: RouteRequest):
+    """后台运行生成任务并存储结果"""
+    try:
+        task = asyncio.create_task(generate_route_with_reflection(request))
+        tasks[task_id] = task
+        result = await task
+        results[task_id] = result
+    except asyncio.CancelledError:
+        results[task_id] = RouteResponse(selected_routes=[], failure_suggestion="任务已被用户取消")
+    except Exception as e:
+        print(f"Task {task_id} failed: {e}")
+        results[task_id] = RouteResponse(selected_routes=[], failure_suggestion=f"生成失败: {e}")
+    finally:
+        if task_id in tasks:
+            del tasks[task_id]
 
 # 静态文件目录
 app.mount("/images", StaticFiles(directory="data/holds_images"), name="images")
@@ -171,7 +194,6 @@ async def delete_hold(hold_type: str, variant: str):
 
         # --- Delete Physical Image File ---
         if image_path_to_delete:
-            # image_path_to_delete is like "/images/filename.jpg", convert to "data/holds_images/filename.jpg"
             physical_path = os.path.join("data", "holds_images", os.path.basename(image_path_to_delete))
             if os.path.exists(physical_path):
                 os.remove(physical_path)
@@ -180,26 +202,74 @@ async def delete_hold(hold_type: str, variant: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除岩点失败: {e}")
 
-@app.post("/api/generate", response_model=RouteResponse)
-async def generate_route(request: RouteRequest):
-    """
-    核心定线端点：已全面接入 PCG 漏斗架构
-    1. Generator (批量撒点)
-    2. Validator (物理初筛)
-    3. A* Solver (寻路评分)
-    4. LLM Curator (艺术决选)
-    """
+# --- Board Persistence ---
+SAVED_BOARDS_FILE = os.path.join("data", "saved_boards.json")
+
+@app.post("/api/save-board")
+async def save_board(route: FinalRoute):
     try:
-        response = await generate_route_with_reflection(request)
-        return response
-    except ValueError as ve:
-        # 处理业务逻辑错误 (如无法生成符合要求的路线)
-        raise HTTPException(status_code=400, detail=str(ve))
+        boards = []
+        if os.path.exists(SAVED_BOARDS_FILE):
+            with open(SAVED_BOARDS_FILE, "r", encoding="utf-8") as f:
+                boards = json.load(f)
+        
+        board_data = route.dict()
+        board_data["saved_id"] = str(uuid.uuid4())
+        boards.append(board_data)
+
+        with open(SAVED_BOARDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(boards, f, indent=2, ensure_ascii=False)
+            
+        return {"success": True, "message": "岩板已保存!"}
     except Exception as e:
-        # 处理服务器内部错误
-        print(f"造物主引擎崩溃: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"无法保存岩板: {e}")
+
+@app.get("/api/my-boards", response_model=List[FinalRoute])
+async def get_my_boards():
+    if not os.path.exists(SAVED_BOARDS_FILE):
+        return []
+    try:
+        with open(SAVED_BOARDS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"无法加载已保存的岩板: {e}")
+
+@app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
+async def generate_route(request: RouteRequest, background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    background_tasks.add_task(run_and_store_generation, task_id, request)
+    return GenerationInitiated(task_id=task_id)
+
+@app.get("/api/result/{task_id}")
+async def get_generation_result(task_id: str):
+    if task_id in results:
+        result = results.pop(task_id)
+        if isinstance(result, Exception):
+             raise HTTPException(status_code=500, detail=str(result))
+        return result
+    elif task_id in tasks:
+        return {"status": "RUNNING"}
+    else:
+        raise HTTPException(status_code=404, detail="任务未找到或已过期")
+
+@app.post("/api/cancel/{task_id}")
+async def cancel_generation_task(task_id: str):
+    if task_id not in tasks:
+        raise HTTPException(status_code=404, detail="无法取消：未找到正在运行的任务")
+    
+    tasks[task_id].cancel()
+    # 等待一小段时间以确保取消信号传播
+    await asyncio.sleep(0.1)
+    
+    # 从 tasks 字典中移除任务，无论它是否成功取消
+    if task_id in tasks:
+        del tasks[task_id]
+        
+    # 在 results 中放置一个“已取消”的标记
+    results[task_id] = RouteResponse(selected_routes=[], failure_suggestion="任务已被用户成功取消")
+
+    return {"status": "CANCELLED", "message": "取消请求已发送"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, loop="auto", timeout_keep_alive=65)

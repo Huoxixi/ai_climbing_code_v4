@@ -29,6 +29,15 @@ class State:
     def __lt__(self, other: 'State'):
         return self.f_cost < other.f_cost
 
+    @property
+    def max_y(self) -> int:
+        """计算当前状态到达的最高 Y 坐标"""
+        current_max_y = 0
+        for limb, hold in self.limbs.items():
+            if hold:
+                current_max_y = max(current_max_y, hold.y)
+        return current_max_y
+
 class AStarSolver:
     """A* 物理评分引擎"""
     def __init__(self, climber_height_cm: int, climber_span_cm: int):
@@ -293,9 +302,10 @@ class AStarSolver:
 
         open_list = [initial_state]
         closed_set = set()
-        max_iterations = 5000
+        max_iterations = 10000 
         iterations = 0
         max_single_step_cost = 0.0
+        best_state_so_far: Optional[State] = None
         
         kinematic_failure_counts = {}
 
@@ -303,13 +313,12 @@ class AStarSolver:
             iterations += 1
             current = heapq.heappop(open_list)
             
-            # 更新最高高度
-            current_max_y = 0
-            for limb, hold in current.limbs.items():
-                if hold:
-                    current_max_y = max(current_max_y, hold.y)
+            # 更新最高高度和最佳状态
+            current_max_y = current.max_y
             max_y_reached = max(max_y_reached, current_max_y)
-            
+            if best_state_so_far is None or current_max_y > best_state_so_far.max_y:
+                best_state_so_far = current
+
             ids = tuple(sorted((l.name, h.id) for l, h in current.limbs.items() if h))
             if ids in closed_set: continue
             closed_set.add(ids)
@@ -322,22 +331,16 @@ class AStarSolver:
                 used_hold_ids = {step.hold_id for step in final_sequence}
                 final_holds = [h for h in board_holds if h.id in used_hold_ids]
 
-                if not (5 <= len(final_holds) <= 15):
-                    continue # 不满足数量要求，继续搜索其他可能性
+                # V10: 长度软上限 (Soft Cap)
+                if len(final_holds) > 15:
+                    current.g_cost += (len(final_holds) - 15) * 10.0
 
                 # 计算配额违规
                 quota_violations = {}
                 from collections import Counter
                 final_counts = Counter(h.hold_type for h in final_holds)
                 
-                # We need the original recipe counts, which are in `inventory_budget` at the start of `solve`.
-                # Let's assume `inventory_budget` is the original recipe passed to solve.
-                # A better implementation would pass the original recipe down.
-                # For now, we reconstruct it imperfectly from the initial state's inventory.
-                # This part is tricky. A better way is to pass the original recipe into `solve`.
-                # Let's assume `inventory_budget` is available here.
-                
-                initial_recipe_counts = inventory_budget # This is a simplification.
+                initial_recipe_counts = inventory_budget
                 
                 for ht, count in final_counts.items():
                     required = initial_recipe_counts.get(ht, 0)
@@ -368,21 +371,17 @@ class AStarSolver:
             for limb in Limb:
                 is_hand_move = limb in [Limb.LH, Limb.RH]
                 
-                # 强制交替与发力顺序优化
                 if is_hand_move and current.consecutive_hand_moves >= 1 and current.last_moved_limb == limb:
                     continue 
-                # 强制发力顺序：如果连续两次手部动作未提升高度，则强制下一步动脚
                 if is_hand_move and current.y_progress_since_foot_move <= 0 and current.consecutive_hand_moves >= 2:
                     continue
 
                 for target_hold in board_holds:
-                    # 1. 空间预筛裁剪 (减少 80% 无效校验)
                     current_limb_hold = current.limbs.get(limb)
                     if current_limb_hold:
-                        curr_pos = self._coord_to_meters(current_limb_hold.x, current_limb_hold.y)
-                        target_pos = self._coord_to_meters(target_hold.x, target_hold.y)
-                        dist_limit = 1.5 if is_hand_move else 0.8
-                        if abs(target_pos[1] - curr_pos[1]) > dist_limit: continue
+                        dist = self._distance(current_limb_hold, target_hold)
+                        dist_limit = 1.1 if is_hand_move else 0.8
+                        if dist > dist_limit: continue
                     
                     if current_limb_hold and current_limb_hold.id == target_hold.id: continue
                     if target_hold.hold_type == HoldType.FOOT and is_hand_move: continue
@@ -398,30 +397,28 @@ class AStarSolver:
                     body_pos_cost = self._calculate_body_position_cost(new_limbs)
                     total_penalty = 0
                     
-                    # a. 软化配额约束
                     is_new_hold = not any(h and h.id == target_hold.id for h in current.limbs.values())
                     new_inventory = current.inventory_left.copy()
                     if is_new_hold:
-                        if new_inventory.get(target_hold.hold_type, 0) <= 0:
+                        if new_inventory.get(target_hold.hold_type, 0) > 0:
+                            total_penalty -= 25.0
+                        else:
                             total_penalty += 100.0
                         new_inventory[target_hold.hold_type] = new_inventory.get(target_hold.hold_type, 0) - 1
 
-                    # b. 动作进度与步数惩罚
                     prev_y_m = self._coord_to_meters(current.limbs[limb].x, current.limbs[limb].y)[1] if current.limbs[limb] else current_cg[1]
                     target_y_m = self._coord_to_meters(target_hold.x, target_hold.y)[1]
                     y_progress = target_y_m - prev_y_m
 
                     if y_progress <= 0:
-                        total_penalty += 40.0 # 原地踏步惩罚
+                        total_penalty += 40.0
                     
-                    total_penalty += min(current.step_count * 0.5, 5.0) # 步数税
+                    total_penalty += current.step_count * 0.2
 
-                    # c. 手脚联动限制
                     y_progress_since_foot_move = (current.y_progress_since_foot_move + y_progress) if is_hand_move else 0
                     if y_progress_since_foot_move > 0.6: 
                         total_penalty += 20.0
 
-                    # d. 物理代价 (使用预测重心)
                     predicted_cg = self._get_center_of_gravity(new_limbs)
                     min_foot_y_m = min(self._coord_to_meters(h.x, h.y)[1] for h in new_limbs.values() if h and h.hold_type == HoldType.FOOT) if any(h and h.hold_type == HoldType.FOOT for h in new_limbs.values()) else 0
                     
@@ -435,11 +432,14 @@ class AStarSolver:
                     new_sequence = current.sequence[:]
                     new_sequence.append(BetaStep(step=current.step_count + 1, limb=limb, hold_id=target_hold.id, intent="Move"))
                     
-                    # e. 重构启发式函数: 关注手部 + 重心高度
-                    max_hand_y_m = max(self._coord_to_meters(h.x, h.y)[1] for h in new_limbs.values() if h and h.hold_type != HoldType.FOOT)
-                    h_hand = (self.GRID_HEIGHT * self.GRID_SPACING - max_hand_y_m) * 50.0
-                    h_cg = (self.GRID_HEIGHT * self.GRID_SPACING - predicted_cg[1]) * 20.0
-                    h_cost = h_hand + h_cg
+                    highest_hand_hold = max((h for h in new_limbs.values() if h and h.hold_type != HoldType.FOOT), key=lambda h: self._coord_to_meters(h.x, h.y)[1], default=None)
+                    
+                    h_cost = 0.0
+                    if highest_hand_hold and top_holds:
+                        dist_to_top = min(self._distance(highest_hand_hold, top) for top in top_holds)
+                        h_cost += dist_to_top * 35.0
+
+                    h_cost += (self.GRID_HEIGHT * self.GRID_SPACING - predicted_cg[1]) * 15.0
                     
                     new_consecutive_hand_moves = (current.consecutive_hand_moves + 1) if is_hand_move else 0
 
@@ -454,6 +454,32 @@ class AStarSolver:
                         consecutive_hand_moves=new_consecutive_hand_moves,
                         y_progress_since_foot_move=y_progress_since_foot_move
                     ))
+
+        if best_state_so_far and max_y_reached >= 16:
+            # 如果是因为迭代耗尽而退出，但我们找到了一个不错的未完成路径
+            best_sequence = best_state_so_far.sequence
+            used_hold_ids = {step.hold_id for step in best_sequence}
+            final_holds = [h for h in board_holds if h.id in used_hold_ids]
+            
+            # 部分成功也需要计算配额
+            quota_violations = {}
+            from collections import Counter
+            final_counts = Counter(h.hold_type for h in final_holds)
+            initial_recipe_counts = inventory_budget
+            for ht, count in final_counts.items():
+                required = initial_recipe_counts.get(ht, 0)
+                if count > required:
+                    quota_violations[ht] = count - required
+            
+            partial_candidate = RouteCandidate(
+                placed_holds=final_holds,
+                beta_sequence=best_sequence,
+                total_cost=best_state_so_far.g_cost,
+                flow_score=0, # 未完攀，没有 flow score
+                crux_step=f"最高点: Y={max_y_reached}",
+                quota_violations=quota_violations
+            )
+            return partial_candidate, {"reason": "未完攀，显示已知最高路径", "max_y": max_y_reached, "rule_violation": None}
 
         most_common_violation = max(kinematic_failure_counts, key=kinematic_failure_counts.get) if kinematic_failure_counts else "无"
         return failure_report(f"A* 搜索超时 ({max_iterations} 次迭代)", most_common_violation)

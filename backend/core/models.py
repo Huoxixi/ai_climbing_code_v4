@@ -55,6 +55,7 @@ class RouteRequest(BaseModel):
     climber_height_cm: int = Field(..., description="攀爬者身高 (厘米)")
     climber_span_cm: int = Field(..., description="攀爬者臂展 (厘米)")
     target_difficulty: str = Field(..., description="目标难度 (如 V1, V3, V5)")
+    special_requirements: str = Field("", description="用户的特殊需求，例如“需要很多侧拉动作”")
     recipe: Dict[HoldType, RecipeItem] = Field(default_factory=dict, description="岩点配方预算 (如 {'Jug': {'count': 4, 'variant': 'random'}})")
 
 
@@ -69,3 +70,7 @@ class RouteResponse(BaseModel):
     """AI 定线结果响应包，可能包含多条精选路线"""
     selected_routes: List[FinalRoute] = Field(..., description="经过 AI 精选的路线列表")
     failure_suggestion: Optional[str] = Field(None, description="如果生成失败，给用户的建议")
+    task_id: Optional[str] = Field(None, description="用于取消操作的后台任务ID")
+
+class GenerationInitiated(BaseModel):
+    task_id: str

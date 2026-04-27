@@ -90,6 +90,21 @@
                 <option value="V3">V3 - 极限爆发型</option>
               </select>
             </div>
+            <div class="field">
+                <label>艺术指导 (Special Requirements)</label>
+                <textarea v-model="profile.special_requirements" placeholder="例如：我想要多一点侧拉动作，或者适合爆发力训练"></textarea>
+            </div>
+          </section>
+
+          <section class="config-group">
+              <h3 class="group-title">⭐ 收藏夹 (My Boards)</h3>
+              <div class="saved-boards-list">
+                  <div v-if="!savedBoards.length" class="pool-empty-state">没有已保存的岩板</div>
+                  <div v-for="board in savedBoards" :key="board.saved_id" class="saved-board-item" @click="loadSavedBoard(board)">
+                      <div class="saved-board-name">{{ board.route_name }}</div>
+                      <div class="saved-board-difficulty">{{ board.beta_sequence.length }} moves</div>
+                  </div>
+              </div>
           </section>
 
           <section class="config-group">
@@ -170,8 +185,11 @@
 </section>
 
           <footer class="actions">
-            <button @click="generateRoute" :disabled="loading" class="generate-btn">
+            <button @click="generateRoute" :disabled="loading" class="generate-btn" v-if="!loading">
               🚀 触发造物意图
+            </button>
+            <button @click="cancelGeneration" class="generate-btn cancel-btn" v-if="loading">
+              ❌ 取消生成
             </button>
             <div v-if="error" class="error-toast">{{ error }}</div>
           </footer>
@@ -212,9 +230,10 @@
 
              <div v-for="hold in placedHolds" :key="hold.id"
                   class="hold-entity"
-                  :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id) }"
-                  :style="getCoord(hold.id)">
-              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(1.0)` }">
+                  :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id), 'is-selected': selectedHold && selectedHold.id === hold.id }"
+                  :style="getCoord(hold.id)"
+                  @mousedown="onHoldMouseDown($event, hold)">
+              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(${hold.scale || 1.0})` }">
                 <!-- 优先渲染 SVG 矢量 -->
                 <div v-if="getHoldSvg(hold)" class="hold-vector-container">
                   <svg :viewBox="'0 0 100 100'" class="vector-svg">
@@ -256,6 +275,13 @@
               <span class="difficulty-tag">{{ profile.target_difficulty }}</span>
             </div>
             <input type="range" v-model.number="currentIndex" min="0" :max="maxIndex" class="modern-slider" />
+             <div class="route-actions">
+                <div class="route-switcher">
+                    <button @click="activeRouteIndex = 0" :class="{ 'active': activeRouteIndex === 0 }" :disabled="allRoutes.length < 1">①</button>
+                    <button @click="activeRouteIndex = 1" :class="{ 'active': activeRouteIndex === 1 }" :disabled="allRoutes.length < 2">②</button>
+                </div>
+                <button @click="saveBoard" class="save-board-btn" :disabled="!routeData">💾 保存岩板</button>
+            </div>
           </div>
         </div>
       </main>
@@ -302,7 +328,7 @@ import axios from 'axios'
 
 // --- 基础状态 ---
 const isSidebarOpen = ref(true) // 控制侧边栏显隐
-const profile = ref({ height: 175, arm_span: 180, target_difficulty: 'V1' })
+const profile = ref({ height: 175, arm_span: 180, target_difficulty: 'V1', special_requirements: '' })
 const holdTypes = ['Jug', 'Crimp', 'Sloper', 'Pinch', 'Pocket', 'Foot']
 
 // --- 🌟 岩点图片映射 ---
@@ -472,7 +498,12 @@ const removeHoldFromPool = (id) => {
 
 const loading = ref(false)
 const error = ref('')
-const routeData = ref(null)
+const allRoutes = ref([])
+const activeRouteIndex = ref(0)
+const routeData = computed(() => allRoutes.value[activeRouteIndex.value] || null)
+const savedBoards = ref([])
+const taskId = ref(null)
+const pollingTimer = ref(null)
 
 // 🌟 核心修复：用 currentIndex 取代 currentStep，强制按数组绝对索引逐个播放！
 const currentIndex = ref(0)
@@ -490,9 +521,46 @@ const reflectionMessages = [
 
 let autoPlayTimer = null // 动画播放器
 
+const pollForResult = async (id) => {
+  pollingTimer.value = setInterval(async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/result/${id}`);
+      if (res.data.status === 'RUNNING') {
+        // continue polling
+      } else {
+        clearInterval(pollingTimer.value);
+        loading.value = false;
+        taskId.value = null;
+
+        if (res.data.selected_routes && res.data.selected_routes.length > 0) {
+          allRoutes.value = res.data.selected_routes;
+          activeRouteIndex.value = 0;
+          if (res.data.failure_suggestion) {
+            error.value = res.data.failure_suggestion;
+          }
+        } else {
+          allRoutes.value = [];
+          error.value = res.data.failure_suggestion || '未能生成有效路线。';
+        }
+        
+        let idx = 0
+        autoPlayTimer = setInterval(() => {
+          if (idx < maxIndex.value) { currentIndex.value = ++idx }
+          else { clearInterval(autoPlayTimer) }
+        }, 1000)
+      }
+    } catch (err) {
+      clearInterval(pollingTimer.value);
+      loading.value = false;
+      taskId.value = null;
+      error.value = err.response?.data?.detail || err.message;
+    }
+  }, 2000);
+};
+
 const generateRoute = async () => {
-  loading.value = true; error.value = ''; routeData.value = null; currentIndex.value = 0
-  if (autoPlayTimer) clearInterval(autoPlayTimer) // 清除上一次的动画
+  loading.value = true; error.value = ''; allRoutes.value = []; currentIndex.value = 0
+  if (autoPlayTimer) clearInterval(autoPlayTimer)
   
   let msgIdx = 0
   const msgTimer = setInterval(() => {
@@ -500,11 +568,6 @@ const generateRoute = async () => {
     msgIdx++
   }, 1200)
 
-  // --- 新的 Payload 组装逻辑 ---
-  // 后端当前 recipe 格式为: { "Jug": { "count": 4, "variant": "random" }, ... }
-  // 注意: 当前后端模型还不支持为每个岩点单独指定 scale 和 rotation。
-  // 因此，我们在这里进行数据聚合，将 holdPool 转换为后端期望的格式。
-  // 我们选择同类型中第一个岩点的 variant, scale, rotation 作为代表。
   const backendRecipePayload = holdPool.value.reduce((acc, hold) => {
     if (!acc[hold.type]) {
       acc[hold.type] = {
@@ -519,32 +582,38 @@ const generateRoute = async () => {
   }, {});
 
   try {
-    const response = await axios.post('http://127.0.0.1:8000/api/generate', {
+    const response = await axios.post(`${API_BASE_URL}/api/generate`, {
       climber_height_cm: profile.value.height,
       climber_span_cm: profile.value.arm_span,
       target_difficulty: profile.value.target_difficulty,
+      special_requirements: profile.value.special_requirements,
       recipe: backendRecipePayload
     })
-    if (response.data.selected_routes && response.data.selected_routes.length > 0) {
-      routeData.value = response.data.selected_routes[0];
-    } else {
-      routeData.value = null; // 或者处理没有路线的情况
-      error.value = response.data.failure_suggestion || '未能生成有效路线。';
-    }
     
-    // 🌟 核心修复：严格按照动作数组的长度，一秒只走一步！
-    let idx = 0
-    autoPlayTimer = setInterval(() => {
-      if (idx < maxIndex.value) { currentIndex.value = ++idx }
-      else { clearInterval(autoPlayTimer) }
-    }, 1000)
+    taskId.value = response.data.task_id;
+    await pollForResult(taskId.value);
+
   } catch (err) {
     error.value = err.response?.data?.detail || err.message
+    loading.value = false;
   } finally {
-    clearInterval(msgTimer)
-    loading.value = false
+    clearInterval(msgTimer);
+    // loading is set to false inside pollForResult
   }
 }
+
+const cancelGeneration = async () => {
+  if (!taskId.value) return;
+  try {
+    await axios.post(`${API_BASE_URL}/api/cancel/${taskId.value}`);
+    clearInterval(pollingTimer.value);
+    loading.value = false;
+    error.value = "生成已取消。";
+    taskId.value = null;
+  } catch (err) {
+    error.value = err.response?.data?.detail || "取消失败。";
+  }
+};
 
 // --- 计算属性 ---
 const managedHolds = computed(() => {
@@ -603,6 +672,102 @@ const getCoord = (id) => {
 const getShapeColor = (type) => ({ Jug: '#10b981', Crimp: '#ef4444', Sloper: '#f59e0b', Pinch: '#8b5cf6', Pocket: '#3b82f6', Foot: '#94a3b8' }[type] || '#10b981')
 const getLimbName = (limb) => ({ LH: '左手', RH: '右手', LF: '左脚', RF: '右脚' }[limb] || limb)
 const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }[limb] || limb)
+
+// --- Interactive Editor ---
+const selectedHold = ref(null);
+const interaction = reactive({ type: null, startX: 0, startY: 0, startRotation: 0, startScale: 0 });
+
+function onHoldMouseDown(event, hold) {
+  event.preventDefault();
+  selectedHold.value = hold;
+  
+  if (event.ctrlKey) {
+    interaction.type = 'rotate';
+    interaction.startRotation = hold.rotation;
+  } else if (event.shiftKey) {
+    interaction.type = 'scale';
+    interaction.startScale = hold.scale || 1.0;
+  } else {
+    interaction.type = 'drag';
+  }
+  
+  interaction.startX = event.clientX;
+  interaction.startY = event.clientY;
+  
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+}
+
+function onMouseMove(event) {
+  if (!selectedHold.value || !interaction.type) return;
+  
+  const dx = event.clientX - interaction.startX;
+  const dy = event.clientY - interaction.startY;
+
+  if (interaction.type === 'rotate') {
+    const newRotation = (interaction.startRotation + dx) % 360;
+    selectedHold.value.rotation = newRotation < 0 ? 360 + newRotation : newRotation;
+  } else if (interaction.type === 'scale') {
+    const newScale = Math.max(0.5, Math.min(2.0, interaction.startScale + dy * 0.01));
+    selectedHold.value.scale = newScale;
+  } else if (interaction.type === 'drag') {
+    const wallRect = document.querySelector('.wall-frame').getBoundingClientRect();
+    const x = event.clientX - wallRect.left;
+    const y = event.clientY - wallRect.top;
+
+    const xPercent = (x / wallRect.width) * 100;
+    const yPercent = 100 - (y / wallRect.height) * 100;
+
+    const xIdx = Math.round(((xPercent - 8) / 84) * 10);
+    const yIdx = Math.round(((yPercent - 8) / 84) * 17);
+
+    const newX = String.fromCharCode(65 + Math.max(0, Math.min(10, xIdx)));
+    const newY = Math.max(1, Math.min(18, yIdx + 1));
+
+    selectedHold.value.id = `${newX}${newY}`;
+  }
+}
+
+function onMouseUp() {
+  selectedHold.value = null;
+  interaction.type = null;
+  window.removeEventListener('mousemove', onMouseMove);
+  window.removeEventListener('mouseup', onMouseUp);
+}
+
+// --- Persistence --- 
+const fetchMyBoards = async () => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/api/my-boards`);
+        savedBoards.value = response.data;
+    } catch (error) {
+        console.error("无法加载已保存的岩板:", error);
+    }
+};
+
+const saveBoard = async () => {
+    if (!routeData.value) return;
+    try {
+        await axios.post(`${API_BASE_URL}/api/save-board`, routeData.value);
+        alert('岩板保存成功!');
+        await fetchMyBoards(); // Refresh saved boards list
+    } catch (error) {
+        console.error("无法保存岩板:", error);
+        alert(`保存失败: ${error.response?.data?.detail || error.message}`);
+    }
+};
+
+const loadSavedBoard = (board) => {
+    // Create a deep copy to avoid modifying the saved list
+    const boardCopy = JSON.parse(JSON.stringify(board));
+    allRoutes.value = [boardCopy];
+    activeRouteIndex.value = 0;
+    currentIndex.value = 0;
+    if (autoPlayTimer) clearInterval(autoPlayTimer);
+};
+
+// Fetch saved boards on initial load
+fetchMyBoards();
 </script>
 
 <style scoped>
@@ -818,6 +983,8 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 }
 .generate-btn:active:not(:disabled) { transform: translateY(0); }
 .generate-btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; box-shadow: none; }
+.cancel-btn { background: #ef4444; }
+.cancel-btn:hover:not(:disabled) { background: #dc2626; }
 
 .upload-section { display: flex; flex-direction: column; gap: 12px; }
 .upload-section input[type="file"] { font-size: 0.8rem; }
@@ -927,6 +1094,19 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 .route-info { flex: 1; }
 .route-info h2 { font-size: 1.8rem; margin: 0 0 15px 0; background: linear-gradient(90deg, #f8fafc, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
 
+.route-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.route-switcher button { background: #334155; color: #94a3b8; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.route-switcher button.active { background: #3b82f6; color: white; font-weight: bold; }
+.route-switcher button:disabled { background: #475569; cursor: not-allowed; }
+.save-board-btn { background: #10b981; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.save-board-btn:disabled { background: #475569; cursor: not-allowed; }
+
+.saved-boards-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.saved-board-item { background: #1e293b; padding: 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+.saved-board-item:hover { background: #334155; }
+.saved-board-name { font-weight: bold; color: #f1f5f9; }
+.saved-board-difficulty { font-size: 0.8rem; color: #94a3b8; }
+
 .commentary-card {
   background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-left: 4px solid #3b82f6;
   padding: 15px 20px; border-radius: 0 12px 12px 0; position: relative; max-width: 600px; margin: 0 auto;
@@ -985,6 +1165,7 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
   cursor: help; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 .hold-entity:hover { transform: translate(-50%, 50%) scale(1.3); z-index: 100; }
+.hold-entity.is-selected { transform: translate(-50%, 50%) scale(1.3); z-index: 101; box-shadow: 0 0 20px #fef08a; border-radius: 50%; }
 
 .hold-image-container {
   width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
