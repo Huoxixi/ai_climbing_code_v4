@@ -136,19 +136,24 @@
         </div>
       </div>
       <!-- 右侧：可视化预览 -->
-      <div class="creator-preview">
-        <div class="preview-visual-large" :style="{ transform: `rotate(${draftHold.rotation}deg) scale(${draftHold.scale})` }">
-          <template v-if="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })">
-            <svg viewBox="0 0 100 100" class="vector-svg">
-              <path :d="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })" :fill="getShapeColor(draftHold.type)" />
-            </svg>
-          </template>
-          <template v-else-if="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })">
-            <img :src="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })" class="hold-image" />
-          </template>
-          <template v-else>
-            <span class="no-preview-text">暂无预览</span>
-          </template>
+      <div class="creator-preview-wrapper">
+        <div class="creator-preview">
+          <div class="preview-visual-large" :style="{ transform: `rotate(${draftHold.rotation}deg) scale(${draftHold.scale})` }">
+            <template v-if="previewMode === 'vector'">
+              <svg v-if="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })" viewBox="0 0 100 100" class="vector-svg">
+                <path :d="getHoldSvg({ hold_type: draftHold.type, variant: draftHold.variant })" :fill="getShapeColor(draftHold.type)" />
+              </svg>
+              <span v-else class="no-preview-text">无矢量图</span>
+            </template>
+            <template v-if="previewMode === 'image'">
+              <img v-if="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })" :src="getHoldImage({ hold_type: draftHold.type, variant: draftHold.variant })" class="hold-image" />
+              <span v-else class="no-preview-text">无真实图</span>
+            </template>
+          </div>
+        </div>
+        <div class="preview-toggle">
+            <button @click="previewMode = 'vector'" :class="{ active: previewMode === 'vector' }">矢量</button>
+            <button @click="previewMode = 'image'" :class="{ active: previewMode === 'image' }">真实</button>
         </div>
       </div>
     </div>
@@ -201,6 +206,28 @@
       </button>
 
       <main class="stage">
+        <!-- 备件托盘 (Spare Holds Tray) -->
+        <aside class="spare-tray" v-if="remainingHolds.length">
+          <div class="tray-header">备件托盘</div>
+          <div class="tray-content">
+            <div v-for="hold in remainingHolds" :key="hold.id" 
+                 class="spare-hold-item"
+                 @mousedown="onHoldMouseDown($event, hold, true)">
+              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(0.8)` }">
+                 <template v-if="getHoldSvg(hold)">
+                    <svg viewBox="0 0 100 100" class="vector-svg">
+                      <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.type)" />
+                    </svg>
+                 </template>
+                 <template v-else-if="getHoldImage(hold)">
+                    <img :src="getHoldImage(hold)" class="hold-image" />
+                 </template>
+              </div>
+              <div class="spare-label">{{ hold.type }}</div>
+            </div>
+          </div>
+        </aside>
+
         <div class="stage-header" v-if="routeData">
           <div class="route-info">
             <h2>{{ routeData.route_name }}</h2>
@@ -237,7 +264,7 @@
                 <!-- 优先渲染 SVG 矢量 -->
                 <div v-if="getHoldSvg(hold)" class="hold-vector-container">
                   <svg :viewBox="'0 0 100 100'" class="vector-svg">
-                    <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.hold_type)" />
+                    <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.hold_type || hold.type)" />
                   </svg>
                 </div>
 
@@ -248,15 +275,15 @@
                 
                 <!-- 无图片时回退到 CSS 图形 -->
                 <div v-else class="geometric-shape" 
-                     :class="hold.hold_type.toLowerCase()"
-                     :style="{ color: getShapeColor(hold.hold_type) }">
+                     :class="(hold.hold_type || hold.type).toLowerCase()"
+                     :style="{ color: getShapeColor(hold.hold_type || hold.type) }">
                   <div class="inner-shadow"></div>
                   <div class="bolt-hole"></div>
                 </div>
               </div>
               <div class="hold-tooltip">
                 <div class="tooltip-row"><span class="label">ID:</span> {{ hold.id }}</div>
-                <div class="tooltip-row"><span class="label">类型:</span> {{ hold.hold_type }}</div>
+                <div class="tooltip-row"><span class="label">类型:</span> {{ hold.hold_type || hold.type }}</div>
                 <div class="tooltip-row"><span class="label">旋转:</span> {{ hold.rotation }}°</div>
               </div>
             </div>
@@ -427,7 +454,8 @@ const deleteHold = async (hold_type, variant) => {
 };
 
 const getHoldImage = (hold) => {
-  const typeMap = holdImageMap[hold.hold_type];
+  const type = hold.hold_type || hold.type;
+  const typeMap = holdImageMap[type];
   if (!typeMap) return null;
 
   let imageUrl = typeMap[hold.variant];
@@ -440,7 +468,8 @@ const getHoldImage = (hold) => {
 }
 
 const getHoldSvg = (hold) => {
-  const typeMap = holdVectorMap[hold.hold_type];
+  const type = hold.hold_type || hold.type;
+  const typeMap = holdVectorMap[type];
   if (!typeMap) return null;
   
   let svgPath = typeMap[hold.variant];
@@ -466,6 +495,7 @@ const draftHold = reactive({ // 造物台，用于编辑单个岩点
   scale: 1.0,
   rotation: 0
 })
+const previewMode = ref('vector'); // 'vector' or 'image'
 
 const availableVariants = computed(() => {
   const imageVariants = holdImageMap[draftHold.type] ? Object.keys(holdImageMap[draftHold.type]) : [];
@@ -635,6 +665,28 @@ const managedHolds = computed(() => {
 const placedHolds = computed(() => routeData.value?.placed_holds || []);
 const routeSteps = computed(() => routeData.value?.beta_sequence || []);
 
+// 计算剩余岩点 (Remaining Holds)
+const remainingHolds = computed(() => {
+  if (!holdPool.value.length) return [];
+  const usedCounts = {};
+  placedHolds.value.forEach(h => {
+    const key = `${h.hold_type || h.type}-${h.variant}`;
+    usedCounts[key] = (usedCounts[key] || 0) + 1;
+  });
+
+  const remaining = [];
+  // 必须对副本进行操作，避免影响原始 holdPool 的响应性或在计算属性中产生副作用
+  holdPool.value.forEach(p => {
+    const key = `${p.type}-${p.variant}`;
+    if (usedCounts[key] > 0) {
+      usedCounts[key]--;
+    } else {
+      remaining.push(p);
+    }
+  });
+  return remaining;
+});
+
 // 🌟 核心修复：最大帧数就是数组长度减一
 const maxIndex = computed(() => Math.max(0, routeSteps.value.length - 1))
 
@@ -675,18 +727,35 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 
 // --- Interactive Editor ---
 const selectedHold = ref(null);
+const isFromTray = ref(false);
 const interaction = reactive({ type: null, startX: 0, startY: 0, startRotation: 0, startScale: 0 });
 
-function onHoldMouseDown(event, hold) {
+function onHoldMouseDown(event, hold, fromTray = false) {
   event.preventDefault();
-  selectedHold.value = hold;
+  
+  if (fromTray) {
+    if (!routeData.value) return;
+    // 从托盘拖拽，创建一个副本
+    const newHold = {
+      ...hold,
+      id: `ADD_${Date.now()}`,
+      hold_type: hold.type, 
+      x: 'A', y: 1
+    };
+    routeData.value.placed_holds.push(newHold);
+    selectedHold.value = newHold;
+    isFromTray.value = true;
+  } else {
+    selectedHold.value = hold;
+    isFromTray.value = false;
+  }
   
   if (event.ctrlKey) {
     interaction.type = 'rotate';
-    interaction.startRotation = hold.rotation;
+    interaction.startRotation = selectedHold.value.rotation;
   } else if (event.shiftKey) {
     interaction.type = 'scale';
-    interaction.startScale = hold.scale || 1.0;
+    interaction.startScale = selectedHold.value.scale || 1.0;
   } else {
     interaction.type = 'drag';
   }
@@ -711,20 +780,29 @@ function onMouseMove(event) {
     const newScale = Math.max(0.5, Math.min(2.0, interaction.startScale + dy * 0.01));
     selectedHold.value.scale = newScale;
   } else if (interaction.type === 'drag') {
-    const wallRect = document.querySelector('.wall-frame').getBoundingClientRect();
-    const x = event.clientX - wallRect.left;
-    const y = event.clientY - wallRect.top;
+    const wallFrame = document.querySelector('.wall-frame');
+    if (!wallFrame) return;
+    const wallRect = wallFrame.getBoundingClientRect();
+    const xIdx = Math.round((((event.clientX - wallRect.left) / wallRect.width * 100 - 8) / 84) * 10);
+    const yIdx = Math.round(((100 - (event.clientY - wallRect.top) / wallRect.height * 100 - 8) / 84) * 17);
 
-    const xPercent = (x / wallRect.width) * 100;
-    const yPercent = 100 - (y / wallRect.height) * 100;
+    const safeXIdx = Math.max(0, Math.min(10, xIdx));
+    const safeYIdx = Math.max(1, Math.min(18, yIdx + 1));
+    const newX = String.fromCharCode(65 + safeXIdx);
+    const newId = `${newX}${safeYIdx}`;
+    
+    if (selectedHold.value.id !== newId) {
+      const oldId = selectedHold.value.id;
+      selectedHold.value.id = newId;
+      selectedHold.value.x = newX;
+      selectedHold.value.y = safeYIdx;
 
-    const xIdx = Math.round(((xPercent - 8) / 84) * 10);
-    const yIdx = Math.round(((yPercent - 8) / 84) * 17);
-
-    const newX = String.fromCharCode(65 + Math.max(0, Math.min(10, xIdx)));
-    const newY = Math.max(1, Math.min(18, yIdx + 1));
-
-    selectedHold.value.id = `${newX}${newY}`;
+      if (routeData.value) {
+        routeData.value.beta_sequence.forEach(step => {
+          if (step.hold_id === oldId) step.hold_id = newId;
+        });
+      }
+    }
   }
 }
 
@@ -843,6 +921,12 @@ fetchMyBoards();
   flex-direction: column;
   gap: 12px;
 }
+.creator-preview-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
 .creator-preview {
   width: 100px;
   height: 100px;
@@ -856,6 +940,35 @@ fetchMyBoards();
 .preview-visual-large {
   width: 60px;
   height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-visual-large .no-preview-text {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+.preview-toggle {
+    display: flex;
+    width: 100%;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.preview-toggle button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.preview-toggle button.active {
+    background: #3b82f6;
+    color: white;
+    font-weight: bold;
 }
 .preview-visual-large .vector-svg,
 .preview-visual-large .hold-image {
@@ -967,6 +1080,20 @@ fetchMyBoards();
   background: #dc2626;
   transform: scale(1.1);
 }
+
+/* --- 备件托盘样式 --- */
+.spare-tray {
+  position: absolute; left: 20px; top: 100px; width: 80px;
+  background: rgba(30, 41, 59, 0.8); border: 1px solid #334155;
+  border-radius: 12px; padding: 10px; z-index: 100;
+  max-height: 500px; overflow-y: auto;
+}
+.tray-header { font-size: 0.7rem; font-weight: bold; color: #94a3b8; text-align: center; margin-bottom: 10px; }
+.tray-content { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+.spare-hold-item { cursor: grab; transition: transform 0.2s; }
+.spare-hold-item:hover { transform: scale(1.2); }
+.spare-hold-item .hold-visual { width: 40px; height: 40px; }
+.spare-label { font-size: 0.6rem; color: #64748b; margin-top: 4px; text-align: center; }
 /* --- 样式结束 --- */
 
 .generate-btn {

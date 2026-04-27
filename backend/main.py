@@ -27,23 +27,32 @@ app = FastAPI(
 )
 
 # --- App State ---
-tasks: Dict[str, asyncio.Task] = {}
-results: Dict[str, Any] = {}
+# active_tasks 用于跟踪所有任务的状态、结果或错误
+# 格式: {task_id: {"status": "RUNNING" | "SUCCESS" | "ERROR", "result": RouteResponse | None, "error": str | None}}
+active_tasks: Dict[str, Dict[str, Any]] = {}
+tasks: Dict[str, asyncio.Task] = {} # 存储后台任务对象，用于取消操作
 
 
 # --- Background Task Runner ---
 async def run_and_store_generation(task_id: str, request: RouteRequest):
     """后台运行生成任务并存储结果"""
+    active_tasks[task_id] = {"status": "RUNNING", "result": None}
     try:
-        task = asyncio.create_task(generate_route_with_reflection(request))
+        # 注意：现在 generate_route_with_reflection 将直接修改 active_tasks
+        task = asyncio.create_task(generate_route_with_reflection(request, task_id))
         tasks[task_id] = task
-        result = await task
-        results[task_id] = result
+        # 等待任务完成, 它会自己处理结果存储
+        await task
+        # 如果任务正常结束但没有设置成功状态，则认为它失败了
+        if active_tasks.get(task_id, {}).get("status") == "RUNNING":
+            active_tasks[task_id] = {"status": "ERROR", "result": RouteResponse(selected_routes=[], failure_suggestion="任务意外结束，未能生成有效路线。")}
+
     except asyncio.CancelledError:
-        results[task_id] = RouteResponse(selected_routes=[], failure_suggestion="任务已被用户取消")
+        active_tasks[task_id] = {"status": "CANCELLED", "result": RouteResponse(selected_routes=[], failure_suggestion="任务已被用户取消")}
     except Exception as e:
-        print(f"Task {task_id} failed: {e}")
-        results[task_id] = RouteResponse(selected_routes=[], failure_suggestion=f"生成失败: {e}")
+        import traceback
+        print(f"Task {task_id} failed catastrophically: {e}\n{traceback.format_exc()}")
+        active_tasks[task_id] = {"status": "ERROR", "result": RouteResponse(selected_routes=[], failure_suggestion=f"生成过程中发生严重错误: {e}")}
     finally:
         if task_id in tasks:
             del tasks[task_id]
@@ -237,38 +246,48 @@ async def get_my_boards():
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
 async def generate_route(request: RouteRequest, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
+    # 立即初始化任务状态
+    active_tasks[task_id] = {"status": "PENDING"}
     background_tasks.add_task(run_and_store_generation, task_id, request)
     return GenerationInitiated(task_id=task_id)
 
 @app.get("/api/result/{task_id}")
 async def get_generation_result(task_id: str):
-    if task_id in results:
-        result = results.pop(task_id)
-        if isinstance(result, Exception):
-             raise HTTPException(status_code=500, detail=str(result))
-        return result
-    elif task_id in tasks:
-        return {"status": "RUNNING"}
-    else:
+    task_info = active_tasks.get(task_id)
+
+    if not task_info:
         raise HTTPException(status_code=404, detail="任务未找到或已过期")
+
+    status = task_info.get("status")
+
+    if status in ["SUCCESS", "ERROR", "CANCELLED"]:
+        # 一旦前端取走结果，就从内存中删除
+        result_to_return = active_tasks.pop(task_id)
+        # 对于成功的结果，我们只返回 result 部分
+        if status == "SUCCESS" and "result" in result_to_return:
+             # FastAPI 会自动处理 Pydantic 模型的序列化
+            return result_to_return["result"]
+        # 对于错误或取消，我们返回整个信息体以便前端诊断
+        elif status in ["ERROR", "CANCELLED"]:
+            return result_to_return["result"] # 这已经是一个RouteResponse对象
+            
+    return {"status": status}
 
 @app.post("/api/cancel/{task_id}")
 async def cancel_generation_task(task_id: str):
     if task_id not in tasks:
+        # 即使任务对象不在了，也检查 active_tasks，可能任务已完成但前端还在轮询
+        if task_id in active_tasks:
+            return {"status": "COMPLETED", "message": "任务已完成，无法取消"}
         raise HTTPException(status_code=404, detail="无法取消：未找到正在运行的任务")
     
     tasks[task_id].cancel()
-    # 等待一小段时间以确保取消信号传播
-    await asyncio.sleep(0.1)
-    
-    # 从 tasks 字典中移除任务，无论它是否成功取消
-    if task_id in tasks:
-        del tasks[task_id]
-        
-    # 在 results 中放置一个“已取消”的标记
-    results[task_id] = RouteResponse(selected_routes=[], failure_suggestion="任务已被用户成功取消")
+    await asyncio.sleep(0.1) # 给予取消信号传播的时间
 
-    return {"status": "CANCELLED", "message": "取消请求已发送"}
+    # 不需要手动删除 task，run_and_store_generation 的 finally 块会处理
+    # 也不需要手动设置 active_tasks, run_and_store_generation 的异常处理会设置
+    
+    return {"status": "CANCEL_REQUESTED", "message": "取消请求已发送"}
 
 if __name__ == "__main__":
     import uvicorn

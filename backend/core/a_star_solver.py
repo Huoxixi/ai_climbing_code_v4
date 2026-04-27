@@ -401,7 +401,7 @@ class AStarSolver:
                     new_inventory = current.inventory_left.copy()
                     if is_new_hold:
                         if new_inventory.get(target_hold.hold_type, 0) > 0:
-                            total_penalty -= 25.0
+                            total_penalty -= 40.0  # 大幅提升配方奖励
                         else:
                             total_penalty += 100.0
                         new_inventory[target_hold.hold_type] = new_inventory.get(target_hold.hold_type, 0) - 1
@@ -413,7 +413,9 @@ class AStarSolver:
                     if y_progress <= 0:
                         total_penalty += 40.0
                     
-                    total_penalty += current.step_count * 0.2
+                    # 消除步数税反噬：如果动作使用了新点（且在配额内），则豁免本次动作的步数惩罚
+                    if not (is_new_hold and new_inventory.get(target_hold.hold_type, -1) >= 0):
+                        total_penalty += current.step_count * 0.2
 
                     y_progress_since_foot_move = (current.y_progress_since_foot_move + y_progress) if is_hand_move else 0
                     if y_progress_since_foot_move > 0.6: 
