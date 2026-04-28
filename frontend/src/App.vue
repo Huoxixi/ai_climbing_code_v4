@@ -224,24 +224,90 @@
       </button>
 
       <main class="stage">
-        <!-- 备件托盘 (Spare Holds Tray) -->
-        <aside class="spare-tray" v-if="remainingHolds.length">
-          <div class="tray-header">备件托盘</div>
-          <div class="tray-content">
-            <div v-for="hold in remainingHolds" :key="hold.id" 
-                 class="spare-hold-item"
-                 @mousedown="onHoldMouseDown($event, hold, true)">
-              <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(0.8)` }">
-                 <template v-if="getHoldSvg(hold)">
-                    <svg viewBox="0 0 100 100" class="vector-svg">
-                      <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.type)" />
-                    </svg>
-                 </template>
-                 <template v-else-if="getHoldImage(hold)">
-                    <img :src="getHoldImage(hold)" class="hold-image" />
-                 </template>
+        <!-- 岩板旁快捷岩点池：区别于左侧“定线配置岩点池” -->
+        <aside class="board-side-hold-pool" :class="{ 'is-open': isBoardPoolOpen }">
+          <button
+            v-if="!isBoardPoolOpen"
+            class="board-pool-toggle"
+            @click="isBoardPoolOpen = true"
+            title="打开岩板快捷岩点池"
+          >
+            🧱<span>岩点池</span>
+          </button>
+
+          <div v-else class="board-pool-panel">
+            <div class="board-pool-header">
+              <div>
+                <h3>🧱 岩板快捷岩点池</h3>
+                <p>从这里拖拽岩点到岩板上</p>
               </div>
-              <div class="spare-label">{{ hold.type }}</div>
+              <button class="board-pool-close" @click="isBoardPoolOpen = false">✕</button>
+            </div>
+
+            <div class="board-pool-tabs">
+              <button
+                @click="boardPoolSource = 'board'"
+                :class="{ active: boardPoolSource === 'board' }"
+              >
+                本岩板已添加类型
+              </button>
+              <button
+                @click="boardPoolSource = 'all'"
+                :class="{ active: boardPoolSource === 'all' }"
+              >
+                全部已有类型
+              </button>
+            </div>
+
+            <div class="board-pool-filters">
+              <button
+                v-for="type in boardPoolTypeFilters"
+                :key="type"
+                @click="boardPoolFilter = type"
+                :class="{ active: boardPoolFilter === type }"
+              >
+                {{ type === 'All' ? '全部' : type }}
+              </button>
+            </div>
+
+            <div class="board-pool-list">
+              <div v-if="!routeData" class="board-pool-empty">
+                请先生成或载入一个岩板，再从这里拖拽岩点上墙。
+              </div>
+              <div v-else-if="filteredBoardPoolHolds.length === 0" class="board-pool-empty">
+                当前分类下暂无可用岩点。
+              </div>
+              <div
+                v-for="hold in filteredBoardPoolHolds"
+                :key="hold.key"
+                class="board-pool-hold-card"
+                @mousedown="onHoldMouseDown($event, hold, true)"
+                :title="`拖拽 ${hold.type} - ${hold.variant} 到岩板`"
+              >
+                <div class="board-pool-hold-thumb">
+                  <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation || 0}deg) scale(${Math.min(1.15, hold.scale || 1)})` }">
+                    <template v-if="getHoldSvg(hold)">
+                      <svg viewBox="0 0 100 100" class="vector-svg">
+                        <path :d="getHoldSvg(hold)" :fill="getShapeColor(hold.type)" />
+                      </svg>
+                    </template>
+                    <template v-else-if="getHoldImage(hold)">
+                      <img :src="getHoldImage(hold)" class="hold-image" />
+                    </template>
+                    <template v-else>
+                      <div class="geometric-shape" :class="hold.type.toLowerCase()" :style="{ color: getShapeColor(hold.type) }">
+                        <div class="inner-shadow"></div>
+                        <div class="bolt-hole"></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div class="board-pool-hold-info">
+                  <span class="board-pool-hold-type">{{ hold.type }}</span>
+                  <span class="board-pool-hold-variant">{{ hold.variant }}</span>
+                </div>
+                <span v-if="hold.count > 1" class="board-pool-count">×{{ hold.count }}</span>
+              </div>
             </div>
           </div>
         </aside>
@@ -275,7 +341,7 @@
 
              <div v-for="hold in placedHolds" :key="hold.id"
                   class="hold-entity"
-                  :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id), 'is-selected': selectedHold && selectedHold.id === hold.id }"
+                  :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id), 'is-selected': selectedHold && selectedHold.id === hold.id, 'is-beta-pick-target': isBetaEditorActive }"
                   :style="getCoord(hold.id)"
                    @mousedown="onHoldMouseDown($event, hold)"
                    @contextmenu.prevent="deletePlacedHold(hold)">
@@ -326,7 +392,11 @@
                     <button @click="activeRouteIndex = 0" :class="{ 'active': activeRouteIndex === 0 }" :disabled="allRoutes.length < 1">①</button>
                     <button @click="activeRouteIndex = 1" :class="{ 'active': activeRouteIndex === 1 }" :disabled="allRoutes.length < 2">②</button>
                 </div>
-                <button @click="saveBoard" class="save-board-btn" :disabled="!routeData">💾 保存岩板</button>
+                <button @click="saveBoard" class="save-board-btn" :disabled="!routeData">💾 {{ routeData?.saved_id ? '更新岩板' : '保存岩板' }}</button>
+            </div>
+            <div v-if="isBetaEditorActive" class="beta-edit-hint">
+              <span>正在{{ betaEditModeLabel }}：选择 {{ getLimbName(betaEditor.selectedLimb) }}，然后点击岩板上已有岩点作为目标。</span>
+              <button @click="cancelBetaEdit">取消本次操作</button>
             </div>
           </div>
         </div>
@@ -337,13 +407,26 @@
         <div class="sidebar-content">
           <section class="timeline-section">
             <h3 class="group-title">📜 攀爬动作序列</h3>
+            <div class="beta-editor-panel">
+              <div class="field compact-field">
+                <label>当前编辑肢体</label>
+                <select v-model="betaEditor.selectedLimb">
+                  <option v-for="limb in limbOptions" :key="limb" :value="limb">{{ getLimbName(limb) }}</option>
+                </select>
+              </div>
+              <div class="beta-editor-status" :class="{ active: isBetaEditorActive }">
+                {{ isBetaEditorActive ? `待选点：${betaEditModeLabel}` : '点击动作卡片上的按钮开始编辑' }}
+              </div>
+              <button v-if="isBetaEditorActive" class="beta-editor-cancel" @click="cancelBetaEdit">取消编辑</button>
+            </div>
             <div class="step-scroll-area">
               <div v-for="(m, idx) in routeSteps" :key="idx"
                    class="step-item"
                    :class="{ 
                      'is-active': idx === currentIndex, 
                      'is-top': m.is_top,
-                     'is-start': m.step === 0 
+                      'is-start': m.step === 0,
+                      'is-edit-target': betaEditor.targetIndex === idx
                    }"
                    @click="currentIndex = idx">
                 <div class="step-indicator">
@@ -357,6 +440,12 @@
                   </div>
                   <p class="intent" v-if="m.intent">{{ m.intent }}</p>
                   <p class="intent" v-else-if="m.step === 0">上墙起步</p>
+                  <div class="step-actions">
+                    <button @click.stop="startBetaEdit('edit', idx)">改</button>
+                    <button @click.stop="startBetaEdit('insert-before', idx)">前插</button>
+                    <button @click.stop="startBetaEdit('insert-after', idx)">后插</button>
+                    <button class="danger" @click.stop="deleteBetaStep(idx)">删</button>
+                  </div>
                 </div>
                 <div v-if="m.is_top" class="top-medal">🏆</div>
               </div>
@@ -508,6 +597,10 @@ const getHoldScale = (hold) => {
 
 // --- 购物车模式重构 ---
 const holdPool = ref([]) // 岩点池，存放最终配置
+const isBoardPoolOpen = ref(false)
+const boardPoolSource = ref('board') // board | all
+const boardPoolFilter = ref('All')
+const boardPoolTypeFilters = computed(() => ['All', ...holdTypes])
 const draftHold = reactive({ // 造物台，用于编辑单个岩点
   type: 'Jug',
   variant: 'random',
@@ -582,7 +675,11 @@ const pollForResult = async (id) => {
         taskId.value = null;
 
         if (res.data.selected_routes && res.data.selected_routes.length > 0) {
-          allRoutes.value = res.data.selected_routes;
+          const generationHoldPoolSnapshot = JSON.parse(JSON.stringify(holdPool.value));
+          allRoutes.value = res.data.selected_routes.map(route => ({
+            ...route,
+            source_hold_pool: generationHoldPoolSnapshot
+          }));
           activeRouteIndex.value = 0;
           if (res.data.failure_suggestion) {
             error.value = res.data.failure_suggestion;
@@ -673,22 +770,84 @@ const cancelGeneration = async () => {
 // --- 计算属性 ---
 const managedHolds = computed(() => {
   const holds = [];
-  for (const hold_type in holdImageMap) {
-    for (const variant in holdImageMap[hold_type]) {
+  const allTypes = new Set([...Object.keys(holdImageMap), ...Object.keys(holdVectorMap)]);
+  allTypes.forEach((hold_type) => {
+    const variants = new Set([
+      ...Object.keys(holdImageMap[hold_type] || {}),
+      ...Object.keys(holdVectorMap[hold_type] || {})
+    ]);
+    variants.forEach((variant) => {
       holds.push({
         key: `${hold_type}-${variant}`,
         hold_type,
         variant,
-        imageUrl: `${API_BASE_URL}${holdImageMap[hold_type][variant]}`,
+        imageUrl: holdImageMap[hold_type]?.[variant] ? `${API_BASE_URL}${holdImageMap[hold_type][variant]}` : null,
         svgPath: holdVectorMap[hold_type]?.[variant] || null
       });
-    }
-  }
+    });
+  });
   return holds.sort((a,b) => a.key.localeCompare(b.key));
 });
 
 const placedHolds = computed(() => routeData.value?.placed_holds || []);
 const routeSteps = computed(() => routeData.value?.beta_sequence || []);
+
+const normalizePoolHold = (hold, index = 0, source = 'board') => {
+  const type = hold.hold_type || hold.type;
+  const variant = hold.variant || 'default';
+  return {
+    key: `${source}-${type}-${variant}-${hold.rotation ?? 0}-${hold.scale ?? 1}-${index}`,
+    type,
+    hold_type: type,
+    variant,
+    rotation: Number(hold.rotation ?? 0),
+    scale: Number(hold.scale ?? 1),
+    count: Number(hold.count ?? 1),
+    source
+  };
+}
+
+const aggregateBoardPoolHolds = (holds, source = 'board') => {
+  const grouped = new Map();
+  holds.forEach((rawHold, index) => {
+    const hold = normalizePoolHold(rawHold, index, source);
+    const key = `${hold.type}-${hold.variant}-${hold.rotation}-${hold.scale}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      grouped.set(key, {
+        ...hold,
+        key: `${source}-${key}`
+      });
+    }
+  });
+  return Array.from(grouped.values()).sort((a, b) => `${a.type}-${a.variant}`.localeCompare(`${b.type}-${b.variant}`));
+}
+
+const boardGeneratedHoldPool = computed(() => {
+  const sourceHolds = routeData.value?.source_hold_pool?.length
+    ? routeData.value.source_hold_pool
+    : (holdPool.value.length ? holdPool.value : placedHolds.value);
+  return aggregateBoardPoolHolds(sourceHolds, 'board');
+});
+
+const allLibraryHoldPool = computed(() => managedHolds.value.map((hold, index) => ({
+  key: `all-${hold.hold_type}-${hold.variant}-${index}`,
+  type: hold.hold_type,
+  hold_type: hold.hold_type,
+  variant: hold.variant,
+  rotation: 0,
+  scale: 1,
+  count: 1,
+  source: 'all'
+})));
+
+const filteredBoardPoolHolds = computed(() => {
+  const sourceList = boardPoolSource.value === 'board' ? boardGeneratedHoldPool.value : allLibraryHoldPool.value;
+  if (boardPoolFilter.value === 'All') return sourceList;
+  return sourceList.filter(hold => hold.type === boardPoolFilter.value);
+});
 
 // 计算剩余岩点 (Remaining Holds)
 const remainingHolds = computed(() => {
@@ -715,13 +874,21 @@ const remainingHolds = computed(() => {
 // 🌟 核心修复：最大帧数就是数组长度减一
 const maxIndex = computed(() => Math.max(0, routeSteps.value.length - 1))
 
-const isStart = (id) => routeSteps.value.some(s => s.step === 0 && s.hold_id === id)
+const isStart = (id) => placedHolds.value.some(h => h.id === id && h.is_start) || routeSteps.value.some(s => s.step === 0 && s.hold_id === id)
 const isTop = (id) => routeSteps.value.some(s => s.is_top && s.hold_id === id)
 
 // 🌟 核心修复：按数组切片 (slice) 截取肢体位置，并修正起步阶段显示
 const currentLimbs = computed(() => {
   const limbs = {};
   const currentMove = routeSteps.value[currentIndex.value];
+
+  if (currentMove && (currentMove.lh || currentMove.rh || currentMove.lf || currentMove.rf)) {
+    if (currentMove.lh) limbs.LH = { id: currentMove.lh };
+    if (currentMove.rh) limbs.RH = { id: currentMove.rh };
+    if (currentMove.lf) limbs.LF = { id: currentMove.lf };
+    if (currentMove.rf) limbs.RF = { id: currentMove.rf };
+    return limbs;
+  }
 
   // 修正逻辑：如果当前是起步动作 (step 0)，则显示所有起步点
   if (currentMove && currentMove.step === 0) {
@@ -750,6 +917,103 @@ const getShapeColor = (type) => ({ Jug: '#10b981', Crimp: '#ef4444', Sloper: '#f
 const getLimbName = (limb) => ({ LH: '左手', RH: '右手', LF: '左脚', RF: '右脚' }[limb] || limb)
 const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }[limb] || limb)
 
+// --- Beta Sequence Editor ---
+const limbOptions = ['LH', 'RH', 'LF', 'RF']
+const betaEditor = reactive({
+  mode: null, // edit | insert-before | insert-after
+  targetIndex: null,
+  selectedLimb: 'LH'
+})
+
+const isBetaEditorActive = computed(() => Boolean(betaEditor.mode) && betaEditor.targetIndex !== null)
+const betaEditModeLabel = computed(() => ({
+  edit: '修改当前动作',
+  'insert-before': '在当前动作前插入',
+  'insert-after': '在当前动作后插入'
+}[betaEditor.mode] || '编辑动作'))
+
+function startBetaEdit(mode, index) {
+  if (!routeData.value || index < 0 || index >= routeSteps.value.length) return
+  betaEditor.mode = mode
+  betaEditor.targetIndex = index
+  betaEditor.selectedLimb = routeSteps.value[index]?.limb || betaEditor.selectedLimb || 'LH'
+  currentIndex.value = index
+  if (autoPlayTimer) clearInterval(autoPlayTimer)
+}
+
+function cancelBetaEdit() {
+  betaEditor.mode = null
+  betaEditor.targetIndex = null
+}
+
+function createEditedStep(limb, holdId, fallbackIndex = 0) {
+  return {
+    step: fallbackIndex,
+    limb,
+    hold_id: holdId,
+    intent: `人工编辑：${getLimbName(limb)}移动到 ${holdId}`,
+    is_top: false,
+    lh: null,
+    rh: null,
+    lf: null,
+    rf: null,
+  }
+}
+
+function normalizeBetaSequence(preferredIndex = currentIndex.value) {
+  if (!routeData.value) return
+  const sequence = routeData.value.beta_sequence || []
+  const limbs = { LH: null, RH: null, LF: null, RF: null }
+
+  sequence.forEach((step, index) => {
+    const limb = limbOptions.includes(step.limb) ? step.limb : 'LH'
+    step.step = index
+    step.limb = limb
+    step.is_top = sequence.length > 0 && index === sequence.length - 1
+    limbs[limb] = step.hold_id
+    step.lh = limbs.LH
+    step.rh = limbs.RH
+    step.lf = limbs.LF
+    step.rf = limbs.RF
+    if (!step.intent) {
+      step.intent = index === 0 ? '上墙起步' : `${getLimbName(limb)}移动到 ${step.hold_id}`
+    }
+  })
+
+  currentIndex.value = Math.max(0, Math.min(preferredIndex, Math.max(0, sequence.length - 1)))
+}
+
+function applyBetaEditToHold(hold) {
+  if (!routeData.value || !isBetaEditorActive.value || !hold?.id) return
+  const sequence = routeData.value.beta_sequence || []
+  const targetIndex = betaEditor.targetIndex
+  const newStep = createEditedStep(betaEditor.selectedLimb, hold.id, targetIndex)
+
+  if (betaEditor.mode === 'edit') {
+    sequence.splice(targetIndex, 1, {
+      ...sequence[targetIndex],
+      ...newStep,
+      intent: `人工修改：${getLimbName(betaEditor.selectedLimb)}改到 ${hold.id}`,
+    })
+    normalizeBetaSequence(targetIndex)
+  } else {
+    const insertIndex = betaEditor.mode === 'insert-before' ? targetIndex : targetIndex + 1
+    sequence.splice(insertIndex, 0, newStep)
+    normalizeBetaSequence(insertIndex)
+  }
+
+  cancelBetaEdit()
+}
+
+function deleteBetaStep(index) {
+  if (!routeData.value || index < 0 || index >= routeSteps.value.length) return
+  const step = routeSteps.value[index]
+  if (!confirm(`确定删除动作 ${step.step}: ${getLimbName(step.limb)} -> ${step.hold_id} 吗？`)) return
+  routeData.value.beta_sequence.splice(index, 1)
+  normalizeBetaSequence(Math.min(index, routeData.value.beta_sequence.length - 1))
+  cancelBetaEdit()
+}
+
 // --- Interactive Editor ---
 const selectedHold = ref(null);
 const isFromTray = ref(false);
@@ -775,6 +1039,8 @@ function deletePlacedHold(hold) {
       rf: step.rf === holdId ? null : step.rf,
     }));
 
+  normalizeBetaSequence(Math.min(currentIndex.value, routeData.value.beta_sequence.length - 1));
+
   if (selectedHold.value?.id === holdId) {
     selectedHold.value = null;
     interaction.type = null;
@@ -787,14 +1053,26 @@ function deletePlacedHold(hold) {
 
 function onHoldMouseDown(event, hold, fromTray = false) {
   event.preventDefault();
+
+  if (!fromTray && isBetaEditorActive.value) {
+    applyBetaEditToHold(hold)
+    return
+  }
   
   if (fromTray) {
     if (!routeData.value) return;
+    if (!Array.isArray(routeData.value.placed_holds)) {
+      routeData.value.placed_holds = [];
+    }
     // 从托盘拖拽，创建一个副本
     const newHold = {
       ...hold,
       id: `ADD_${Date.now()}`,
       hold_type: hold.type, 
+      type: hold.type,
+      variant: hold.variant,
+      rotation: Number(hold.rotation ?? 0),
+      scale: Number(hold.scale ?? 1),
       x: 'A', y: 1
     };
     routeData.value.placed_holds.push(newHold);
@@ -856,6 +1134,7 @@ function onMouseMove(event) {
         routeData.value.beta_sequence.forEach(step => {
           if (step.hold_id === oldId) step.hold_id = newId;
         });
+        normalizeBetaSequence(currentIndex.value);
       }
     }
   }
@@ -880,9 +1159,18 @@ const fetchMyBoards = async () => {
 
 const saveBoard = async () => {
     if (!routeData.value) return;
+    normalizeBetaSequence(currentIndex.value);
     try {
-        await axios.post(`${API_BASE_URL}/api/save-board`, routeData.value);
-        alert('岩板保存成功!');
+        if (routeData.value.saved_id) {
+            await axios.put(`${API_BASE_URL}/api/my-boards/${routeData.value.saved_id}`, routeData.value);
+            alert('岩板更新成功!');
+        } else {
+            const response = await axios.post(`${API_BASE_URL}/api/save-board`, routeData.value);
+            if (response.data?.saved_id) {
+                routeData.value.saved_id = response.data.saved_id;
+            }
+            alert('岩板保存成功!');
+        }
         await fetchMyBoards(); // Refresh saved boards list
     } catch (error) {
         console.error("无法保存岩板:", error);
@@ -1210,19 +1498,202 @@ fetchMyBoards();
   transform: scale(1.1);
 }
 
-/* --- 备件托盘样式 --- */
-.spare-tray {
-  position: absolute; left: 20px; top: 100px; width: 80px;
-  background: rgba(30, 41, 59, 0.8); border: 1px solid #334155;
-  border-radius: 12px; padding: 10px; z-index: 100;
-  max-height: 500px; overflow-y: auto;
+/* --- 岩板旁快捷岩点池：独立于左侧配置池 --- */
+.board-side-hold-pool {
+  position: absolute;
+  left: 24px;
+  top: 96px;
+  z-index: 120;
 }
-.tray-header { font-size: 0.7rem; font-weight: bold; color: #94a3b8; text-align: center; margin-bottom: 10px; }
-.tray-content { display: flex; flex-direction: column; gap: 15px; align-items: center; }
-.spare-hold-item { cursor: grab; transition: transform 0.2s; }
-.spare-hold-item:hover { transform: scale(1.2); }
-.spare-hold-item .hold-visual { width: 40px; height: 40px; }
-.spare-label { font-size: 0.6rem; color: #64748b; margin-top: 4px; text-align: center; }
+.board-pool-toggle {
+  width: 58px;
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.92));
+  color: #fff7ed;
+  border: 1px solid rgba(251, 191, 36, 0.7);
+  border-radius: 16px;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.32), 0 0 24px rgba(245, 158, 11, 0.18);
+  cursor: pointer;
+  font-weight: 900;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.board-pool-toggle span {
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+  font-size: 0.72rem;
+}
+.board-pool-toggle:hover {
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.08);
+}
+.board-pool-panel {
+  width: 290px;
+  max-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 24px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+}
+.board-pool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.board-pool-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #fef3c7;
+}
+.board-pool-header p {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+.board-pool-close {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: #334155;
+  color: #cbd5e1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.board-pool-close:hover { background: #ef4444; color: white; }
+.board-pool-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 4px;
+}
+.board-pool-tabs button,
+.board-pool-filters button {
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.board-pool-tabs button {
+  padding: 8px 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.board-pool-tabs button.active {
+  background: #f59e0b;
+  color: #111827;
+}
+.board-pool-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.board-pool-filters button {
+  padding: 5px 8px;
+  font-size: 0.7rem;
+  border: 1px solid #334155;
+  background: #1e293b;
+}
+.board-pool-filters button.active {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: #3b82f6;
+  color: #dbeafe;
+}
+.board-pool-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.board-pool-list::-webkit-scrollbar { width: 6px; }
+.board-pool-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+.board-pool-empty {
+  color: #64748b;
+  font-size: 0.78rem;
+  text-align: center;
+  line-height: 1.5;
+  padding: 20px 12px;
+  background: #0f172a;
+  border: 1px dashed #334155;
+  border-radius: 12px;
+}
+.board-pool-hold-card {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px;
+  background: #1e293b;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  border-radius: 12px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.board-pool-hold-card:hover {
+  transform: translateX(3px);
+  border-color: #f59e0b;
+  background: #273449;
+}
+.board-pool-hold-card:active { cursor: grabbing; }
+.board-pool-hold-thumb {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.board-pool-hold-thumb .hold-visual {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.board-pool-hold-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.board-pool-hold-type {
+  color: #f8fafc;
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+.board-pool-hold-variant {
+  color: #94a3b8;
+  font-family: monospace;
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-pool-count {
+  color: #fbbf24;
+  font-weight: 900;
+  font-size: 0.78rem;
+}
 /* --- 样式结束 --- */
 
 .generate-btn {
@@ -1315,6 +1786,56 @@ fetchMyBoards();
 .step-item.is-active { opacity: 1; border-color: #3b82f6; background: #334155; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
 .step-item.is-start { border-left: 4px solid #10b981; }
 .step-item.is-top { border-left: 4px solid #ef4444; }
+.step-item.is-edit-target { outline: 2px dashed #f59e0b; outline-offset: 2px; }
+
+.beta-editor-panel {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.compact-field { margin-bottom: 0; }
+.beta-editor-status {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  line-height: 1.4;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #1e293b;
+}
+.beta-editor-status.active {
+  color: #fef3c7;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.beta-editor-cancel {
+  background: #475569;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.step-actions button {
+  background: #334155;
+  color: #cbd5e1;
+  border: 1px solid #475569;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.step-actions button:hover { background: #3b82f6; color: white; }
+.step-actions button.danger:hover { background: #ef4444; }
 
 .step-indicator { display: flex; flex-direction: column; align-items: center; width: 20px; }
 .step-line { width: 2px; height: 100%; background: #334155; position: absolute; left: 21px; top: 0; z-index: 1; }
@@ -1356,6 +1877,30 @@ fetchMyBoards();
 .route-switcher button:disabled { background: #475569; cursor: not-allowed; }
 .save-board-btn { background: #10b981; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; }
 .save-board-btn:disabled { background: #475569; cursor: not-allowed; }
+.beta-edit-hint {
+  font-size: 0.78rem;
+  color: #fef3c7;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 8px 10px;
+  border-radius: 8px;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.beta-edit-hint button {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+.beta-edit-hint button:hover { background: #dc2626; }
 
 .saved-boards-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .saved-board-item { background: #1e293b; padding: 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -1444,6 +1989,16 @@ fetchMyBoards();
 }
 .hold-entity:hover { transform: translate(-50%, 50%) scale(1.3); z-index: 100; }
 .hold-entity.is-selected { transform: translate(-50%, 50%) scale(1.3); z-index: 101; box-shadow: 0 0 20px #fef08a; border-radius: 50%; }
+.hold-entity.is-beta-pick-target { cursor: crosshair; }
+.hold-entity.is-beta-pick-target::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border: 2px dashed rgba(245, 158, 11, 0.8);
+  border-radius: 50%;
+  animation: circle-pulse 1.2s infinite;
+  pointer-events: none;
+}
 
 .hold-image-container {
   width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
