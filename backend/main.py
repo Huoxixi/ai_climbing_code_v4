@@ -28,7 +28,7 @@ class EndpointFilter(logging.Filter):
 # 获取 uvicorn.access 日志器并添加过滤器
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-from core.models import RouteRequest, RouteResponse, FinalRoute, GenerationInitiated
+from core.models import RouteRequest, RouteResponse, FinalRoute, GenerationInitiated, RenameBoardRequest
 from agent.controller import generate_route_with_reflection
 
 app = FastAPI(
@@ -250,6 +250,59 @@ async def get_my_boards():
             return json.load(f)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法加载已保存的岩板: {e}")
+
+
+@app.put("/api/my-boards/{saved_id}")
+async def rename_saved_board(saved_id: str, payload: RenameBoardRequest):
+    if not os.path.exists(SAVED_BOARDS_FILE):
+        raise HTTPException(status_code=404, detail="收藏夹为空，未找到可重命名的岩板")
+
+    new_name = payload.route_name.strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="新的路线名称不能为空")
+
+    try:
+        with open(SAVED_BOARDS_FILE, "r", encoding="utf-8") as f:
+            boards = json.load(f)
+
+        target_board = next((b for b in boards if b.get("saved_id") == saved_id), None)
+        if target_board is None:
+            raise HTTPException(status_code=404, detail="未找到该收藏岩板")
+
+        target_board["route_name"] = new_name
+
+        with open(SAVED_BOARDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(boards, f, indent=2, ensure_ascii=False)
+
+        return {"success": True, "message": "收藏岩板已重命名", "saved_id": saved_id, "route_name": new_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重命名收藏岩板失败: {e}")
+
+@app.delete("/api/my-boards/{saved_id}")
+async def delete_saved_board(saved_id: str):
+    if not os.path.exists(SAVED_BOARDS_FILE):
+        raise HTTPException(status_code=404, detail="收藏夹为空，未找到可删除的岩板")
+
+    try:
+        with open(SAVED_BOARDS_FILE, "r", encoding="utf-8") as f:
+            boards = json.load(f)
+
+        original_len = len(boards)
+        boards = [b for b in boards if b.get("saved_id") != saved_id]
+
+        if len(boards) == original_len:
+            raise HTTPException(status_code=404, detail="未找到该收藏岩板")
+
+        with open(SAVED_BOARDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(boards, f, indent=2, ensure_ascii=False)
+
+        return {"success": True, "message": "收藏岩板已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除收藏岩板失败: {e}")
 
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
 async def generate_route(request: RouteRequest, background_tasks: BackgroundTasks):

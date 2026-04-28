@@ -5,7 +5,7 @@ backend/core/validator.py
 
 import math
 from typing import List, Tuple, Dict, Set
-from core.models import Hold, HoldType
+from core.models import Hold, HoldType, BetaStep
 
 class PhysicsValidator:
     """
@@ -21,6 +21,9 @@ class PhysicsValidator:
         x_idx = ord(x_label.upper()) - ord('A')
         y_idx = y_label - 1
         return (x_idx * self.GRID_SPACING, y_idx * self.GRID_SPACING)
+
+    def _get_x_idx(self, hold: Hold) -> int:
+        return ord(hold.x.upper()) - ord('A')
 
     def validate_baseline(self, holds: List[Hold]) -> Tuple[bool, str]:
         """
@@ -80,3 +83,45 @@ class PhysicsValidator:
             return False, "路线过于垂直，违反“No Ladder Rule”。"
             
         return True, "初筛通过：路线符合基本的物理布局规则。"
+
+    def validate_beta_balance(self, beta_sequence: List[BetaStep], holds: List[Hold]) -> Tuple[bool, str]:
+        """
+        后验动作平衡检查：拦截“脚步跨到对侧上方导致身体过横”的 Beta。
+        """
+        if not beta_sequence:
+            return True, "无动作序列，跳过平衡检查。"
+
+        holds_map: Dict[str, Hold] = {h.id: h for h in holds}
+        cross_high_step_count = 0
+        torso_offset_samples: List[float] = []
+
+        for step in beta_sequence:
+            lh = holds_map.get(step.lh) if step.lh else None
+            rh = holds_map.get(step.rh) if step.rh else None
+            lf = holds_map.get(step.lf) if step.lf else None
+            rf = holds_map.get(step.rf) if step.rf else None
+
+            if not (lh and rh and lf and rf):
+                continue
+
+            lh_x, rh_x = self._get_x_idx(lh), self._get_x_idx(rh)
+            lf_x, rf_x = self._get_x_idx(lf), self._get_x_idx(rf)
+            hand_center = (lh_x + rh_x) / 2.0
+            foot_center = (lf_x + rf_x) / 2.0
+            torso_offset_samples.append(abs(hand_center - foot_center))
+
+            # 对侧上方高踩（或同列上方高踩）计数
+            if (lf_x >= rf_x and lf.y > rf.y) or (abs(lf_x - rf_x) <= 1 and lf.y >= rf.y + 2):
+                cross_high_step_count += 1
+            if (rf_x <= lf_x and rf.y > lf.y) or (abs(lf_x - rf_x) <= 1 and rf.y >= lf.y + 2):
+                cross_high_step_count += 1
+
+        avg_torso_offset = (sum(torso_offset_samples) / len(torso_offset_samples)) if torso_offset_samples else 0.0
+
+        if cross_high_step_count >= 2:
+            return False, "动作序列存在多次对侧上方高踩，身体横向扭转过大。"
+
+        if avg_torso_offset > 1.8:
+            return False, f"动作序列手脚中轴偏移过大（平均偏移 {avg_torso_offset:.2f} 列）。"
+
+        return True, "通过后验平衡检查：未发现明显身体过横问题。"

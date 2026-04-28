@@ -57,6 +57,13 @@ class AStarSolver:
         self.GRID_SPACING = 0.2
         self.GRID_HEIGHT = 18
         self.GRID_WIDTH = 11
+
+        # 稳定性参数：用于抑制“大字型横向发力”和“双脚上下断层”
+        self.SOFT_HAND_SPAN_LIMIT = 4
+        self.SOFT_FOOT_SPAN_LIMIT = 2
+        self.SOFT_FOOT_VERTICAL_GAP_LIMIT = 2
+        self.HARD_FOOT_VERTICAL_GAP_LIMIT = 5
+        self.MAX_FOOT_MOVE_VERTICAL_DELTA = 4
         
         # 岩点难度权重表 (V2 难度校准)
         self.HOLD_COST_WEIGHTS = {
@@ -67,6 +74,277 @@ class AStarSolver:
             HoldType.SLOPER: 6.5,
             HoldType.POCKET: 8.0
         }
+
+    def _get_x_idx(self, hold: Optional[Hold]) -> int:
+        return ord(hold.x.upper()) - ord('A') if hold else -1
+
+    def _get_body_midline_x(self, limbs: Dict[Limb, Optional[Hold]]) -> float:
+        """用双手中心近似身体中线；若手点缺失，则回退到双脚中心。"""
+        lh, rh = limbs.get(Limb.LH), limbs.get(Limb.RH)
+        if lh and rh:
+            return (self._get_x_idx(lh) + self._get_x_idx(rh)) / 2.0
+
+        lf, rf = limbs.get(Limb.LF), limbs.get(Limb.RF)
+        if lf and rf:
+            return (self._get_x_idx(lf) + self._get_x_idx(rf)) / 2.0
+
+        return (self.GRID_WIDTH - 1) / 2.0
+
+    def _is_contralateral_high_step(
+        self,
+        current_limbs: Dict[Limb, Optional[Hold]],
+        moving_limb: Limb,
+        target_hold: Hold
+    ) -> bool:
+        """
+        拦截“同侧脚跨到对侧脚上方/同列上方”的高踩动作。
+        该动作会显著诱发身体过横与骨盆偏转。
+        """
+        if moving_limb not in [Limb.LF, Limb.RF] or target_hold.hold_type != HoldType.FOOT:
+            return False
+
+        other_limb = Limb.RF if moving_limb == Limb.LF else Limb.LF
+        other_foot = current_limbs.get(other_limb)
+        if not other_foot:
+            return False
+
+        target_x = self._get_x_idx(target_hold)
+        other_x = self._get_x_idx(other_foot)
+
+        if moving_limb == Limb.LF and target_x >= other_x and target_hold.y > other_foot.y:
+            return True
+        if moving_limb == Limb.RF and target_x <= other_x and target_hold.y > other_foot.y:
+            return True
+
+        # 同列/近邻列上方高踩同样容易造成明显横向扭转
+        if abs(target_x - other_x) <= 1 and target_hold.y >= other_foot.y + 2:
+            return True
+
+        return False
+
+    def _calculate_torsional_penalty(self, limbs: Dict[Limb, Optional[Hold]]) -> float:
+        """惩罚身体中轴偏移与脚点对侧高踩导致的扭转姿态。"""
+        lh, rh = limbs.get(Limb.LH), limbs.get(Limb.RH)
+        lf, rf = limbs.get(Limb.LF), limbs.get(Limb.RF)
+
+        if not (lh and rh and lf and rf):
+            return 0.0
+
+        penalty = 0.0
+        lx, rx = self._get_x_idx(lf), self._get_x_idx(rf)
+        hand_center = (self._get_x_idx(lh) + self._get_x_idx(rh)) / 2.0
+        foot_center = (lx + rx) / 2.0
+
+        center_offset = abs(hand_center - foot_center)
+        if center_offset > 1.0:
+            penalty += ((center_offset - 1.0) ** 2) * 35.0
+
+        # 左脚不应长期跑到中线右侧，右脚不应长期跑到中线左侧
+        if lx > hand_center + 0.5:
+            penalty += ((lx - (hand_center + 0.5)) ** 2) * 45.0
+        if rx < hand_center - 0.5:
+            penalty += (((hand_center - 0.5) - rx) ** 2) * 45.0
+
+        # “某只脚踩到另一只脚上方近列”会显著增大扭转成本
+        if abs(lx - rx) <= 1 and abs(lf.y - rf.y) >= 2:
+            penalty += (abs(lf.y - rf.y) - 1) * 18.0
+
+        return penalty
+
+    def _calculate_lateral_and_foot_stability_penalty(self, limbs: Dict[Limb, Optional[Hold]]) -> float:
+        """
+        对“未超红线但明显难发力”的姿态进行软惩罚：
+        1) 手部横向开距过大
+        2) 脚部横向开距过大
+        3) 双脚上下高差过大
+        4) 手脚过近（压缩位形，不利于发力）
+        5) 同侧手脚堆叠（LH-LF / RH-RF）
+        6) 双脚站位过窄
+        7) 身体中轴偏移 / 对侧高踩扭转
+        """
+        penalty = 0.0
+        lh, rh = limbs.get(Limb.LH), limbs.get(Limb.RH)
+        lf, rf = limbs.get(Limb.LF), limbs.get(Limb.RF)
+
+        def _grid_distance(h1: Hold, h2: Hold) -> float:
+            dx = self._get_x_idx(h1) - self._get_x_idx(h2)
+            dy = h1.y - h2.y
+            return math.sqrt(dx * dx + dy * dy)
+
+        if lh and rh:
+            hand_span = abs(self._get_x_idx(lh) - self._get_x_idx(rh))
+            if hand_span > self.SOFT_HAND_SPAN_LIMIT:
+                penalty += ((hand_span - self.SOFT_HAND_SPAN_LIMIT) ** 2) * 18.0
+
+        if lf and rf:
+            foot_span = abs(self._get_x_idx(lf) - self._get_x_idx(rf))
+            foot_vertical_gap = abs(lf.y - rf.y)
+
+            if foot_span > self.SOFT_FOOT_SPAN_LIMIT:
+                penalty += ((foot_span - self.SOFT_FOOT_SPAN_LIMIT) ** 2) * 20.0
+
+            if foot_vertical_gap > self.SOFT_FOOT_VERTICAL_GAP_LIMIT:
+                penalty += ((foot_vertical_gap - self.SOFT_FOOT_VERTICAL_GAP_LIMIT) ** 2) * 28.0
+
+            # 低脚滞后越明显，越不稳定
+            low_foot_lag = max(lf.y, rf.y) - min(lf.y, rf.y)
+            if low_foot_lag > 3:
+                penalty += (low_foot_lag - 3) * 12.0
+
+            # 双脚过窄会导致站姿发力受限（尤其在两脚几乎同高时）
+            if foot_span < 1:
+                penalty += 28.0
+            elif foot_span < 2:
+                penalty += 10.0
+
+            if foot_span <= 1 and foot_vertical_gap <= 1:
+                penalty += 18.0
+
+        # 手脚过近惩罚：减少“抱团”姿态
+        hands = [h for h in [lh, rh] if h]
+        feet = [f for f in [lf, rf] if f]
+        for hand in hands:
+            for foot in feet:
+                hand_foot_dist = _grid_distance(hand, foot)
+                if hand_foot_dist < 1.6:
+                    penalty += ((1.6 - hand_foot_dist) ** 2) * 55.0
+
+                # 同列近贴额外惩罚：垂直近贴会限制蹬伸空间
+                col_gap = abs(self._get_x_idx(hand) - self._get_x_idx(foot))
+                row_gap = abs(hand.y - foot.y)
+                if col_gap == 0 and row_gap <= 2:
+                    penalty += (3 - row_gap) * 12.0
+
+        # 同侧手脚过近（局部堆叠）惩罚
+        if lh and lf:
+            same_side_gap_left = abs(lh.y - lf.y)
+            if same_side_gap_left < 3:
+                penalty += (3 - same_side_gap_left) * 16.0
+
+        if rh and rf:
+            same_side_gap_right = abs(rh.y - rf.y)
+            if same_side_gap_right < 3:
+                penalty += (3 - same_side_gap_right) * 16.0
+
+        penalty += self._calculate_torsional_penalty(limbs)
+        return penalty
+
+    def _is_two_point_compression(self, limbs: Dict[Limb, Optional[Hold]]) -> bool:
+        """
+        判定是否处于“双手同点 + 双脚同点，且手脚分居两个点”的压缩姿态。
+        即 4 肢总共只占 2 个实体点。
+        """
+        lh, rh = limbs.get(Limb.LH), limbs.get(Limb.RH)
+        lf, rf = limbs.get(Limb.LF), limbs.get(Limb.RF)
+
+        if not (lh and rh and lf and rf):
+            return False
+
+        hands_matched = lh.id == rh.id
+        feet_matched = lf.id == rf.id
+        if not (hands_matched and feet_matched):
+            return False
+
+        # 手脚同点在运动学中本就非法，这里保底再防御一次
+        return lh.id != lf.id
+
+    def _calculate_two_point_compression_penalty(
+        self,
+        limbs: Dict[Limb, Optional[Hold]],
+        step_count: int,
+        top_hold_ids: Set[str]
+    ) -> float:
+        """
+        对“双手同点 + 双脚同点”的两点压缩姿态施加软惩罚。
+        设计原则：
+        - 起步阶段仅轻惩罚（避免明显降低成线率）
+        - 顶点双手 Match 不惩罚（避免误伤完攀）
+        - 中段高惩罚（显著降低站不稳姿态概率）
+        """
+        if not self._is_two_point_compression(limbs):
+            return 0.0
+
+        lh, rh = limbs.get(Limb.LH), limbs.get(Limb.RH)
+        is_top_match = bool(lh and rh and lh.id == rh.id and lh.id in top_hold_ids)
+        if is_top_match:
+            return 0.0
+
+        # 起步阶段保留弹性，避免伤及完攀成功率
+        if step_count <= 1:
+            return 90.0
+
+        # 中段强抑制：随步数略增，鼓励尽快脱离双双 Match
+        return 240.0 + min(80.0, step_count * 2.0)
+
+    def _has_better_lower_foothold(
+        self,
+        current_limbs: Dict[Limb, Optional[Hold]],
+        moving_limb: Limb,
+        target_hold: Hold,
+        candidate_holds: List[Hold]
+    ) -> bool:
+        """
+        如果当前要踩更高脚点，但存在“更接近中线且更稳定”的过渡脚点，
+        则优先该过渡脚点（返回 True 表示应放弃当前高点候选）。
+        """
+        if moving_limb not in [Limb.LF, Limb.RF] or target_hold.hold_type != HoldType.FOOT:
+            return False
+
+        current_foot = current_limbs.get(moving_limb)
+        if not current_foot or target_hold.y <= current_foot.y:
+            return False
+
+        other_limb = Limb.RF if moving_limb == Limb.LF else Limb.LF
+        other_foot = current_limbs.get(other_limb)
+        body_midline_x = self._get_body_midline_x(current_limbs)
+
+        target_x = self._get_x_idx(target_hold)
+        target_horizontal_gap = abs(target_x - self._get_x_idx(other_foot)) if other_foot else 999
+        target_vertical_gap = abs(target_hold.y - other_foot.y) if other_foot else 999
+        target_midline_dist = abs(target_x - body_midline_x)
+
+        # 左脚应偏中线左侧，右脚应偏中线右侧
+        side_bias = -0.25 if moving_limb == Limb.LF else 0.25
+        preferred_x = body_midline_x + side_bias
+        target_side_dist = abs(target_x - preferred_x)
+
+        for candidate in candidate_holds:
+            if candidate.hold_type != HoldType.FOOT:
+                continue
+            if candidate.id in {target_hold.id, current_foot.id}:
+                continue
+
+            # 必须是“比当前脚更高，且不高于目标脚”的稳定中继点
+            if not (current_foot.y < candidate.y <= target_hold.y):
+                continue
+
+            test_limbs = current_limbs.copy()
+            test_limbs[moving_limb] = candidate
+            is_valid, _ = self._check_kinematics(test_limbs)
+            if not is_valid:
+                continue
+
+            if self._is_contralateral_high_step(current_limbs, moving_limb, candidate):
+                continue
+
+            if not other_foot:
+                return True
+
+            candidate_x = self._get_x_idx(candidate)
+            candidate_horizontal_gap = abs(candidate_x - self._get_x_idx(other_foot))
+            candidate_vertical_gap = abs(candidate.y - other_foot.y)
+            candidate_midline_dist = abs(candidate_x - body_midline_x)
+            candidate_side_dist = abs(candidate_x - preferred_x)
+
+            horizontal_better = candidate_horizontal_gap <= target_horizontal_gap
+            vertical_better = candidate_vertical_gap <= target_vertical_gap + 1
+            midline_better = candidate_midline_dist + 0.25 <= target_midline_dist
+            side_better = candidate_side_dist + 0.25 <= target_side_dist
+
+            if horizontal_better and vertical_better and (midline_better or side_better):
+                return True
+
+        return False
 
     def _calculate_rotation_penalty(self, hold: Hold) -> float:
         """根据岩点类型和旋转角度计算抓握难度惩罚。"""
@@ -218,8 +496,8 @@ class AStarSolver:
         
         min_hand_y = min(get_y(Limb.LH), get_y(Limb.RH)) if get_hold(Limb.LH) and get_hold(Limb.RH) else (get_y(Limb.LH) or get_y(Limb.RH))
         max_foot_y = max(active_feet_y)
-        if max_foot_y > min_hand_y: 
-            return False, "脚高于手"
+        if max_foot_y >= min_hand_y: 
+            return False, "脚不能等于或高于手"
 
         max_hand_y = max(get_y(Limb.LH), get_y(Limb.RH))
         min_foot_y = min(active_feet_y)
@@ -235,7 +513,7 @@ class AStarSolver:
             other_foot_y = max(active_feet_y)
             # 如果最高脚比最低脚高出 3 格以上，认为有高位支撑，放宽到 1.5 倍身高
             if other_foot_y > min_foot_y + 3:
-                if body_span > max_extension_units * 1.2:
+                if body_span > max_extension_units * 1.5:
                     return False, "身体过度伸展(极限)"
             else:
                 return False, "身体过度伸展"
@@ -244,11 +522,28 @@ class AStarSolver:
             return False, "手部横向跨度过大"
         if lf and rf and abs(get_x_idx(Limb.LF) - get_x_idx(Limb.RF)) > 4: 
             return False, "脚部横向跨度过大"
+        if lf and rf and abs(get_y(Limb.LF) - get_y(Limb.RF)) > self.HARD_FOOT_VERTICAL_GAP_LIMIT:
+            return False, "脚部上下跨度过大"
 
         return True, None
 
     def solve(self, board_holds: List[Hold], inventory_budget: Dict[HoldType, int] = None) -> Tuple[Optional[RouteCandidate], Dict]:
         max_y_reached = 0
+
+        # 配方预算是硬约束：若未提供，按空预算处理（即不允许新增任何点）
+        inventory_budget = inventory_budget or {}
+
+        def get_quota_violations(final_holds: List[Hold]) -> Dict[HoldType, int]:
+            """统计最终路线中各类型岩点是否超出配额。"""
+            quota_violations = {}
+            from collections import Counter
+
+            final_counts = Counter(h.hold_type for h in final_holds)
+            for ht, count in final_counts.items():
+                required = inventory_budget.get(ht, 0)
+                if count > required:
+                    quota_violations[ht] = count - required
+            return quota_violations
         
         def failure_report(reason: str, rule: Optional[str] = None):
             return None, {"reason": reason, "max_y": max_y_reached, "rule_violation": rule}
@@ -258,86 +553,80 @@ class AStarSolver:
 
         all_holds_map = {h.id: h for h in board_holds}
         top_holds = self._get_top_holds(board_holds)
+        top_hold_ids = {h.id for h in top_holds}
         if not top_holds:
             return failure_report("没有找到完攀点")
 
-        start_hands = sorted([h for h in board_holds if 5 <= h.y <= 6 and h.hold_type != HoldType.FOOT], key=lambda h: h.y)
-        start_feet = sorted([h for h in board_holds if 1 <= h.y <= 2], key=lambda h: h.y)
+        # 获取所有预设的起步点 (由 generator 严格生成并标记)
+        start_holds = [h for h in board_holds if h.is_start]
+        start_hands = sorted([h for h in start_holds if h.hold_type != HoldType.FOOT], key=lambda h: h.y)
+        start_feet = sorted([h for h in start_holds if h.hold_type == HoldType.FOOT], key=lambda h: h.y)
 
         if len(start_hands) < 1 or len(start_feet) < 1:
-            return failure_report("起步区手点或脚点数量不足")
-
-        from itertools import combinations
-        possible_starts = []
-        # 兼容双手同点起步
-        for hand in start_hands:
-            for feet_combo in combinations(start_feet, 1):
-                possible_starts.append(((hand, hand), feet_combo))
-            for feet_combo in combinations(start_feet, 2):
-                possible_starts.append(((hand, hand), feet_combo))
-
-        for hands in combinations(start_hands, 2):
-            for feet_combo in combinations(start_feet, 1):
-                possible_starts.append((hands, feet_combo))
-            for feet_combo in combinations(start_feet, 2):
-                possible_starts.append((hands, feet_combo))
+            return failure_report("未找到合法的起步点标记配置")
 
         initial_state = None
-        for hands, feet in possible_starts:
-            lh, rh = (hands[0], hands[1]) if ord(hands[0].x) <= ord(hands[1].x) else (hands[1], hands[0])
-            
-            if not all(h.y > f.y for h in hands for f in feet): continue
-            if len(feet) == 2 and abs(ord(feet[0].x) - ord(feet[1].x)) > 3: continue
+        initial_limbs = {}
 
-            initial_limbs = {Limb.LH: lh, Limb.RH: rh}
-            if len(feet) == 1:
-                # 即使只有一个脚点，也尝试寻找附近（1.5格内）的脚点作为另一只脚，或者强制分配
-                initial_limbs.update({Limb.LF: feet[0], Limb.RF: feet[0]}) # 允许双脚踩同一点起步，防止肢体丢失
-            else:
-                lf, rf = (feet[0], feet[1]) if ord(feet[0].x) <= ord(feet[1].x) else (feet[1], feet[0])
-                initial_limbs.update({Limb.LF: lf, Limb.RF: rf})
+        # 严格按照 generator 的 5 种起步模板还原分配
+        # 如果只有 1 个手点，必然是模式 1（双手同点）
+        if len(start_hands) == 1:
+            initial_limbs[Limb.LH] = start_hands[0]
+            initial_limbs[Limb.RH] = start_hands[0]
+        elif len(start_hands) >= 2:
+            # 区分左右手，x 坐标小的为左手
+            h1, h2 = start_hands[0], start_hands[1]
+            lh, rh = (h1, h2) if ord(h1.x) <= ord(h2.x) else (h2, h1)
+            initial_limbs[Limb.LH] = lh
+            initial_limbs[Limb.RH] = rh
 
-            is_kinematic, _ = self._check_kinematics(initial_limbs)
-            if not is_kinematic: continue
-            
+        # 如果只有 1 个脚点，必然是模式 2（双脚同点）
+        if len(start_feet) == 1:
+            initial_limbs[Limb.LF] = start_feet[0]
+            initial_limbs[Limb.RF] = start_feet[0]
+        elif len(start_feet) >= 2:
+            # 区分左右脚，x 坐标小的为左脚
+            f1, f2 = start_feet[0], start_feet[1]
+            lf, rf = (f1, f2) if ord(f1.x) <= ord(f2.x) else (f2, f1)
+            initial_limbs[Limb.LF] = lf
+            initial_limbs[Limb.RF] = rf
+
+        is_kinematic, _ = self._check_kinematics(initial_limbs)
+        if is_kinematic:
             active_limbs = {l: h for l, h in initial_limbs.items() if h}
-            if len(active_limbs) < 3: continue
-
-            # V7 逻辑：在 A* 开始前，预先扣除起步点所消耗的配额
-            initial_inventory = inventory_budget.copy()
-            for hold in active_limbs.values():
-                initial_inventory[hold.hold_type] = initial_inventory.get(hold.hold_type, 0) - 1
-            
-            # 如果任何岩点类型的配额变为负数，则这是一个无效的起步姿态
-            if any(count < 0 for count in initial_inventory.values()):
-                continue
-
-            # 在起步 Step 中也记录全肢体状态
-            start_sequence = []
-            for limb, hold in active_limbs.items():
-                step_obj = BetaStep(
-                    step=0, 
-                    limb=limb, 
-                    hold_id=hold.id, 
-                    intent="Start",
-                    lh=initial_limbs.get(Limb.LH).id if initial_limbs.get(Limb.LH) else None,
-                    rh=initial_limbs.get(Limb.RH).id if initial_limbs.get(Limb.RH) else None,
-                    lf=initial_limbs.get(Limb.LF).id if initial_limbs.get(Limb.LF) else None,
-                    rf=initial_limbs.get(Limb.RF).id if initial_limbs.get(Limb.RF) else None
-                )
-                start_sequence.append(step_obj)
+            if len(active_limbs) >= 3:
+                # V7 逻辑：在 A* 开始前，预先扣除起步点所消耗的配额
+                initial_inventory = inventory_budget.copy()
+                for hold in active_limbs.values():
+                    initial_inventory[hold.hold_type] = initial_inventory.get(hold.hold_type, 0) - 1
                 
-            initial_state = State(
-                limbs=initial_limbs, 
-                g_cost=0.0, 
-                h_cost=0.0, 
-                step_count=0, 
-                sequence=start_sequence, 
-                inventory_left=initial_inventory,
-                last_moved_limb=None,
-                limb_idle_steps={l: 0 for l in Limb}
-            )
-            break
+                # 如果任何岩点类型的配额变为负数，则这是一个无效的起步姿态
+                if not any(count < 0 for count in initial_inventory.values()):
+                    # 在起步 Step 中也记录全肢体状态
+                    start_sequence = []
+                    for limb, hold in active_limbs.items():
+                        step_obj = BetaStep(
+                            step=0, 
+                            limb=limb, 
+                            hold_id=hold.id, 
+                            intent="Start",
+                            lh=initial_limbs.get(Limb.LH).id if initial_limbs.get(Limb.LH) else None,
+                            rh=initial_limbs.get(Limb.RH).id if initial_limbs.get(Limb.RH) else None,
+                            lf=initial_limbs.get(Limb.LF).id if initial_limbs.get(Limb.LF) else None,
+                            rf=initial_limbs.get(Limb.RF).id if initial_limbs.get(Limb.RF) else None
+                        )
+                        start_sequence.append(step_obj)
+                        
+                    initial_state = State(
+                        limbs=initial_limbs, 
+                        g_cost=0.0, 
+                        h_cost=0.0, 
+                        step_count=0, 
+                        sequence=start_sequence, 
+                        inventory_left=initial_inventory,
+                        last_moved_limb=None,
+                        limb_idle_steps={l: 0 for l in Limb}
+                    )
 
         if not initial_state:
             return failure_report("无法构造合法的起步姿态")
@@ -378,24 +667,17 @@ class AStarSolver:
                 used_hold_ids = {step.hold_id for step in final_sequence}
                 final_holds = [h for h in board_holds if h.id in used_hold_ids]
 
+                # 最终防线：一旦超配额，直接丢弃该完攀状态，继续搜索其他合法路径
+                quota_violations = get_quota_violations(final_holds)
+                if quota_violations:
+                    continue
+
                 # V10: 长度软上限 (Soft Cap)
                 if len(final_holds) > 15:
                     current.g_cost += (len(final_holds) - 15) * 10.0
 
                 # 赋予极高的完攀奖励 (Finishing Lust)
                 current.g_cost -= 5000.0
-
-                # 计算配额违规
-                quota_violations = {}
-                from collections import Counter
-                final_counts = Counter(h.hold_type for h in final_holds)
-                
-                initial_recipe_counts = inventory_budget
-                
-                for ht, count in final_counts.items():
-                    required = initial_recipe_counts.get(ht, 0)
-                    if count > required:
-                        quota_violations[ht] = count - required
 
                 has_top = False
                 for step in reversed(final_sequence):
@@ -417,38 +699,47 @@ class AStarSolver:
             # --- V9: 弹簧蓄力驱动的子节点生成 ---
             current_cg = self._get_center_of_gravity(current.limbs)
             if not current_cg: continue
+            current_is_two_point = self._is_two_point_compression(current.limbs)
 
             for limb in Limb:
                 is_hand_move = limb in [Limb.LH, Limb.RH]
+                current_limb_hold = current.limbs.get(limb)
                 
                 if is_hand_move and current.consecutive_hand_moves >= 1 and current.last_moved_limb == limb:
                     continue 
-                if is_hand_move and current.y_progress_since_foot_move <= 0 and current.consecutive_hand_moves >= 2:
-                    continue
-
-                # 空间剪枝：预先计算坐标范围，避免对全量岩点进行昂贵的距离计算
-                current_limb_hold = current.limbs.get(limb)
-                dist_limit = 1.1 if is_hand_move else 0.8
+                # V12 动态核心：以重心 (CG) 为锚点进行大范围扫描，物理判定后置
+                max_reach = self.span_m * 1.5 # 设定一个极大的扫描半径
+                cg_x_m, cg_y_m = current_cg
                 
-                # 预过滤：仅处理在当前肢体合理半径范围内的岩点 (Grid Units 粗算)
                 potential_holds = []
-                if current_limb_hold:
-                    limit_units = (dist_limit / self.GRID_SPACING) + 1
-                    for h in board_holds:
-                        dx = abs(ord(h.x) - ord(current_limb_hold.x))
-                        dy = abs(h.y - current_limb_hold.y)
-                        if dx <= limit_units and dy <= limit_units:
-                            potential_holds.append(h)
-                else:
-                    potential_holds = board_holds
+                for h in board_holds:
+                    h_x_m, h_y_m = self._coord_to_meters(h.x, h.y)
+                    # 快速过滤掉绝对不可能的点
+                    if abs(h_x_m - cg_x_m) > max_reach or abs(h_y_m - cg_y_m) > max_reach:
+                        continue
+                    potential_holds.append(h)
 
                 for target_hold in potential_holds:
-                    if current_limb_hold:
-                        dist = self._distance(current_limb_hold, target_hold)
-                        if dist > dist_limit: continue
+                    # 判定后置：不再需要硬性的距离检查
                     
                     if current_limb_hold and current_limb_hold.id == target_hold.id: continue
                     if target_hold.hold_type == HoldType.FOOT and is_hand_move: continue
+
+                    # 单次脚步上提硬限制：脚在一次移动中，垂直上升不能超过 4 格
+                    if (
+                        (not is_hand_move)
+                        and current_limb_hold
+                        and (target_hold.y - current_limb_hold.y) > self.MAX_FOOT_MOVE_VERTICAL_DELTA
+                    ):
+                        continue
+
+                    # 强拦截：禁止脚步跨到对侧脚的上方/近列上方，避免身体过横
+                    if (not is_hand_move) and self._is_contralateral_high_step(current.limbs, limb, target_hold):
+                        continue
+
+                    # 低位已确定脚点优先：存在更低且可稳定的脚点时，跳过更高脚点
+                    if (not is_hand_move) and self._has_better_lower_foothold(current.limbs, limb, target_hold, potential_holds):
+                        continue
                     
                     new_limbs = current.limbs.copy()
                     new_limbs[limb] = target_hold
@@ -457,18 +748,35 @@ class AStarSolver:
                     if not is_kinematic:
                         kinematic_failure_counts[reason] = kinematic_failure_counts.get(reason, 0) + 1
                         continue
+
+                    new_is_two_point = self._is_two_point_compression(new_limbs)
+                    two_point_penalty = self._calculate_two_point_compression_penalty(
+                        new_limbs,
+                        current.step_count + 1,
+                        top_hold_ids
+                    )
                     
                     body_pos_cost = self._calculate_body_position_cost(new_limbs)
+                    stability_penalty = self._calculate_lateral_and_foot_stability_penalty(new_limbs)
                     total_penalty = 0
+
+                    # 脱离“两点压缩态”奖励：鼓励尽快恢复到 >=3 点支撑结构
+                    if current_is_two_point and not new_is_two_point:
+                        total_penalty -= 35.0
+                    
+                    # V12 修正：将连续手部动作的硬剪枝，改为高额软惩罚
+                    if is_hand_move and current.y_progress_since_foot_move <= 0 and current.consecutive_hand_moves >= 2:
+                        total_penalty += 80.0
                     
                     is_new_hold = not any(h and h.id == target_hold.id for h in current.limbs.values())
                     new_inventory = current.inventory_left.copy()
                     if is_new_hold:
-                        if new_inventory.get(target_hold.hold_type, 0) > 0:
-                            total_penalty -= 40.0  # 大幅提升配方奖励
-                        else:
-                            total_penalty += 100.0
-                        new_inventory[target_hold.hold_type] = new_inventory.get(target_hold.hold_type, 0) - 1
+                        remaining = new_inventory.get(target_hold.hold_type, 0)
+                        # 硬约束：禁止在配额耗尽后继续引入新岩点
+                        if remaining <= 0:
+                            continue
+                        total_penalty -= 40.0  # 配额内使用新点奖励
+                        new_inventory[target_hold.hold_type] = remaining - 1
 
                     prev_y_m = self._coord_to_meters(current.limbs[limb].x, current.limbs[limb].y)[1] if current.limbs[limb] else current_cg[1]
                     target_y_m = self._coord_to_meters(target_hold.x, target_hold.y)[1]
@@ -538,15 +846,10 @@ class AStarSolver:
                         dist_lh = min(self._distance(lh_hold, top) for top in top_holds) if lh_hold else self.GRID_HEIGHT * self.GRID_SPACING
                         dist_rh = min(self._distance(rh_hold, top) for top in top_holds) if rh_hold else self.GRID_HEIGHT * self.GRID_SPACING
                         
-                        # 动态权重：当 Y_max >= 12 时，平滑增加 h_cost 的占比，增加紧迫感
-                        current_y_max = max(h.y for h in new_limbs.values() if h)
-                        if current_y_max >= 12:
-                            # 提前从 12 开始增加权重，而非 15
-                            hand_weight = 35.0 + (current_y_max - 12) * (150.0 / 6.0) 
-                            cg_weight = 25.0 + (current_y_max - 12) * (100.0 / 6.0)
-                        else:
-                            hand_weight = 35.0
-                            cg_weight = 15.0
+                        # V12 核心修正：移除权重爆炸，回归距离本质
+                        current_y_max = max(h.y for h in new_limbs.values() if h) # 保留 current_y_max 用于提脚奖励
+                        hand_weight = 20.0
+                        cg_weight = 10.0
                             
                         h_cost = (dist_lh + dist_rh) * hand_weight
                         h_cost += (self.GRID_HEIGHT * self.GRID_SPACING - predicted_cg[1]) * cg_weight
@@ -573,16 +876,27 @@ class AStarSolver:
                     if not is_hand_move and y_progress > 0:
                         current_max_y = max(h.y for h in current.limbs.values() if h)
                         current_body_span = max(h.y for h in current.limbs.values() if h) - min(h.y for h in current.limbs.values() if h)
-                        if current_max_y > 12:
+                        if current_max_y > 8: # V12 修正：下调提脚奖励门槛
                             # 跨度越大，提脚奖励越高
                             span_bonus = max(0, (current_body_span - 6) * 15.0)
                             step_cost -= (30.0 + span_bonus)
+
+                        # 优先补低脚：如果移动的是当前较低的一只脚并向上提，额外奖励
+                        current_lf = current.limbs.get(Limb.LF)
+                        current_rf = current.limbs.get(Limb.RF)
+                        if current_lf and current_rf:
+                            lower_foot_limb = Limb.LF if current_lf.y <= current_rf.y else Limb.RF
+                            if limb == lower_foot_limb:
+                                step_cost -= 15.0
 
                     # 双脚支撑奖金：当两只脚都处于 Y > 1 的活跃状态时，降低整体动作代价
                     lf_hold = new_limbs.get(Limb.LF)
                     rf_hold = new_limbs.get(Limb.RF)
                     if lf_hold and rf_hold and lf_hold.y > 1 and rf_hold.y > 1:
                         step_cost *= 0.8 # 20% 的动作代价减免
+
+                    # 将稳定性惩罚在末端统一加回，避免被前面的奖励完全抵消
+                    step_cost += stability_penalty + two_point_penalty
 
                     new_consecutive_hand_moves = (current.consecutive_hand_moves + 1) if is_hand_move else 0
                     new_limb_idle_steps = {l: (0 if l == limb else current.limb_idle_steps[l] + 1) for l in Limb}
@@ -607,14 +921,7 @@ class AStarSolver:
             final_holds = [h for h in board_holds if h.id in used_hold_ids]
             
             # 部分成功也需要计算配额
-            quota_violations = {}
-            from collections import Counter
-            final_counts = Counter(h.hold_type for h in final_holds)
-            initial_recipe_counts = inventory_budget
-            for ht, count in final_counts.items():
-                required = initial_recipe_counts.get(ht, 0)
-                if count > required:
-                    quota_violations[ht] = count - required
+            quota_violations = get_quota_violations(final_holds)
             
             partial_candidate = RouteCandidate(
                 placed_holds=final_holds,

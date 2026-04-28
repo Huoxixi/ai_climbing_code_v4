@@ -27,6 +27,7 @@ class Hold(BaseModel):
     y: int = Field(..., description="纵轴：1到18")
     hold_type: HoldType = Field(..., description="岩点形态")
     rotation: int = Field(0, description="安装角度 (0-360)")
+    scale: float = Field(1.0, description="岩点缩放比例")
     is_start: bool = Field(False, description="是否为起步点")
     variant: str = Field("default", description="岩点形状变体")
 
@@ -57,20 +58,34 @@ class RecipeItem(BaseModel):
     count: int
     variant: str
 
+class HoldSpec(BaseModel):
+    """前端岩点池中的单个岩点实例配置"""
+    hold_type: HoldType
+    variant: str = "default"
+    rotation: int = 0
+    scale: float = 1.0
+
 class RouteRequest(BaseModel):
     climber_height_cm: int = Field(..., description="攀爬者身高 (厘米)")
     climber_span_cm: int = Field(..., description="攀爬者臂展 (厘米)")
     target_difficulty: str = Field(..., description="目标难度 (如 V1, V3, V5)")
     special_requirements: str = Field("", description="用户的特殊需求，例如“需要很多侧拉动作”")
     recipe: Dict[HoldType, RecipeItem] = Field(default_factory=dict, description="岩点配方预算 (如 {'Jug': {'count': 4, 'variant': 'random'}})")
+    hold_pool: List[HoldSpec] = Field(default_factory=list, description="岩点实例池（保留每个岩点独立的变体/旋转/缩放）")
 
 
 class FinalRoute(BaseModel):
     """最终呈现给用户的单条路线"""
+    saved_id: Optional[str] = Field(None, description="收藏后的唯一ID")
     route_name: str
     setter_commentary: str
     placed_holds: List[Hold]
     beta_sequence: List[BetaStep]
+
+
+class RenameBoardRequest(BaseModel):
+    """收藏岩板重命名请求体"""
+    route_name: str = Field(..., description="新的路线名称")
 
 class RouteResponse(BaseModel):
     """AI 定线结果响应包，可能包含多条精选路线"""

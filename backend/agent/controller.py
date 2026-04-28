@@ -5,7 +5,7 @@ backend/agent/controller.py
 
 import json
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from openai import AsyncOpenAI
 import httpx
 import traceback
@@ -17,6 +17,7 @@ from core.config import settings
 from core.models import RouteRequest, RouteResponse, RouteCandidate, HoldType, FinalRoute
 from core.generator import RouteGenerator
 from core.a_star_solver import AStarSolver
+from core.validator import PhysicsValidator
 from agent.tools_def import SELECT_ROUTE_TOOL
 
 SYSTEM_PROMPT = """
@@ -51,6 +52,7 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
     
     generator = RouteGenerator()
     solver = AStarSolver(request.climber_height_cm, request.climber_span_cm)
+    validator = PhysicsValidator()
     
     successful_candidates: List[RouteCandidate] = []
     
@@ -70,7 +72,12 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
 
             print(f"[进度 {i+1}/{MAX_ITERATIONS}] 正在生成样本 (已成功: {len(successful_candidates)})")
             
-            board_holds, inventory_budget = await asyncio.to_thread(generator.generate_board, request.recipe, request.target_difficulty)
+            board_holds, inventory_budget = await asyncio.to_thread(
+                generator.generate_board,
+                request.recipe,
+                request.target_difficulty,
+                request.hold_pool
+            )
             if not board_holds:
                 failure_heights.append(0)
                 continue
@@ -78,6 +85,14 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
             result, report = await asyncio.to_thread(solver.solve, board_holds, inventory_budget)
             
             if result and report.get('reason') == "成功":
+                is_balanced, balance_msg = validator.validate_beta_balance(result.beta_sequence, board_holds)
+                if not is_balanced:
+                    print(f"❌ 尝试失败。后验平衡检查未通过: {balance_msg}")
+                    failure_heights.append(report.get('max_y', 0))
+                    rule_violations[balance_msg] = rule_violations.get(balance_msg, 0) + 1
+                    await asyncio.sleep(0)
+                    continue
+
                 successful_candidates.append(result)
                 print(f"✅ 找到成功路线! Flow: {result.flow_score:.2f}, Holds: {len(result.placed_holds)}")
             else:
@@ -113,16 +128,74 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
         suggestion = "所有尝试均失败。请根据以上分析报告调整配方或检查运动学参数。"
         return RouteResponse(selected_routes=[], failure_suggestion=suggestion)
 
-    # 策略筛选机制
+    # --- 候选去重 + 差异化筛选，避免最终两条路线完全一致 ---
+    def _candidate_hold_set(candidate: RouteCandidate) -> Set[str]:
+        seq_ids = {step.hold_id for step in candidate.beta_sequence}
+        return seq_ids if seq_ids else {h.id for h in candidate.placed_holds}
+
+    def _candidate_signature(candidate: RouteCandidate) -> str:
+        return "|".join(sorted(_candidate_hold_set(candidate)))
+
+    def _jaccard_overlap(a: Set[str], b: Set[str]) -> float:
+        union = a | b
+        if not union:
+            return 1.0
+        return len(a & b) / len(union)
+
+    dedup_candidates: Dict[str, RouteCandidate] = {}
+    for c in successful_candidates:
+        sig = _candidate_signature(c)
+        existing = dedup_candidates.get(sig)
+        if not existing:
+            dedup_candidates[sig] = c
+            continue
+
+        if (c.flow_score > existing.flow_score) or (
+            c.flow_score == existing.flow_score and len(c.placed_holds) > len(existing.placed_holds)
+        ):
+            dedup_candidates[sig] = c
+
+    unique_candidates = list(dedup_candidates.values())
+    print(f"[候选去重] 原始候选: {len(successful_candidates)}, 去重后: {len(unique_candidates)}")
+
     # 路线 ① (Max Capacity): 数量最多的路线
-    max_capacity_candidate = max(successful_candidates, key=lambda c: len(c.placed_holds))
-    # 路线 ② (Elite Flow): 分数最高的路线
-    elite_flow_candidate = max(successful_candidates, key=lambda c: c.flow_score)
+    primary_candidate = max(unique_candidates, key=lambda c: (len(c.placed_holds), c.flow_score))
+    primary_set = _candidate_hold_set(primary_candidate)
+
+    # 路线 ② (Diverse Elite): 与路线①保持明显差异，同时尽量高 flow
+    DIVERSITY_OVERLAP_THRESHOLD = 0.85
+    diverse_pool = []
+    for c in unique_candidates:
+        if c is primary_candidate:
+            continue
+        overlap = _jaccard_overlap(primary_set, _candidate_hold_set(c))
+        if overlap <= DIVERSITY_OVERLAP_THRESHOLD:
+            diverse_pool.append((overlap, c))
 
     selected_candidates = [
-        {"type": "Max Capacity", "data": max_capacity_candidate, "name": "满负载专家", "comment": "这条路线最大化地利用了你的配方岩点，路径曲折且充满挑战。"},
-        {"type": "Elite Flow", "data": elite_flow_candidate, "name": "精英流向", "comment": "系统筛选出的物理效率最高的路径，动作衔接丝滑顺畅。"}
+        {
+            "type": "Max Capacity",
+            "data": primary_candidate,
+            "name": "满负载专家",
+            "comment": "这条路线最大化地利用了你的配方岩点，路径曲折且充满挑战。",
+        }
     ]
+
+    if diverse_pool:
+        diverse_elite_candidate = max(
+            diverse_pool,
+            key=lambda item: (item[1].flow_score, len(item[1].placed_holds), -item[0])
+        )[1]
+        selected_candidates.append(
+            {
+                "type": "Diverse Elite",
+                "data": diverse_elite_candidate,
+                "name": "精英流向",
+                "comment": "这条路线在保持高流畅度的同时，与第一条线路动作结构明显不同，提供更丰富的攀爬体验。",
+            }
+        )
+    else:
+        print("[差异化筛选] 未找到足够差异的第二路线，本次仅返回1条，避免重复输出。")
 
     final_routes = []
     for selection in selected_candidates:

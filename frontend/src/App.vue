@@ -64,8 +64,8 @@
           <header class="brand">
             <div class="logo">🧗‍♂️</div>
             <div class="titles">
-              <h1>智行通途 / ZXT</h1>
-              <p>AI Agent Creator Engine v5.0</p>
+              <h1>AI 定线系统</h1>
+              <p>AI Climbing Route System</p>
             </div>
           </header>
 
@@ -101,14 +101,32 @@
               <div class="saved-boards-list">
                   <div v-if="!savedBoards.length" class="pool-empty-state">没有已保存的岩板</div>
                   <div v-for="board in savedBoards" :key="board.saved_id" class="saved-board-item" @click="loadSavedBoard(board)">
-                      <div class="saved-board-name">{{ board.route_name }}</div>
-                      <div class="saved-board-difficulty">{{ board.beta_sequence.length }} moves</div>
+                      <div class="saved-board-info">
+                        <div class="saved-board-name">{{ board.route_name }}</div>
+                        <div class="saved-board-difficulty">{{ board.beta_sequence.length }} moves</div>
+                      </div>
+                      <div class="saved-board-actions">
+                        <button
+                          class="saved-board-action-btn saved-board-rename-btn"
+                          @click.stop="renameSavedBoard(board)"
+                          title="重命名该收藏岩板"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          class="saved-board-action-btn saved-board-delete-btn"
+                          @click.stop="deleteSavedBoard(board)"
+                          title="删除该收藏岩板"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                   </div>
               </div>
           </section>
 
-          <section class="config-group">
-  <h3 class="group-title">🧪 岩点造物台 (Hold Creator)</h3>
+<section class="config-group">
+  <h3 class="group-title">🧪 定线岩点选择 (Hold Selector)</h3>
   <div class="hold-creator-console">
     <div class="creator-grid">
       <!-- 左侧：参数控制 -->
@@ -165,7 +183,7 @@
   <h3 class="group-title">📦 岩点池 (Hold Pool)</h3>
   <div class="hold-pool-roster">
     <div v-if="!holdPool.length" class="pool-empty-state">
-      岩点池是空的，请从上方造物台添加。
+      岩点池是空的，请从上方定线岩点选择添加。
     </div>
     <div v-for="hold in holdPool" :key="hold.id" class="pool-item-card">
       <div class="pool-item-thumbnail">
@@ -191,7 +209,7 @@
 
           <footer class="actions">
             <button @click="generateRoute" :disabled="loading" class="generate-btn" v-if="!loading">
-              🚀 触发造物意图
+              🚀 开始定线
             </button>
             <button @click="cancelGeneration" class="generate-btn cancel-btn" v-if="loading">
               ❌ 取消生成
@@ -603,13 +621,18 @@ const generateRoute = async () => {
       acc[hold.type] = {
         count: 0,
         variant: hold.variant,
-        scale: hold.scale,
-        rotation: hold.rotation,
       };
     }
     acc[hold.type].count++;
     return acc;
   }, {});
+
+  const backendHoldPoolPayload = holdPool.value.map((hold) => ({
+    hold_type: hold.type,
+    variant: hold.variant,
+    rotation: Number(hold.rotation ?? 0),
+    scale: Number(hold.scale ?? 1.0),
+  }));
 
   try {
     const response = await axios.post(`${API_BASE_URL}/api/generate`, {
@@ -617,7 +640,8 @@ const generateRoute = async () => {
       climber_span_cm: profile.value.arm_span,
       target_difficulty: profile.value.target_difficulty,
       special_requirements: profile.value.special_requirements,
-      recipe: backendRecipePayload
+      recipe: backendRecipePayload,
+      hold_pool: backendHoldPoolPayload
     })
     
     taskId.value = response.data.task_id;
@@ -832,6 +856,80 @@ const saveBoard = async () => {
     } catch (error) {
         console.error("无法保存岩板:", error);
         alert(`保存失败: ${error.response?.data?.detail || error.message}`);
+    }
+};
+
+const renameSavedBoard = async (board) => {
+    if (!board?.saved_id) {
+        alert('该收藏岩板缺少 saved_id，无法重命名。请重新保存后重试。');
+        return;
+    }
+
+    const originalName = board.route_name || '';
+    const inputName = prompt('请输入新的路线名称：', originalName);
+
+    if (inputName === null) {
+        return;
+    }
+
+    const newName = inputName.trim();
+    if (!newName) {
+        alert('路线名称不能为空。');
+        return;
+    }
+
+    if (newName === originalName.trim()) {
+        return;
+    }
+
+    try {
+        await axios.put(`${API_BASE_URL}/api/my-boards/${board.saved_id}`, {
+            route_name: newName,
+        });
+
+        savedBoards.value = savedBoards.value.map((b) =>
+            b.saved_id === board.saved_id ? { ...b, route_name: newName } : b
+        );
+
+        if (routeData.value?.saved_id === board.saved_id) {
+            const activeBoard = allRoutes.value[activeRouteIndex.value];
+            if (activeBoard) {
+                activeBoard.route_name = newName;
+            }
+        }
+
+        alert('重命名成功!');
+    } catch (error) {
+        console.error("无法重命名收藏岩板:", error);
+        alert(`重命名失败: ${error.response?.data?.detail || error.message}`);
+    }
+};
+
+const deleteSavedBoard = async (board) => {
+    if (!board?.saved_id) {
+        alert('该收藏岩板缺少 saved_id，无法删除。请重新保存后重试。');
+        return;
+    }
+
+    if (!confirm(`确定要删除收藏岩板「${board.route_name}」吗？`)) {
+        return;
+    }
+
+    try {
+        await axios.delete(`${API_BASE_URL}/api/my-boards/${board.saved_id}`);
+        savedBoards.value = savedBoards.value.filter(b => b.saved_id !== board.saved_id);
+
+        // 如果当前展示的就是被删除的收藏岩板，则清空当前路线展示
+        if (routeData.value?.saved_id === board.saved_id) {
+            allRoutes.value = [];
+            activeRouteIndex.value = 0;
+            currentIndex.value = 0;
+        }
+
+        alert('删除成功!');
+    } catch (error) {
+        console.error("无法删除收藏岩板:", error);
+        alert(`删除失败: ${error.response?.data?.detail || error.message}`);
     }
 };
 
@@ -1229,10 +1327,32 @@ fetchMyBoards();
 .save-board-btn:disabled { background: #475569; cursor: not-allowed; }
 
 .saved-boards-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-.saved-board-item { background: #1e293b; padding: 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+.saved-board-item { background: #1e293b; padding: 10px; border-radius: 6px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .saved-board-item:hover { background: #334155; }
+.saved-board-info { min-width: 0; }
 .saved-board-name { font-weight: bold; color: #f1f5f9; }
 .saved-board-difficulty { font-size: 0.8rem; color: #94a3b8; }
+
+.saved-board-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.saved-board-action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.saved-board-rename-btn { background: #3b82f6; }
+.saved-board-rename-btn:hover { background: #2563eb; transform: scale(1.08); }
+
+.saved-board-delete-btn { background: #ef4444; }
+.saved-board-delete-btn:hover { background: #dc2626; transform: scale(1.08); }
+
+.saved-board-item:hover .saved-board-action-btn { opacity: 1; }
+.saved-board-delete-btn:hover { background: #dc2626; transform: scale(1.08); }
 
 .commentary-card {
   background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-left: 4px solid #3b82f6;
