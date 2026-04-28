@@ -277,7 +277,8 @@
                   class="hold-entity"
                   :class="{ 'start-glow': isStart(hold.id), 'top-glow': isTop(hold.id), 'is-selected': selectedHold && selectedHold.id === hold.id }"
                   :style="getCoord(hold.id)"
-                  @mousedown="onHoldMouseDown($event, hold)">
+                   @mousedown="onHoldMouseDown($event, hold)"
+                   @contextmenu.prevent="deletePlacedHold(hold)">
               <div class="hold-visual" :style="{ transform: `rotate(${hold.rotation}deg) scale(${hold.scale || 1.0})` }">
                 <!-- 优先渲染 SVG 矢量 -->
                 <div v-if="getHoldSvg(hold)" class="hold-vector-container">
@@ -753,6 +754,36 @@ const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }
 const selectedHold = ref(null);
 const isFromTray = ref(false);
 const interaction = reactive({ type: null, startX: 0, startY: 0, startRotation: 0, startScale: 0 });
+
+function deletePlacedHold(hold) {
+  if (!routeData.value || !hold) return;
+
+  const holdId = hold.id;
+  if (!confirm(`确定删除岩板上的点 ${holdId} 吗？`)) {
+    return;
+  }
+
+  routeData.value.placed_holds = (routeData.value.placed_holds || []).filter(h => h.id !== holdId);
+
+  routeData.value.beta_sequence = (routeData.value.beta_sequence || [])
+    .filter(step => step.hold_id !== holdId)
+    .map(step => ({
+      ...step,
+      lh: step.lh === holdId ? null : step.lh,
+      rh: step.rh === holdId ? null : step.rh,
+      lf: step.lf === holdId ? null : step.lf,
+      rf: step.rf === holdId ? null : step.rf,
+    }));
+
+  if (selectedHold.value?.id === holdId) {
+    selectedHold.value = null;
+    interaction.type = null;
+  }
+
+  if (currentIndex.value > maxIndex.value) {
+    currentIndex.value = maxIndex.value;
+  }
+}
 
 function onHoldMouseDown(event, hold, fromTray = false) {
   event.preventDefault();

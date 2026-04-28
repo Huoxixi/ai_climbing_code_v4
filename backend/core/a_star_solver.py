@@ -63,7 +63,7 @@ class AStarSolver:
         self.SOFT_FOOT_SPAN_LIMIT = 2
         self.SOFT_FOOT_VERTICAL_GAP_LIMIT = 2
         self.HARD_FOOT_VERTICAL_GAP_LIMIT = 5
-        self.MAX_FOOT_MOVE_VERTICAL_DELTA = 4
+        self.MAX_FOOT_MOVE_VERTICAL_DELTA = 3
         
         # 岩点难度权重表 (V2 难度校准)
         self.HOLD_COST_WEIGHTS = {
@@ -919,19 +919,23 @@ class AStarSolver:
             best_sequence = best_state_so_far.sequence
             used_hold_ids = {step.hold_id for step in best_sequence}
             final_holds = [h for h in board_holds if h.id in used_hold_ids]
-            
+
             # 部分成功也需要计算配额
             quota_violations = get_quota_violations(final_holds)
-            
+
             partial_candidate = RouteCandidate(
                 placed_holds=final_holds,
                 beta_sequence=best_sequence,
                 total_cost=best_state_so_far.g_cost,
-                flow_score=0, # 未完攀，没有 flow score
+                flow_score=0,  # 未完攀，没有 flow score
                 crux_step=f"最高点: Y={max_y_reached}",
-                quota_violations=quota_violations
+                quota_violations=quota_violations,
             )
-            return partial_candidate, {"reason": "未完攀，显示已知最高路径", "max_y": max_y_reached, "rule_violation": None}
+            return partial_candidate, {
+                "reason": "未完攀，显示已知最高路径",
+                "max_y": max_y_reached,
+                "rule_violation": None,
+            }
 
         most_common_violation = max(kinematic_failure_counts, key=kinematic_failure_counts.get) if kinematic_failure_counts else "无"
         return failure_report(f"A* 搜索超时 ({max_iterations} 次迭代)", most_common_violation)
