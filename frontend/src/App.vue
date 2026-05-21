@@ -4,12 +4,13 @@
       <div class="topbar-brand-block">
         <div class="topbar-logo">🧗</div>
         <div>
-          <div class="topbar-kicker">AI Climbing Studio</div>
-          <h1>智能定线工作台</h1>
+          <div class="topbar-kicker">Climbing Board Simulator</div>
+          <h1>攀岩岩板模拟设计系统</h1>
         </div>
       </div>
       <div class="topbar-center">
         <span class="status-pill" :class="editorMode">{{ editorModeLabel }}</span>
+        <span class="status-pill subtle">{{ currentBoardSpec.label }}</span>
         <span class="status-pill subtle">{{ currentBoard.placed_holds.length }} 个岩点</span>
         <span class="status-pill subtle">{{ unsavedChanges ? '有未保存修改' : '已同步到本地状态' }}</span>
       </div>
@@ -27,6 +28,21 @@
         </template>
       </div>
     </header>
+
+    <nav class="workspace-switcher" aria-label="功能页导航">
+      <button
+        v-for="item in workspaceTabs"
+        :key="item.key"
+        :class="{ active: activeWorkspace === item.key }"
+        @click="activeWorkspace = item.key"
+      >
+        <span class="tab-icon">{{ item.icon }}</span>
+        <span class="tab-copy">
+          <strong>{{ item.label }}</strong>
+          <small>{{ item.desc }}</small>
+        </span>
+      </button>
+    </nav>
 
     <div v-if="showLoginDialog" class="login-dialog-backdrop" @click.self="showLoginDialog = false">
       <div class="login-dialog">
@@ -65,114 +81,244 @@
       </div>
     </div>
 
-    <div class="main-layout">
-      <aside class="sidebar" :class="{ 'is-collapsed': !isSidebarOpen }">
-        <div class="sidebar-content">
-          <div class="config-group">
-             <h3 class="group-title">🛠️ 岩点库管理</h3>
-             <div class="upload-section">
-                <div class="field">
-                  <label>岩点类型</label>
-                  <select v-model="uploadInfo.hold_type">
-                    <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
-                  </select>
-                </div>
-                 <div class="field">
-                   <label>变体名称 (英文/数字)</label>
-                   <input type="text" v-model="uploadInfo.variant" placeholder="例如: large_crimp_01">
-                 </div>
-                 <input type="file" @change="onFileChange" accept="image/*" />
-                 <button @click="uploadImage" :disabled="!uploadInfo.file || !uploadInfo.variant">上传新岩点</button>
-              </div>
+    <div class="main-layout" :class="`workspace-${activeWorkspace}`">
+      <section v-if="activeWorkspace === 'dashboard'" class="dashboard-workspace">
+        <div class="dashboard-hero-card">
+          <div>
+            <span class="section-kicker">Board Simulation Operations</span>
+            <h2>自由组合岩点，搭建你的模拟岩板</h2>
+            <p>当前版本聚焦“岩板模拟设计”：选择底层岩板规格、组合岩点库、拖拽布点、编辑岩板属性并保存资产。AI 定线功能已暂时封印，避免干扰手动设计流程。</p>
+            <div class="dashboard-actions">
+              <button class="primary" @click="startStudioWithBlankBoard">开始模拟建板</button>
+              <button @click="activeWorkspace = 'library'">管理岩点资源</button>
+            </div>
+          </div>
+          <div class="dashboard-metrics">
+            <div><strong>{{ currentBoard.placed_holds.length }}</strong><span>当前岩点</span></div>
+            <div><strong>{{ routeSteps.length }}</strong><span>Beta 动作</span></div>
+            <div><strong>{{ savedBoards.length }}</strong><span>保存岩板</span></div>
+            <div><strong>{{ managedHolds.length }}</strong><span>资源岩点</span></div>
+          </div>
+        </div>
 
-              <div class="hold-library">
-                <div v-for="hold in managedHolds" :key="hold.key" class="library-item">
-                   <div class="library-item-thumbnail">
-                      <div class="thumbnail-visual">
-                        <template v-if="hold.svgPath">
-                          <svg viewBox="0 0 100 100" class="vector-svg">
-                            <path :d="hold.svgPath" :fill="getShapeColor(hold.hold_type)" />
-                          </svg>
-                        </template>
-                        <template v-else-if="hold.imageUrl">
-                          <img :src="hold.imageUrl" class="hold-image" />
-                        </template>
-                      </div>
-                   </div>
-                   <div class="library-item-info">
-                      <span class="info-type">{{ hold.hold_type }}</span>
-                      <span class="info-variant">{{ hold.variant }}</span>
-                   </div>
-                   <button @click="deleteHold(hold.hold_type, hold.variant)" class="library-item-delete-btn">🗑️</button>
-                </div>
-                 <div v-if="managedHolds.length === 0" class="pool-empty-state">
-                    岩点库是空的，请上传新岩点。
+        <div class="dashboard-card-grid">
+          <article class="dashboard-card">
+            <span>底层岩板</span>
+            <strong>{{ currentBoardSpec.label }}</strong>
+            <small>{{ currentBoardSpec.columns }} 列 × {{ currentBoardSpec.rows }} 行 · {{ currentBoardSpec.angleLabel }}</small>
+          </article>
+          <article class="dashboard-card">
+            <span>编辑状态</span>
+            <strong>{{ editorModeLabel }}</strong>
+            <small>{{ unsavedChanges ? '当前岩板存在未保存修改' : '当前状态已同步' }}</small>
+          </article>
+          <article class="dashboard-card">
+            <span>候选岩点池</span>
+            <strong>{{ holdPool.length }}</strong>
+            <small>可拖拽到岩板的候选岩点</small>
+          </article>
+          <article class="dashboard-card">
+            <span>资源覆盖</span>
+            <strong>{{ managedHolds.length }}</strong>
+            <small>图片与矢量资源合计</small>
+          </article>
+        </div>
+
+        <BoardTemplatePicker
+          :templates="boardPresets"
+          :active-template-id="activeBoardPresetId"
+          @select="startBoardFromPreset"
+        />
+
+        <div class="dashboard-lower-grid">
+          <section class="dashboard-panel">
+            <h3>⚡ 快速开始</h3>
+            <div class="quick-action-grid">
+              <button @click="startStudioWithBlankBoard">＋ 新建模拟岩板</button>
+              <button @click="activeWorkspace = 'studio'">规格 选择岩板规格</button>
+              <button @click="activeWorkspace = 'library'">🧱 管理岩点资源</button>
+              <button @click="activeWorkspace = 'boards'">🗂️ 查看岩板资产</button>
+            </div>
+          </section>
+          <section class="dashboard-panel">
+            <h3>最近岩板</h3>
+            <div v-if="!savedBoards.length" class="pool-empty-state">暂无已保存岩板。</div>
+            <div v-for="board in savedBoards.slice(0, 5)" :key="board.saved_id" class="saved-board-item premium" @click="loadSavedBoard(board); activeWorkspace = 'studio'">
+              <div class="saved-board-info">
+                <div class="saved-board-name">{{ board.route_name }}</div>
+                <div class="saved-board-difficulty">{{ board.beta_sequence?.length || 0 }} moves · 点击载入 Studio</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section v-if="activeWorkspace === 'ai-lab'" class="ai-lab-workspace">
+        <div class="ai-sealed-card">
+          <span class="section-kicker">AI Lab · Sealed</span>
+          <h2>AI 定线功能暂时封印</h2>
+          <p>
+            当前版本的产品主路径已切换为“岩板模拟设计系统”。AI 生成路线不会作为主入口触发，
+            也不会向用户推荐自动定线流程。你可以继续在 Studio 中选择岩板模板、组合岩点池、拖拽布点、编辑 Beta 并保存岩板资产。
+          </p>
+          <div class="sealed-roadmap">
+            <div><strong>当前可用</strong><span>多规格岩板 · 手动布点 · 岩点池 · Beta 编辑 · 资产保存</span></div>
+            <div><strong>暂不开放</strong><span>/api/generate 自动生成与 AI CTA 主流程</span></div>
+            <div><strong>未来恢复</strong><span>保留实验室入口，后续可在不干扰模拟系统的前提下恢复</span></div>
+          </div>
+          <div class="dashboard-actions">
+            <button class="primary" @click="activeWorkspace = 'studio'">返回模拟设计</button>
+            <button @click="activeWorkspace = 'dashboard'">查看系统总览</button>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="activeWorkspace === 'library'" class="workspace-page library-workspace">
+        <div class="workspace-page-header">
+          <div>
+            <span class="section-kicker">Hold Library</span>
+            <h2>岩点资源管理</h2>
+            <p>这里专注处理岩点资源的上传、预览和删除。岩板设计页只调用这些资源，不再混入资源管理表单。</p>
+          </div>
+          <div class="module-jump-actions">
+            <button class="primary" @click="activeWorkspace = 'studio'">返回岩板设计</button>
+            <button @click="activeWorkspace = 'boards'">查看岩板资产</button>
+          </div>
+        </div>
+
+        <div class="library-layout-grid">
+          <section class="workspace-panel resource-upload-panel">
+            <h3 class="group-title">🛠️ 上传新岩点</h3>
+            <div class="upload-section">
+              <div class="field">
+                <label>岩点类型</label>
+                <select v-model="uploadInfo.hold_type">
+                  <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>变体名称 (英文/数字)</label>
+                <input type="text" v-model="uploadInfo.variant" placeholder="例如: large_crimp_01">
+              </div>
+              <input type="file" @change="onFileChange" accept="image/*" />
+              <button @click="uploadImage" :disabled="!uploadInfo.file || !uploadInfo.variant">上传新岩点</button>
+            </div>
+          </section>
+
+          <section class="workspace-panel resource-library-panel">
+            <div class="panel-title-row">
+              <div>
+                <h3 class="group-title">▦ 已录入岩点</h3>
+                <p>{{ managedHolds.length }} 个资源岩点，可在 Studio 中作为设计素材使用。</p>
+              </div>
+              <button @click="fetchAllHoldData">刷新资源</button>
+            </div>
+            <div class="hold-library workspace-library-list">
+              <div v-for="hold in managedHolds" :key="hold.key" class="library-item">
+                <div class="library-item-thumbnail">
+                  <div class="thumbnail-visual">
+                    <template v-if="hold.svgPath">
+                      <svg viewBox="0 0 100 100" class="vector-svg">
+                        <path :d="hold.svgPath" :fill="getShapeColor(hold.hold_type)" />
+                      </svg>
+                    </template>
+                    <template v-else-if="hold.imageUrl">
+                      <img :src="hold.imageUrl" class="hold-image" />
+                    </template>
                   </div>
+                </div>
+                <div class="library-item-info">
+                  <span class="info-type">{{ hold.hold_type }}</span>
+                  <span class="info-variant">{{ hold.variant }}</span>
+                </div>
+                <button @click="deleteHold(hold.hold_type, hold.variant)" class="library-item-delete-btn">🗑️</button>
               </div>
-           </div>
+              <div v-if="managedHolds.length === 0" class="pool-empty-state">
+                岩点库是空的，请先上传新岩点。
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
 
+      <section v-if="activeWorkspace === 'boards'" class="workspace-page boards-workspace">
+        <div class="workspace-page-header">
+          <div>
+            <span class="section-kicker">Board Assets</span>
+            <h2>岩板资产</h2>
+            <p>这里专注保存岩板的查看、载入、重命名和删除。点击“载入编辑”后再进入 Studio，不再占用设计页侧栏。</p>
+          </div>
+          <div class="module-jump-actions">
+            <button class="primary" @click="startStudioWithBlankBoard">新建模拟岩板</button>
+            <button @click="activeWorkspace = 'library'">管理岩点资源</button>
+          </div>
+        </div>
+
+        <section class="workspace-panel boards-asset-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3 class="group-title">🗂️ 已保存岩板</h3>
+              <p>{{ savedBoards.length ? `共 ${savedBoards.length} 个岩板资产` : '暂无已保存岩板资产' }}</p>
+            </div>
+            <button @click="fetchMyBoards">刷新列表</button>
+          </div>
+
+          <div v-if="!savedBoards.length" class="asset-empty-card">
+            <strong>还没有保存岩板</strong>
+            <span>进入岩板设计页完成布点后，可以将当前岩板保存为资产。</span>
+            <button @click="activeWorkspace = 'studio'">去岩板设计</button>
+          </div>
+
+          <div v-else class="asset-card-grid">
+            <article v-for="board in savedBoards" :key="board.saved_id" class="asset-card">
+              <div class="asset-card-main" @click="loadSavedBoard(board); activeWorkspace = 'studio'">
+                <span class="asset-kicker">{{ board.board_spec?.label || '模拟岩板' }}</span>
+                <h3>{{ board.route_name }}</h3>
+                <p>{{ board.setter_commentary || '暂无备注' }}</p>
+                <div class="asset-meta-row">
+                  <span>{{ board.placed_holds?.length || 0 }} 个岩点</span>
+                  <span>{{ board.beta_sequence?.length || 0 }} 个动作</span>
+                  <span>{{ board.visibility || 'private' }}</span>
+                </div>
+              </div>
+              <div class="asset-actions">
+                <button class="primary" @click="loadSavedBoard(board); activeWorkspace = 'studio'">载入编辑</button>
+                <button @click="renameSavedBoard(board)">重命名</button>
+                <button class="danger" @click="deleteSavedBoard(board)">删除</button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <aside v-if="activeWorkspace === 'studio'" class="sidebar studio-tools-sidebar" :class="{ 'is-collapsed': !isSidebarOpen }">
+        <div class="sidebar-content">
           <header class="brand">
             <div class="logo">🧗‍♂️</div>
             <div class="titles">
-              <h1>AI 定线系统</h1>
-              <p>AI Climbing Route System</p>
+              <h1>岩板模拟系统</h1>
+              <p>Board Simulation Workspace</p>
             </div>
           </header>
 
           <section class="config-group">
-            <h3 class="group-title">👤 攀爬者孪生体</h3>
-            <div class="input-row">
-              <div class="field">
-                <label>身高 (cm)</label>
-                <input type="number" v-model="profile.height" />
-              </div>
-              <div class="field">
-                <label>臂展 (cm)</label>
-                <input type="number" v-model="profile.arm_span" />
-              </div>
-            </div>
+            <h3 class="group-title">🧭 岩板模拟参数</h3>
             <div class="field">
-              <label>空间拓扑难度 (Target Difficulty)</label>
-              <select v-model="profile.target_difficulty">
-                <option value="V0">V0 - 新手稳定型</option>
-                <option value="V1">V1 - 基础入门型</option>
-                <option value="V2">V2 - 进阶拉伸型</option>
-                <option value="V3">V3 - 极限爆发型</option>
+              <label>底层岩板规格</label>
+              <select v-model="activeBoardPresetId" @change="applyBoardPreset(activeBoardPresetId)">
+                <option v-for="preset in boardPresets" :key="preset.id" :value="preset.id">
+                  {{ preset.label }} · {{ preset.columns }}×{{ preset.rows }}
+                </option>
               </select>
             </div>
-            <div class="field">
-                <label>艺术指导 (Special Requirements)</label>
-                <textarea v-model="profile.special_requirements" placeholder="例如：我想要多一点侧拉动作，或者适合爆发力训练"></textarea>
+            <div class="board-preset-summary">
+              <strong>{{ currentBoardSpec.label }}</strong>
+              <span>{{ currentBoardSpec.description }}</span>
+              <small>{{ currentBoardSpec.columns }} 列 × {{ currentBoardSpec.rows }} 行 · {{ currentBoardSpec.angleLabel }} · {{ currentBoardSpec.material }}</small>
             </div>
-          </section>
-
-          <section class="config-group">
-              <h3 class="group-title">⭐ 收藏夹 (My Boards)</h3>
-              <div class="saved-boards-list">
-                  <div v-if="!savedBoards.length" class="pool-empty-state">没有已保存的岩板</div>
-                  <div v-for="board in savedBoards" :key="board.saved_id" class="saved-board-item" @click="loadSavedBoard(board)">
-                      <div class="saved-board-info">
-                        <div class="saved-board-name">{{ board.route_name }}</div>
-                        <div class="saved-board-difficulty">{{ board.beta_sequence.length }} moves</div>
-                      </div>
-                      <div class="saved-board-actions">
-                        <button
-                          class="saved-board-action-btn saved-board-rename-btn"
-                          @click.stop="renameSavedBoard(board)"
-                          title="重命名该收藏岩板"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          class="saved-board-action-btn saved-board-delete-btn"
-                          @click.stop="deleteSavedBoard(board)"
-                          title="删除该收藏岩板"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                  </div>
-              </div>
+            <div class="simulation-note">
+              当前阶段已封印 AI 定线，工作台只保留手动组合岩点、模拟布板、动作序列编辑和资产保存。
+            </div>
           </section>
 
 <section class="config-group">
@@ -257,9 +403,115 @@
   </div>
 </section>
 
+<section class="config-group compact-studio-panel">
+  <h3 class="group-title">🎛️ 当前岩板</h3>
+  <div class="field">
+    <label>岩板名称</label>
+    <input v-model="currentBoard.route_name" @input="markUnsaved" />
+  </div>
+  <div class="input-row">
+    <div class="field">
+      <label>来源</label>
+      <input :value="currentBoard.source_type || editorMode" disabled />
+    </div>
+    <div class="field">
+      <label>可见性</label>
+      <select v-model="currentBoard.visibility" @change="markUnsaved">
+        <option value="private">私有</option>
+        <option value="team">团队</option>
+        <option value="public">公开</option>
+      </select>
+    </div>
+  </div>
+  <div class="field">
+    <label>备注 / 定线说明</label>
+    <textarea v-model="currentBoard.setter_commentary" @input="markUnsaved"></textarea>
+  </div>
+</section>
+
+<section class="config-group compact-studio-panel">
+  <h3 class="group-title">🧩 选中岩点</h3>
+  <div v-if="!selectedHold" class="pool-empty-state">点击岩板上的岩点后可编辑参数。</div>
+  <template v-else>
+    <div class="selected-hold-id">{{ selectedHold.id }}</div>
+    <div class="input-row">
+      <div class="field">
+        <label>类型</label>
+        <select v-model="selectedHold.hold_type" @change="syncSelectedHoldType">
+          <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>形状</label>
+        <input v-model="selectedHold.variant" @input="markUnsaved" />
+      </div>
+    </div>
+    <div class="field">
+      <label>旋转：{{ Number(selectedHold.rotation || 0).toFixed(0) }}°</label>
+      <input type="range" min="0" max="360" step="5" v-model.number="selectedHold.rotation" @input="markUnsaved" />
+    </div>
+    <div class="field">
+      <label>缩放：{{ Number(selectedHold.scale || 1).toFixed(1) }}x</label>
+      <input type="range" min="0.5" max="2" step="0.1" v-model.number="selectedHold.scale" @input="markUnsaved" />
+    </div>
+    <div class="inspector-actions">
+      <button @click="toggleSelectedStart">{{ selectedHold.is_start ? '取消起步点' : '设为起步点' }}</button>
+      <button class="danger" @click="deletePlacedHold(selectedHold)">删除岩点</button>
+    </div>
+  </template>
+</section>
+
+<section v-if="routeSteps.length" class="config-group compact-studio-panel studio-beta-panel">
+  <h3 class="group-title">📜 攀爬动作序列</h3>
+  <div class="beta-editor-panel">
+    <div class="field compact-field">
+      <label>当前编辑肢体</label>
+      <select v-model="betaEditor.selectedLimb">
+        <option value="" disabled>请选择左手/右手/左脚/右脚</option>
+        <option v-for="limb in limbOptions" :key="limb" :value="limb">{{ getLimbName(limb) }}</option>
+      </select>
+    </div>
+    <div class="beta-editor-status" :class="{ active: isBetaEditorActive }">
+      {{ isBetaEditorActive ? `待选点：${betaEditModeLabel}` : '点击动作卡片上的按钮开始编辑' }}
+    </div>
+    <button v-if="isBetaEditorActive" class="beta-editor-cancel" @click="cancelBetaEdit">取消编辑</button>
+  </div>
+  <div class="step-scroll-area compact-step-scroll">
+    <div v-for="(m, idx) in routeSteps" :key="idx"
+         class="step-item"
+         :class="{ 
+           'is-active': idx === currentIndex, 
+           'is-top': m.is_top,
+           'is-start': m.step === 0,
+           'is-edit-target': betaEditor.targetIndex === idx
+         }"
+         @click="currentIndex = idx">
+      <div class="step-indicator">
+        <div class="step-line"></div>
+        <div class="step-number">{{ m.step }}</div>
+      </div>
+      <div class="step-content">
+        <div class="step-meta">
+          <span class="limb-tag" :class="m.limb.toLowerCase()">{{ getLimbName(m.limb) }}</span>
+          <span class="hold-id">{{ m.hold_id }}</span>
+        </div>
+        <p class="intent" v-if="m.intent">{{ m.intent }}</p>
+        <p class="intent" v-else-if="m.step === 0">上墙起步</p>
+        <div class="step-actions">
+          <button @click.stop="startBetaEdit('edit', idx)">改</button>
+          <button @click.stop="startBetaEdit('insert-before', idx)">前插</button>
+          <button @click.stop="startBetaEdit('insert-after', idx)">后插</button>
+          <button class="danger" @click.stop="deleteBetaStep(idx)">删</button>
+        </div>
+      </div>
+      <div v-if="m.is_top" class="top-medal">🏆</div>
+    </div>
+  </div>
+</section>
+
           <footer class="actions">
-            <button @click="generateRoute" :disabled="loading" class="generate-btn" v-if="!loading">
-              🚀 开始定线
+            <button @click="notifyAiSealed" :disabled="loading" class="generate-btn sealed-generate-btn" v-if="!loading">
+              AI 定线已封印
             </button>
             <button @click="cancelGeneration" class="generate-btn cancel-btn" v-if="loading">
               ❌ 取消生成
@@ -269,11 +521,11 @@
         </div>
       </aside>
 
-      <button class="sidebar-toggle-btn" @click="isSidebarOpen = !isSidebarOpen" :class="{ 'is-closed': !isSidebarOpen }">
+      <button v-if="activeWorkspace === 'studio'" class="sidebar-toggle-btn" @click="isSidebarOpen = !isSidebarOpen" :class="{ 'is-closed': !isSidebarOpen }">
         {{ isSidebarOpen ? '◀' : '▶' }}
       </button>
 
-      <main class="stage">
+      <main v-if="activeWorkspace === 'studio'" class="stage studio-stage">
         <!-- 岩板旁快捷岩点池：区别于左侧“定线配置岩点池” -->
         <aside class="board-side-hold-pool" :class="{ 'is-open': isBoardPoolOpen }">
           <button
@@ -370,29 +622,31 @@
         </div>
 
         <div class="board-toolbar">
-          <button @click="createNewBlankBoard">＋ 新建空白岩板</button>
+          <button @click="createNewBlankBoard">＋ 新建模拟岩板</button>
           <button @click="saveBoard" :disabled="!currentBoard.placed_holds.length">💾 保存当前岩板</button>
           <button @click="clearCurrentBoard" :disabled="!currentBoard.placed_holds.length">🧹 清空岩板</button>
-          <button @click="generateRoute" :disabled="loading" class="primary-tool">🤖 AI 生成路线</button>
+          <button @click="activeWorkspace = 'library'">▦ 岩点资源</button>
+          <button @click="activeWorkspace = 'boards'">🗂️ 岩板资产</button>
+          <button @click="notifyAiSealed" class="sealed-tool">🔒 AI 定线封印中</button>
         </div>
 
         <div class="wall-display">
-          <div class="wall-frame" :class="{ 'is-empty-board': !placedHolds.length }">
+          <div class="wall-frame" :class="[{ 'is-empty-board': !placedHolds.length }, currentBoardSpec.skinClass]" :style="boardFrameStyle">
             <div v-if="!placedHolds.length" class="blank-board-hint">
               <strong>空白岩板已就绪</strong>
-              <span>点击任意孔位可放置左侧预设岩点；也可以从快捷岩点池拖拽上墙。</span>
+              <span>选择底层岩板规格后，点击孔位或从快捷岩点池拖拽岩点上墙。</span>
             </div>
             <!-- 坐标轴 -->
             <div class="axis-x">
-              <span v-for="x in 'ABCDEFGHIJK'.split('')" :key="x">{{ x }}</span>
+              <span v-for="x in coordinateColumns" :key="x">{{ x }}</span>
             </div>
             <div class="axis-y">
-              <span v-for="y in 18" :key="y">{{ y }}</span>
+              <span v-for="y in coordinateRows" :key="y">{{ y }}</span>
             </div>
 
             <div class="grid-backdrop">
-              <template v-for="y in 18" :key="'y-'+y">
-                <div v-for="(x, xi) in 'ABCDEFGHIJK'.split('')" :key="x+y" 
+              <template v-for="y in coordinateRows" :key="'y-'+y">
+                <div v-for="x in coordinateColumns" :key="x+y"
                      class="hole" :style="getCoord(x+y)" @click.stop="placeDraftHoldAt(x+y)"></div>
               </template>
             </div>
@@ -439,7 +693,7 @@
           </div>
 
           <!-- 移到岩板下方 -->
-          <div class="controls">
+          <div class="controls" :style="controlPanelStyle">
             <div class="control-labels">
               <span class="step-counter">动作序列 {{ routeSteps.length > 0 ? currentIndex + 1 : 0 }} / {{ routeSteps.length }}</span>
               <span class="difficulty-tag">{{ profile.target_difficulty }}</span>
@@ -461,7 +715,7 @@
       </main>
 
       <!-- 右侧边栏: 攀爬动作序列 -->
-      <aside v-if="routeSteps.length" class="sidebar right-sidebar">
+      <aside v-if="false && routeSteps.length" class="sidebar right-sidebar">
         <div class="sidebar-content">
           <section class="timeline-section">
             <h3 class="group-title">📜 攀爬动作序列</h3>
@@ -513,7 +767,7 @@
         </div>
       </aside>
 
-      <aside class="inspector-panel">
+      <aside v-if="false" class="inspector-panel">
         <section class="config-group">
           <h3 class="group-title">🎛️ 岩板属性</h3>
           <div class="field">
@@ -521,6 +775,12 @@
             <input v-model="currentBoard.route_name" @input="markUnsaved" />
           </div>
           <div class="input-row">
+              <div class="field">
+                <label>岩板规格</label>
+                <select v-model="activeBoardPresetId" @change="applyBoardPreset(activeBoardPresetId)">
+                  <option v-for="preset in boardPresets" :key="preset.id" :value="preset.id">{{ preset.label }}</option>
+                </select>
+              </div>
             <div class="field">
               <label>来源</label>
               <input :value="currentBoard.source_type || editorMode" disabled />
@@ -578,9 +838,20 @@
 
 <script setup>
 import { ref, computed, reactive, watch } from 'vue'
-import axios from 'axios'
+import BoardTemplatePicker from './components/BoardTemplatePicker.vue'
 import { useAuth } from './composables/useAuth'
 import { createBlankBoard } from './composables/useBoardEditor'
+import apiClient, { API_BASE_URL } from './services/apiClient'
+import boardService from './services/boardService'
+import {
+  BOARD_TEMPLATES,
+  DEFAULT_BOARD_TEMPLATE_ID,
+  LEGACY_BOARD_TEMPLATE_ID,
+  createAxisLabels,
+  createBoardSpecSnapshot,
+  getBoardTemplateById,
+  normalizeBoardSpec,
+} from './constants/boardTemplates'
 
 // --- 基础状态 ---
 const isSidebarOpen = ref(true) // 控制侧边栏显隐
@@ -592,6 +863,93 @@ const showLoginDialog = ref(false)
 const loginForm = reactive({ email: '', name: '' })
 const manualBoard = ref(createBlankBoard())
 const unsavedChanges = ref(false)
+const activeWorkspace = ref('dashboard')
+const workspaceTabs = [
+  { key: 'dashboard', label: '总览', icon: '📊', desc: '模拟状态与快捷入口' },
+  { key: 'studio', label: '岩板设计', icon: '🧗', desc: '规格选择、布点与动作序列' },
+  { key: 'library', label: '岩点资源', icon: '▦', desc: '上传与管理' },
+  { key: 'boards', label: '岩板资产', icon: '🗂️', desc: '保存、载入与版本管理' },
+  { key: 'ai-lab', label: 'AI 实验室', icon: '🔒', desc: '封印态与未来恢复位' },
+]
+
+const boardPresets = BOARD_TEMPLATES
+const activeBoardPresetId = ref(DEFAULT_BOARD_TEMPLATE_ID)
+const getBoardPresetById = getBoardTemplateById
+
+const currentBoardSpec = computed(() => {
+  const savedSpec = currentBoard.value?.board_spec
+  const preset = getBoardPresetById(savedSpec?.preset_id || activeBoardPresetId.value)
+  return savedSpec ? normalizeBoardSpec(savedSpec) : createBoardSpecSnapshot(preset)
+})
+
+const coordinateColumns = computed(() =>
+  currentBoardSpec.value.xLabels?.length ? currentBoardSpec.value.xLabels : createAxisLabels(currentBoardSpec.value.columns)
+)
+const coordinateRows = computed(() =>
+  currentBoardSpec.value.yLabels?.length
+    ? currentBoardSpec.value.yLabels
+    : Array.from({ length: currentBoardSpec.value.rows }, (_, index) => index + 1)
+)
+const boardFrameStyle = computed(() => ({
+  width: `${currentBoardSpec.value.width}px`,
+  height: `${currentBoardSpec.value.height}px`,
+  maxWidth: `min(72vw, ${currentBoardSpec.value.width}px)`,
+  maxHeight: 'calc(100vh - 310px)',
+}))
+const controlPanelStyle = computed(() => ({
+  maxWidth: `${Math.min(currentBoardSpec.value.width, 760)}px`,
+}))
+
+const getColumnIndex = (label = 'A') => {
+  const normalized = String(label).toUpperCase()
+  return normalized.split('').reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1
+}
+
+const getColumnLabel = (index = 0) => createAxisLabels(index + 1)[index]
+
+const parseCoord = (coord = 'A1') => {
+  const [, column = 'A', row = '1'] = String(coord).match(/^([A-Z]+)(\d+)$/i) || []
+  return {
+    column,
+    row: Number(row),
+    columnIndex: getColumnIndex(column),
+  }
+}
+
+const syncCurrentBoardSpec = (preset = getBoardPresetById(activeBoardPresetId.value)) => {
+  if (!currentBoard.value) return
+  currentBoard.value.board_spec = createBoardSpecSnapshot(getBoardPresetById(preset.preset_id || preset.id || activeBoardPresetId.value))
+}
+
+const isHoldInsideSpec = (hold, spec = currentBoardSpec.value) => {
+  const coord = parseCoord(hold.x && hold.y ? `${hold.x}${hold.y}` : (hold.id || 'A1'))
+  const columnIndex = hold.x ? getColumnIndex(hold.x) : coord.columnIndex
+  const rowIndex = Number(hold.y || coord.row || 1)
+  return columnIndex >= 0 && columnIndex < spec.columns && rowIndex >= 1 && rowIndex <= spec.rows
+}
+
+const applyBoardPreset = (presetId) => {
+  const preset = getBoardPresetById(presetId)
+  activeBoardPresetId.value = preset.id
+  if (!currentBoard.value) return
+
+  const outOfRangeHolds = (currentBoard.value.placed_holds || []).filter((hold) => !isHoldInsideSpec(hold, preset))
+  if (outOfRangeHolds.length > 0) {
+    const shouldContinue = confirm(`当前有 ${outOfRangeHolds.length} 个岩点超出新岩板范围，切换规格会移除这些岩点及相关动作，是否继续？`)
+    if (!shouldContinue) {
+      activeBoardPresetId.value = currentBoard.value.board_spec?.preset_id || currentBoardSpec.value.preset_id
+      return
+    }
+    const removedIds = new Set(outOfRangeHolds.map((hold) => hold.id))
+    currentBoard.value.placed_holds = (currentBoard.value.placed_holds || []).filter((hold) => !removedIds.has(hold.id))
+    currentBoard.value.beta_sequence = (currentBoard.value.beta_sequence || []).filter((step) => !removedIds.has(step.hold_id))
+    selectedHold.value = null
+    normalizeBetaSequence(currentIndex.value)
+  }
+
+  syncCurrentBoardSpec(preset)
+  markUnsaved()
+}
 
 const handleLogin = async () => {
   await login(loginForm)
@@ -613,12 +971,9 @@ const markUnsaved = () => {
 const holdImageMap = reactive({})
 const holdVectorMap = reactive({})
 
-// 从后端加载映射
-const API_BASE_URL = 'http://127.0.0.1:8000'
-
 const fetchHoldMapping = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/holds/mapping`);
+    const response = await apiClient.get('/api/holds/mapping');
     // 创建一个新的空对象，然后分配，以确保响应性
     const newMap = {};
     Object.assign(newMap, response.data);
@@ -631,7 +986,7 @@ const fetchHoldMapping = async () => {
 
 const fetchHoldVectors = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/holds/vectors`);
+    const response = await apiClient.get('/api/holds/vectors');
     const newMap = {};
     Object.assign(newMap, response.data);
     Object.keys(holdVectorMap).forEach(key => delete holdVectorMap[key]);
@@ -670,7 +1025,7 @@ const uploadImage = async () => {
   formData.append('file', uploadInfo.file);
 
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/holds/upload`, formData);
+    const response = await apiClient.post('/api/holds/upload', formData);
     if (response.data.success) {
       alert('上传成功!');
       await fetchAllHoldData(); // 重新加载所有数据
@@ -695,7 +1050,7 @@ const deleteHold = async (hold_type, variant) => {
     return;
   }
   try {
-    await axios.delete(`${API_BASE_URL}/api/holds/${hold_type}/${variant}`);
+    await apiClient.delete(`/api/holds/${hold_type}/${variant}`);
     alert('删除成功!');
     await fetchAllHoldData();
   } catch (error) {
@@ -791,20 +1146,20 @@ const taskId = ref(null)
 const pollingTimer = ref(null)
 const currentBoard = computed(() => routeData.value || manualBoard.value)
 const editorMode = computed(() => routeData.value ? (routeData.value.source_type === 'manual' ? 'manual' : 'generated') : 'manual')
-const editorModeLabel = computed(() => editorMode.value === 'manual' ? '手动建板模式' : 'AI 生成结果模式')
+const editorModeLabel = computed(() => editorMode.value === 'manual' ? '模拟建板模式' : '历史 AI 结果模式')
 
 // 🌟 核心修复：用 currentIndex 取代 currentStep，强制按数组绝对索引逐个播放！
 const currentIndex = ref(0)
 const currentReflectionMsg = ref('')
 
 const reflectionMessages = [
-  "正在初始化物理 Agent...",
-  "分析 11x18 空间拓扑结构...",
-  "尝试生成第 1 版岩点布局...",
-  "物理裁判正在核验人体极限...",
-  "检测到跨度风险，正在自我重构...",
-  "优化 Beta 动作连贯性...",
-  "最终渲染定线方案..."
+  "正在初始化模拟设计工作台...",
+  "分析当前岩板规格拓扑结构...",
+  "准备岩点池与孔位映射...",
+  "校验动作序列编辑状态...",
+  "同步岩板资产草稿...",
+  "当前版本 AI 定线保持封印...",
+  "模拟岩板已就绪..."
 ]
 
 let autoPlayTimer = null // 动画播放器
@@ -812,7 +1167,7 @@ let autoPlayTimer = null // 动画播放器
 const pollForResult = async (id) => {
   pollingTimer.value = setInterval(async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/result/${id}`);
+      const res = await apiClient.get(`/api/result/${id}`);
       if (res.data.status === 'RUNNING') {
         // continue polling
       } else {
@@ -856,59 +1211,18 @@ const pollForResult = async (id) => {
 };
 
 const generateRoute = async () => {
-  loading.value = true; error.value = ''; allRoutes.value = []; currentIndex.value = 0
-  if (autoPlayTimer) clearInterval(autoPlayTimer)
-  
-  let msgIdx = 0
-  const msgTimer = setInterval(() => {
-    currentReflectionMsg.value = reflectionMessages[msgIdx % reflectionMessages.length]
-    msgIdx++
-  }, 1200)
+  notifyAiSealed()
+}
 
-  const backendRecipePayload = holdPool.value.reduce((acc, hold) => {
-    if (!acc[hold.type]) {
-      acc[hold.type] = {
-        count: 0,
-        variant: hold.variant,
-      };
-    }
-    acc[hold.type].count++;
-    return acc;
-  }, {});
-
-  const backendHoldPoolPayload = holdPool.value.map((hold) => ({
-    hold_type: hold.type,
-    variant: hold.variant,
-    rotation: Number(hold.rotation ?? 0),
-    scale: Number(hold.scale ?? 1.0),
-  }));
-
-  try {
-    const response = await axios.post(`${API_BASE_URL}/api/generate`, {
-      climber_height_cm: profile.value.height,
-      climber_span_cm: profile.value.arm_span,
-      target_difficulty: profile.value.target_difficulty,
-      special_requirements: profile.value.special_requirements,
-      recipe: backendRecipePayload,
-      hold_pool: backendHoldPoolPayload
-    })
-    
-    taskId.value = response.data.task_id;
-    await pollForResult(taskId.value);
-
-  } catch (err) {
-    error.value = err.response?.data?.detail || err.message
-    loading.value = false;
-  } finally {
-    clearInterval(msgTimer);
-    // loading is set to false inside pollForResult
-  }
+const notifyAiSealed = () => {
+  loading.value = false
+  error.value = 'AI 定线功能已暂时封印：请使用岩板规格、岩点池和拖拽布点完成模拟设计。'
 }
 
 const cancelGeneration = async () => {
   if (!taskId.value) return;
   try {
-    await axios.post(`${API_BASE_URL}/api/cancel/${taskId.value}`);
+    await apiClient.post(`/api/cancel/${taskId.value}`);
     clearInterval(pollingTimer.value);
     loading.value = false;
     error.value = "生成已取消。";
@@ -1060,19 +1374,21 @@ const currentLimbs = computed(() => {
 
 const getCoord = (id) => {
   if (!id) return { left: '50%', bottom: '50%' }
-  const xIdx = id.charCodeAt(0) - 65
-  const yIdx = parseInt(id.substring(1)) - 1
-  return { left: `${8 + (xIdx / 10) * 84}%`, bottom: `${8 + (yIdx / 17) * 84}%` }
+  const { columnIndex, row } = parseCoord(id)
+  const xIdx = columnIndex
+  const yIdx = row - 1
+  const maxX = Math.max(1, currentBoardSpec.value.columns - 1)
+  const maxY = Math.max(1, currentBoardSpec.value.rows - 1)
+  return { left: `${8 + (xIdx / maxX) * 84}%`, bottom: `${8 + (yIdx / maxY) * 84}%` }
 }
 
 const makeHoldAt = (coord, source = draftHold) => {
-  const x = coord.charAt(0)
-  const y = Number(coord.slice(1))
+  const { column, row } = parseCoord(coord)
   const type = source.hold_type || source.type || 'Jug'
   return {
     id: coord,
-    x,
-    y,
+    x: column,
+    y: row,
     hold_type: type,
     type,
     variant: source.variant || 'random',
@@ -1101,17 +1417,41 @@ function placeDraftHoldAt(coord) {
   placeHoldOnCurrentBoard(coord, draftHold)
 }
 
-function createNewBlankBoard() {
-  if (unsavedChanges.value && !confirm('当前岩板有未保存修改，确定新建空白岩板吗？')) return
+function createNewBlankBoard(presetId = activeBoardPresetId.value) {
+  if (unsavedChanges.value && !confirm('当前岩板有未保存修改，确定新建模拟岩板吗？')) return false
+  const preset = getBoardPresetById(presetId)
+  activeBoardPresetId.value = preset.id
   allRoutes.value = []
   activeRouteIndex.value = 0
   currentIndex.value = 0
   selectedHold.value = null
   manualBoard.value = createBlankBoard({
-    route_name: '空白手动岩板',
+    route_name: `${preset.label} · 空白模拟岩板`,
     owner_id: currentUser.value?.id || null,
+    source_type: 'manual',
+    difficulty: '模拟设计',
+    board_spec: createBoardSpecSnapshot(preset),
+    setter_commentary: `使用 ${preset.label}（${preset.columns}×${preset.rows}）作为底层岩板进行手动模拟布点。`,
   })
   unsavedChanges.value = false
+  return true
+}
+
+function startBoardFromPreset(presetId) {
+  const previousPresetId = activeBoardPresetId.value
+  activeBoardPresetId.value = presetId
+  const created = createNewBlankBoard(presetId)
+  if (created) {
+    activeWorkspace.value = 'studio'
+  } else {
+    activeBoardPresetId.value = previousPresetId
+  }
+}
+
+function startStudioWithBlankBoard() {
+  if (createNewBlankBoard()) {
+    activeWorkspace.value = 'studio'
+  }
 }
 
 function clearCurrentBoard() {
@@ -1346,12 +1686,14 @@ function onMouseMove(event) {
     const wallFrame = document.querySelector('.wall-frame');
     if (!wallFrame) return;
     const wallRect = wallFrame.getBoundingClientRect();
-    const xIdx = Math.round((((event.clientX - wallRect.left) / wallRect.width * 100 - 8) / 84) * 10);
-    const yIdx = Math.round(((100 - (event.clientY - wallRect.top) / wallRect.height * 100 - 8) / 84) * 17);
+    const maxColumnIndex = currentBoardSpec.value.columns - 1;
+    const maxRowIndex = currentBoardSpec.value.rows - 1;
+    const xIdx = Math.round((((event.clientX - wallRect.left) / wallRect.width * 100 - 8) / 84) * maxColumnIndex);
+    const yIdx = Math.round(((100 - (event.clientY - wallRect.top) / wallRect.height * 100 - 8) / 84) * maxRowIndex);
 
-    const safeXIdx = Math.max(0, Math.min(10, xIdx));
-    const safeYIdx = Math.max(1, Math.min(18, yIdx + 1));
-    const newX = String.fromCharCode(65 + safeXIdx);
+    const safeXIdx = Math.max(0, Math.min(maxColumnIndex, xIdx));
+    const safeYIdx = Math.max(1, Math.min(currentBoardSpec.value.rows, yIdx + 1));
+    const newX = getColumnLabel(safeXIdx);
     const newId = `${newX}${safeYIdx}`;
     
     if (selectedHold.value.id !== newId) {
@@ -1380,7 +1722,7 @@ function onMouseUp() {
 // --- Persistence --- 
 const fetchMyBoards = async () => {
     try {
-        const response = await axios.get(`${API_BASE_URL}/api/my-boards`);
+        const response = await boardService.listBoards();
         savedBoards.value = response.data;
     } catch (error) {
         console.error("无法加载已保存的岩板:", error);
@@ -1390,15 +1732,16 @@ const fetchMyBoards = async () => {
 const saveBoard = async () => {
     if (!currentBoard.value?.placed_holds?.length) return;
     const boardToSave = currentBoard.value;
+    syncCurrentBoardSpec();
     boardToSave.owner_id = currentUser.value?.id || boardToSave.owner_id || null;
     boardToSave.updated_at = new Date().toISOString();
     normalizeBetaSequence(currentIndex.value);
     try {
         if (boardToSave.saved_id) {
-            await axios.put(`${API_BASE_URL}/api/my-boards/${boardToSave.saved_id}`, boardToSave);
+            await boardService.updateBoard(boardToSave.saved_id, boardToSave);
             alert('岩板更新成功!');
         } else {
-            const response = await axios.post(`${API_BASE_URL}/api/save-board`, boardToSave);
+            const response = await boardService.createBoard(boardToSave);
             if (response.data?.saved_id) {
                 boardToSave.saved_id = response.data.saved_id;
             }
@@ -1436,7 +1779,7 @@ const renameSavedBoard = async (board) => {
     }
 
     try {
-        await axios.put(`${API_BASE_URL}/api/my-boards/${board.saved_id}`, {
+        await boardService.updateBoard(board.saved_id, {
             route_name: newName,
         });
 
@@ -1469,7 +1812,7 @@ const deleteSavedBoard = async (board) => {
     }
 
     try {
-        await axios.delete(`${API_BASE_URL}/api/my-boards/${board.saved_id}`);
+        await boardService.deleteBoard(board.saved_id);
         savedBoards.value = savedBoards.value.filter(b => b.saved_id !== board.saved_id);
 
         // 如果当前展示的就是被删除的收藏岩板，则清空当前路线展示
@@ -1489,9 +1832,15 @@ const deleteSavedBoard = async (board) => {
 const loadSavedBoard = (board) => {
     // Create a deep copy to avoid modifying the saved list
     const boardCopy = JSON.parse(JSON.stringify(board));
+    if (!boardCopy.board_spec) {
+      boardCopy.board_spec = createBoardSpecSnapshot(getBoardPresetById(LEGACY_BOARD_TEMPLATE_ID));
+    }
+    boardCopy.board_spec = normalizeBoardSpec(boardCopy.board_spec);
+    activeBoardPresetId.value = boardCopy.board_spec.preset_id || LEGACY_BOARD_TEMPLATE_ID;
     allRoutes.value = [boardCopy];
     activeRouteIndex.value = 0;
     currentIndex.value = 0;
+    selectedHold.value = null;
     if (autoPlayTimer) clearInterval(autoPlayTimer);
 };
 
@@ -1576,11 +1925,473 @@ fetchMyBoards();
 
 .main-layout { display: flex; height: calc(100% - 72px); position: relative; }
 
+.workspace-switcher {
+  height: 82px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 22px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.9));
+  border-bottom: 1px solid rgba(96, 165, 250, 0.16);
+  box-sizing: border-box;
+}
+.workspace-switcher button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.46);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+.workspace-switcher button:hover {
+  border-color: rgba(96, 165, 250, 0.48);
+  transform: translateY(-1px);
+  background: rgba(30, 41, 59, 0.72);
+}
+.workspace-switcher button.active {
+  color: #fff;
+  border-color: rgba(96, 165, 250, 0.75);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(14, 165, 233, 0.42));
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22);
+}
+.tab-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1.1rem;
+}
+.tab-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.18;
+}
+.tab-copy strong { font-size: 0.86rem; }
+.tab-copy small {
+  margin-top: 4px;
+  color: rgba(203, 213, 225, 0.7);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.main-layout {
+  height: calc(100% - 154px);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(37, 99, 235, 0.16), transparent 28%),
+    radial-gradient(circle at 90% 85%, rgba(245, 158, 11, 0.1), transparent 30%),
+    #07111f;
+}
+.main-layout.workspace-dashboard {
+  display: block;
+  overflow-y: auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.main-layout.workspace-dashboard > :not(.dashboard-workspace) { display: none !important; }
+.main-layout.workspace-ai-lab {
+  display: block;
+  overflow-y: auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.main-layout.workspace-ai-lab > :not(.ai-lab-workspace) { display: none !important; }
+.main-layout.workspace-library,
+.main-layout.workspace-boards {
+  display: block;
+  overflow-y: auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.main-layout.workspace-studio {
+  display: flex;
+  overflow: hidden;
+}
+.main-layout.workspace-library .brand,
+.main-layout.workspace-library .sidebar .config-group:not(.library-panel),
+.main-layout.workspace-boards .library-panel,
+.main-layout.workspace-boards .brand,
+.main-layout.workspace-boards .sidebar .config-group:nth-of-type(2),
+.main-layout.workspace-boards .sidebar .config-group:nth-of-type(4),
+.main-layout.workspace-boards .actions {
+  display: none;
+}
+.main-layout.workspace-library .stage,
+.main-layout.workspace-library .inspector-panel,
+.main-layout.workspace-library .right-sidebar,
+.main-layout.workspace-boards .stage,
+.main-layout.workspace-boards .inspector-panel,
+.main-layout.workspace-boards .right-sidebar {
+  display: none;
+}
+.main-layout.workspace-library .sidebar,
+.main-layout.workspace-boards .sidebar {
+  width: min(460px, 38vw);
+  border-right: 1px solid rgba(96, 165, 250, 0.16);
+  background: rgba(15, 23, 42, 0.88);
+}
+.main-layout.workspace-library .sidebar-content,
+.main-layout.workspace-boards .sidebar-content { width: 100%; }
+.main-layout.workspace-library .hold-library { max-height: calc(100vh - 310px); }
+.dashboard-workspace {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+.workspace-page {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+}
+.workspace-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 22px;
+  padding: 28px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(37, 99, 235, 0.22), transparent 26%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.74));
+  box-shadow: 0 24px 70px rgba(0,0,0,0.26);
+}
+.workspace-page-header h2 {
+  margin: 8px 0 8px;
+  font-size: 2rem;
+  color: #fff;
+}
+.workspace-page-header p,
+.panel-title-row p {
+  margin: 0;
+  color: #94a3b8;
+  line-height: 1.65;
+}
+.module-jump-actions,
+.asset-actions,
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.module-jump-actions { flex-wrap: wrap; justify-content: flex-end; }
+.module-jump-actions button,
+.panel-title-row button,
+.asset-actions button,
+.asset-empty-card button {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.82);
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 13px;
+  cursor: pointer;
+  font-weight: 900;
+  transition: all 0.18s ease;
+}
+.module-jump-actions button.primary,
+.asset-actions button.primary,
+.asset-empty-card button {
+  border-color: transparent;
+  background: linear-gradient(135deg, #2563eb, #0891b2);
+  color: white;
+}
+.asset-actions button.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(127, 29, 29, 0.72);
+  color: #fecaca;
+}
+.module-jump-actions button:hover,
+.panel-title-row button:hover,
+.asset-actions button:hover,
+.asset-empty-card button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.56);
+}
+.workspace-panel {
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.24);
+}
+.library-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.resource-upload-panel {
+  position: sticky;
+  top: 0;
+}
+.resource-library-panel,
+.boards-asset-panel {
+  min-width: 0;
+}
+.panel-title-row {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.panel-title-row .group-title { margin-bottom: 8px; }
+.workspace-library-list {
+  max-height: none;
+  min-height: 420px;
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  align-content: start;
+}
+.workspace-library-list .library-item {
+  min-width: 0;
+  border: 1px solid rgba(51, 65, 85, 0.84);
+  border-radius: 14px;
+}
+.asset-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.asset-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 245px;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.94));
+  overflow: hidden;
+}
+.asset-card-main {
+  flex: 1;
+  padding: 18px;
+  cursor: pointer;
+}
+.asset-card-main:hover h3 { color: #93c5fd; }
+.asset-kicker {
+  color: #60a5fa;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+.asset-card h3 {
+  margin: 9px 0 8px;
+  color: #f8fafc;
+  font-size: 1.1rem;
+}
+.asset-card p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.asset-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.asset-meta-row span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  color: #bfdbfe;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.asset-actions {
+  justify-content: flex-end;
+  padding: 12px;
+  border-top: 1px solid rgba(51, 65, 85, 0.74);
+  background: rgba(2, 6, 23, 0.28);
+}
+.asset-empty-card {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  border: 1px dashed rgba(96, 165, 250, 0.3);
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.52);
+}
+.asset-empty-card strong { color: #f8fafc; font-size: 1.15rem; }
+.asset-empty-card span { color: #94a3b8; }
+.ai-lab-workspace {
+  max-width: 1080px;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+.ai-sealed-card {
+  padding: 38px;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(245, 158, 11, 0.22), transparent 28%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.88));
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  box-shadow: 0 36px 90px rgba(0,0,0,0.42);
+}
+.ai-sealed-card h2 {
+  margin: 10px 0 12px;
+  color: #fff;
+  font-size: 2.2rem;
+}
+.ai-sealed-card p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.85;
+  max-width: 880px;
+}
+.sealed-roadmap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+.sealed-roadmap div {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.sealed-roadmap strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fef3c7;
+}
+.sealed-roadmap span {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.dashboard-hero-card {
+  display: grid;
+  grid-template-columns: 1.25fr 0.85fr;
+  gap: 28px;
+  padding: 34px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(15, 23, 42, 0.88) 48%, rgba(245, 158, 11, 0.13));
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.34);
+}
+.section-kicker {
+  color: #60a5fa;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  font-weight: 900;
+  font-size: 0.7rem;
+}
+.dashboard-hero-card h2 {
+  margin: 10px 0 12px;
+  font-size: 2rem;
+  color: #fff;
+}
+.dashboard-hero-card p {
+  margin: 0;
+  max-width: 760px;
+  color: #b6c4d6;
+  line-height: 1.75;
+}
+.dashboard-actions { display: flex; gap: 12px; margin-top: 24px; }
+.dashboard-actions button,
+.quick-action-grid button {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #111c2f;
+  color: #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 900;
+  transition: all 0.2s ease;
+}
+.dashboard-actions button.primary,
+.quick-action-grid button:hover {
+  background: linear-gradient(135deg, #2563eb, #0891b2);
+  color: white;
+  border-color: transparent;
+}
+.dashboard-actions button:hover,
+.quick-action-grid button:hover { transform: translateY(-1px); }
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.dashboard-metrics div,
+.dashboard-card,
+.dashboard-panel {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 22px;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.22);
+}
+.dashboard-metrics div { padding: 18px; }
+.dashboard-metrics strong {
+  display: block;
+  color: #fff;
+  font-size: 2rem;
+}
+.dashboard-metrics span { color: #94a3b8; font-size: 0.78rem; }
+.dashboard-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.dashboard-card { padding: 20px; }
+.dashboard-card span { color: #94a3b8; font-size: 0.78rem; }
+.dashboard-card strong { display: block; margin: 8px 0; color: #fff; font-size: 1.32rem; }
+.dashboard-card small { color: #64748b; }
+.dashboard-lower-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.dashboard-panel { padding: 20px; }
+.dashboard-panel h3 { margin: 0 0 14px; color: #f8fafc; }
+.quick-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.saved-board-item.premium { margin-bottom: 10px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.12); }
+
+@media (max-width: 1180px) {
+  .workspace-switcher { grid-template-columns: repeat(2, minmax(0, 1fr)); height: auto; }
+  .main-layout { height: calc(100% - 72px - 176px); }
+  .dashboard-hero-card,
+  .dashboard-card-grid,
+  .dashboard-lower-grid,
+  .sealed-roadmap,
+  .library-layout-grid { grid-template-columns: 1fr; }
+  .workspace-page-header { flex-direction: column; }
+  .module-jump-actions { justify-content: flex-start; }
+  .resource-upload-panel { position: static; }
+}
+
 .sidebar {
   width: 350px; background: #1e293b;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-y: auto; overflow-x: hidden; position: relative;
   flex-shrink: 0;
+}
+.studio-tools-sidebar {
+  border-right: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(15, 23, 42, 0.94);
 }
 .sidebar.left-sidebar { border-right: 1px solid #334155; }
 .sidebar.right-sidebar { 
@@ -1621,6 +2432,76 @@ fetchMyBoards();
   width: 100%; box-sizing: border-box;
   background: #1e293b; border: 1px solid #334155; color: white; 
   padding: 8px; border-radius: 6px; outline: none; font-size: 0.85rem;
+}
+.field textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: white;
+  padding: 9px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.compact-studio-panel .input-row { gap: 8px; }
+.selected-hold-id {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fef3c7;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-weight: 900;
+  font-family: monospace;
+}
+.inspector-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.inspector-actions button {
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(37, 99, 235, 0.18);
+  color: #dbeafe;
+  border-radius: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 800;
+}
+.inspector-actions button.danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(127, 29, 29, 0.72);
+  color: #fecaca;
+}
+
+.board-preset-summary,
+.simulation-note {
+  border-radius: 12px;
+  padding: 12px;
+  line-height: 1.55;
+}
+.board-preset-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  margin-bottom: 10px;
+}
+.board-preset-summary strong { color: #dbeafe; font-size: 0.92rem; }
+.board-preset-summary span { color: #cbd5e1; font-size: 0.78rem; }
+.board-preset-summary small { color: #93c5fd; font-size: 0.72rem; }
+.simulation-note {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px dashed rgba(245, 158, 11, 0.42);
+  color: #fde68a;
+  font-size: 0.76rem;
 }
 
 /* --- 岩点池重构样式 --- */
@@ -2013,6 +2894,18 @@ fetchMyBoards();
 }
 .generate-btn:active:not(:disabled) { transform: translateY(0); }
 .generate-btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; box-shadow: none; }
+.sealed-generate-btn,
+.board-toolbar .sealed-tool {
+  background: linear-gradient(135deg, #475569, #1e293b) !important;
+  border: 1px solid rgba(148, 163, 184, 0.32) !important;
+  color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+.sealed-generate-btn:hover,
+.board-toolbar .sealed-tool:hover {
+  border-color: rgba(245, 158, 11, 0.65) !important;
+  color: #fef3c7 !important;
+}
 .cancel-btn { background: #ef4444; }
 .cancel-btn:hover:not(:disabled) { background: #dc2626; }
 
@@ -2269,7 +3162,7 @@ fetchMyBoards();
 
 .controls {
   background: #1e293b; padding: 15px 20px; border-radius: 16px; border: 1px solid #334155;
-  width: 100%; max-width: 450px; /* 与岩板同宽 */
+  width: 100%;
   display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
   margin-top: 20px; /* 与岩板间距 */
 }
@@ -2290,7 +3183,7 @@ fetchMyBoards();
   justify-content: center; align-items: center; padding: 0;
 }
 .wall-frame {
-  width: 450px; height: 650px; flex-shrink: 0; /* 防止岩板被压缩 */
+  width: auto; height: auto; flex-shrink: 0; /* 实际尺寸由 boardFrameStyle 根据模板动态控制 */
   background: #2a1e12; /* 木纹底色 */
   background-image: 
     repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 10px),
@@ -2298,6 +3191,36 @@ fetchMyBoards();
   border-radius: 15px; position: relative;
   box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.3); 
   border: 12px solid #1a120b;
+}
+.wall-frame.skin-wood-classic {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 10px),
+    radial-gradient(circle at 50% 50%, #3d2b1f 0%, #2a1e12 100%);
+}
+.wall-frame.skin-birch-studio {
+  background: #6b4a2f;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(6deg, rgba(245, 222, 179, 0.08) 0px, rgba(245, 222, 179, 0.08) 8px, transparent 8px, transparent 18px),
+    radial-gradient(circle at 50% 35%, #8b623d 0%, #4b321f 100%);
+  border-color: #27180e;
+}
+.wall-frame.skin-commercial-dark {
+  background: #1f2937;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.16), transparent 18%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 3px, transparent 3px, transparent 14px),
+    linear-gradient(180deg, #374151, #111827);
+  border-color: #020617;
+}
+.wall-frame.skin-competition-blue {
+  background: #1e3a5f;
+  background-image:
+    radial-gradient(circle at 75% 18%, rgba(56, 189, 248, 0.25), transparent 26%),
+    radial-gradient(circle at 15% 80%, rgba(14, 165, 233, 0.18), transparent 28%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 18px),
+    linear-gradient(180deg, #315b86, #172554);
+  border-color: #0f172a;
 }
 .wall-frame.is-empty-board { box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(16, 185, 129, 0.18), inset 0 0 60px rgba(0,0,0,0.3); }
 .blank-board-hint {
