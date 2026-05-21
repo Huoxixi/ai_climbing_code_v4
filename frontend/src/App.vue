@@ -1,5 +1,55 @@
 <template>
   <div class="symbiosis-app">
+    <header class="workspace-topbar">
+      <div class="topbar-brand-block">
+        <div class="topbar-logo">🧗</div>
+        <div>
+          <div class="topbar-kicker">AI Climbing Studio</div>
+          <h1>智能定线工作台</h1>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <span class="status-pill" :class="editorMode">{{ editorModeLabel }}</span>
+        <span class="status-pill subtle">{{ currentBoard.placed_holds.length }} 个岩点</span>
+        <span class="status-pill subtle">{{ unsavedChanges ? '有未保存修改' : '已同步到本地状态' }}</span>
+      </div>
+      <div class="user-entry">
+        <template v-if="currentUser">
+          <div class="user-avatar">{{ currentUser.name.slice(0, 1).toUpperCase() }}</div>
+          <div class="user-meta">
+            <strong>{{ currentUser.name }}</strong>
+            <span>云端同步接口已预留</span>
+          </div>
+          <button class="ghost-btn" @click="handleLogout">退出</button>
+        </template>
+        <template v-else>
+          <button class="login-btn" @click="showLoginDialog = true">登录 / 云端入口</button>
+        </template>
+      </div>
+    </header>
+
+    <div v-if="showLoginDialog" class="login-dialog-backdrop" @click.self="showLoginDialog = false">
+      <div class="login-dialog">
+        <div class="login-dialog-header">
+          <div>
+            <span>Account Portal</span>
+            <h2>登录入口预览</h2>
+          </div>
+          <button @click="showLoginDialog = false">✕</button>
+        </div>
+        <p class="login-note">当前为本地 Mock 登录。后续接入云数据库时，可直接替换为真实鉴权接口。</p>
+        <div class="field">
+          <label>邮箱</label>
+          <input v-model="loginForm.email" type="email" placeholder="setter@example.com" />
+        </div>
+        <div class="field">
+          <label>显示名称</label>
+          <input v-model="loginForm.name" type="text" placeholder="定线员名称" />
+        </div>
+        <button class="login-submit" @click="handleLogin">进入工作台</button>
+      </div>
+    </div>
+
     <div v-if="loading" class="loading-overlay">
       <div class="loading-content">
         <div class="progress-circle">
@@ -271,10 +321,7 @@
             </div>
 
             <div class="board-pool-list">
-              <div v-if="!routeData" class="board-pool-empty">
-                请先生成或载入一个岩板，再从这里拖拽岩点上墙。
-              </div>
-              <div v-else-if="filteredBoardPoolHolds.length === 0" class="board-pool-empty">
+              <div v-if="filteredBoardPoolHolds.length === 0" class="board-pool-empty">
                 当前分类下暂无可用岩点。
               </div>
               <div
@@ -312,18 +359,29 @@
           </div>
         </aside>
 
-        <div class="stage-header" v-if="routeData">
+        <div class="stage-header">
           <div class="route-info">
-            <h2>{{ routeData.route_name }}</h2>
-            <div class="commentary-card" v-if="routeData.setter_commentary">
+            <h2>{{ currentBoard.route_name }}</h2>
+            <div class="commentary-card" v-if="currentBoard.setter_commentary">
               <span class="quote-icon">"</span>
-              <p>{{ routeData.setter_commentary }}</p>
+              <p>{{ currentBoard.setter_commentary }}</p>
             </div>
           </div>
         </div>
 
+        <div class="board-toolbar">
+          <button @click="createNewBlankBoard">＋ 新建空白岩板</button>
+          <button @click="saveBoard" :disabled="!currentBoard.placed_holds.length">💾 保存当前岩板</button>
+          <button @click="clearCurrentBoard" :disabled="!currentBoard.placed_holds.length">🧹 清空岩板</button>
+          <button @click="generateRoute" :disabled="loading" class="primary-tool">🤖 AI 生成路线</button>
+        </div>
+
         <div class="wall-display">
-          <div class="wall-frame">
+          <div class="wall-frame" :class="{ 'is-empty-board': !placedHolds.length }">
+            <div v-if="!placedHolds.length" class="blank-board-hint">
+              <strong>空白岩板已就绪</strong>
+              <span>点击任意孔位可放置左侧预设岩点；也可以从快捷岩点池拖拽上墙。</span>
+            </div>
             <!-- 坐标轴 -->
             <div class="axis-x">
               <span v-for="x in 'ABCDEFGHIJK'.split('')" :key="x">{{ x }}</span>
@@ -335,7 +393,7 @@
             <div class="grid-backdrop">
               <template v-for="y in 18" :key="'y-'+y">
                 <div v-for="(x, xi) in 'ABCDEFGHIJK'.split('')" :key="x+y" 
-                     class="hole" :style="getCoord(x+y)"></div>
+                     class="hole" :style="getCoord(x+y)" @click.stop="placeDraftHoldAt(x+y)"></div>
               </template>
             </div>
 
@@ -381,7 +439,7 @@
           </div>
 
           <!-- 移到岩板下方 -->
-          <div class="controls" v-if="routeData">
+          <div class="controls">
             <div class="control-labels">
               <span class="step-counter">动作序列 {{ routeSteps.length > 0 ? currentIndex + 1 : 0 }} / {{ routeSteps.length }}</span>
               <span class="difficulty-tag">{{ profile.target_difficulty }}</span>
@@ -392,10 +450,10 @@
                     <button @click="activeRouteIndex = 0" :class="{ 'active': activeRouteIndex === 0 }" :disabled="allRoutes.length < 1">①</button>
                     <button @click="activeRouteIndex = 1" :class="{ 'active': activeRouteIndex === 1 }" :disabled="allRoutes.length < 2">②</button>
                 </div>
-                <button @click="saveBoard" class="save-board-btn" :disabled="!routeData">💾 {{ routeData?.saved_id ? '更新岩板' : '保存岩板' }}</button>
+                 <button @click="saveBoard" class="save-board-btn" :disabled="!currentBoard.placed_holds.length">💾 {{ currentBoard?.saved_id ? '更新岩板' : '保存岩板' }}</button>
             </div>
             <div v-if="isBetaEditorActive" class="beta-edit-hint">
-              <span>正在{{ betaEditModeLabel }}：选择 {{ getLimbName(betaEditor.selectedLimb) }}，然后点击岩板上已有岩点作为目标。</span>
+              <span>正在{{ betaEditModeLabel }}：{{ betaEditor.selectedLimb ? `选择 ${getLimbName(betaEditor.selectedLimb)}` : '请先选择左手/右手/左脚/右脚' }}，然后点击岩板上已有岩点作为目标。</span>
               <button @click="cancelBetaEdit">取消本次操作</button>
             </div>
           </div>
@@ -411,6 +469,7 @@
               <div class="field compact-field">
                 <label>当前编辑肢体</label>
                 <select v-model="betaEditor.selectedLimb">
+                  <option value="" disabled>请选择左手/右手/左脚/右脚</option>
                   <option v-for="limb in limbOptions" :key="limb" :value="limb">{{ getLimbName(limb) }}</option>
                 </select>
               </div>
@@ -453,6 +512,66 @@
           </section>
         </div>
       </aside>
+
+      <aside class="inspector-panel">
+        <section class="config-group">
+          <h3 class="group-title">🎛️ 岩板属性</h3>
+          <div class="field">
+            <label>岩板名称</label>
+            <input v-model="currentBoard.route_name" @input="markUnsaved" />
+          </div>
+          <div class="input-row">
+            <div class="field">
+              <label>来源</label>
+              <input :value="currentBoard.source_type || editorMode" disabled />
+            </div>
+            <div class="field">
+              <label>可见性</label>
+              <select v-model="currentBoard.visibility" @change="markUnsaved">
+                <option value="private">私有</option>
+                <option value="team">团队</option>
+                <option value="public">公开</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>备注 / 定线说明</label>
+            <textarea v-model="currentBoard.setter_commentary" @input="markUnsaved"></textarea>
+          </div>
+        </section>
+
+        <section class="config-group">
+          <h3 class="group-title">🧩 选中岩点</h3>
+          <div v-if="!selectedHold" class="pool-empty-state">点击岩板上的岩点后可编辑参数。</div>
+          <template v-else>
+            <div class="selected-hold-id">{{ selectedHold.id }}</div>
+            <div class="input-row">
+              <div class="field">
+                <label>类型</label>
+                <select v-model="selectedHold.hold_type" @change="syncSelectedHoldType">
+                  <option v-for="type in holdTypes" :key="type" :value="type">{{ type }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>形状</label>
+                <input v-model="selectedHold.variant" @input="markUnsaved" />
+              </div>
+            </div>
+            <div class="field">
+              <label>旋转：{{ Number(selectedHold.rotation || 0).toFixed(0) }}°</label>
+              <input type="range" min="0" max="360" step="5" v-model.number="selectedHold.rotation" @input="markUnsaved" />
+            </div>
+            <div class="field">
+              <label>缩放：{{ Number(selectedHold.scale || 1).toFixed(1) }}x</label>
+              <input type="range" min="0.5" max="2" step="0.1" v-model.number="selectedHold.scale" @input="markUnsaved" />
+            </div>
+            <div class="inspector-actions">
+              <button @click="toggleSelectedStart">{{ selectedHold.is_start ? '取消起步点' : '设为起步点' }}</button>
+              <button class="danger" @click="deletePlacedHold(selectedHold)">删除岩点</button>
+            </div>
+          </template>
+        </section>
+      </aside>
     </div>
   </div>
 </template>
@@ -460,11 +579,35 @@
 <script setup>
 import { ref, computed, reactive, watch } from 'vue'
 import axios from 'axios'
+import { useAuth } from './composables/useAuth'
+import { createBlankBoard } from './composables/useBoardEditor'
 
 // --- 基础状态 ---
 const isSidebarOpen = ref(true) // 控制侧边栏显隐
 const profile = ref({ height: 175, arm_span: 180, target_difficulty: 'V1', special_requirements: '' })
 const holdTypes = ['Jug', 'Crimp', 'Sloper', 'Pinch', 'Pocket', 'Foot']
+
+const { currentUser, login, logout } = useAuth()
+const showLoginDialog = ref(false)
+const loginForm = reactive({ email: '', name: '' })
+const manualBoard = ref(createBlankBoard())
+const unsavedChanges = ref(false)
+
+const handleLogin = async () => {
+  await login(loginForm)
+  showLoginDialog.value = false
+}
+
+const handleLogout = async () => {
+  await logout()
+}
+
+const markUnsaved = () => {
+  unsavedChanges.value = true
+  if (currentBoard.value) {
+    currentBoard.value.updated_at = new Date().toISOString()
+  }
+}
 
 // --- 🌟 岩点图片映射 ---
 const holdImageMap = reactive({})
@@ -646,6 +789,9 @@ const routeData = computed(() => allRoutes.value[activeRouteIndex.value] || null
 const savedBoards = ref([])
 const taskId = ref(null)
 const pollingTimer = ref(null)
+const currentBoard = computed(() => routeData.value || manualBoard.value)
+const editorMode = computed(() => routeData.value ? (routeData.value.source_type === 'manual' ? 'manual' : 'generated') : 'manual')
+const editorModeLabel = computed(() => editorMode.value === 'manual' ? '手动建板模式' : 'AI 生成结果模式')
 
 // 🌟 核心修复：用 currentIndex 取代 currentStep，强制按数组绝对索引逐个播放！
 const currentIndex = ref(0)
@@ -678,9 +824,14 @@ const pollForResult = async (id) => {
           const generationHoldPoolSnapshot = JSON.parse(JSON.stringify(holdPool.value));
           allRoutes.value = res.data.selected_routes.map(route => ({
             ...route,
+            source_type: 'ai-generated',
+            visibility: route.visibility || 'private',
+            tags: route.tags || [],
+            owner_id: currentUser.value?.id || route.owner_id || null,
             source_hold_pool: generationHoldPoolSnapshot
           }));
           activeRouteIndex.value = 0;
+          unsavedChanges.value = false;
           if (res.data.failure_suggestion) {
             error.value = res.data.failure_suggestion;
           }
@@ -789,8 +940,8 @@ const managedHolds = computed(() => {
   return holds.sort((a,b) => a.key.localeCompare(b.key));
 });
 
-const placedHolds = computed(() => routeData.value?.placed_holds || []);
-const routeSteps = computed(() => routeData.value?.beta_sequence || []);
+const placedHolds = computed(() => currentBoard.value?.placed_holds || []);
+const routeSteps = computed(() => currentBoard.value?.beta_sequence || []);
 
 const normalizePoolHold = (hold, index = 0, source = 'board') => {
   const type = hold.hold_type || hold.type;
@@ -828,7 +979,7 @@ const aggregateBoardPoolHolds = (holds, source = 'board') => {
 const boardGeneratedHoldPool = computed(() => {
   const sourceHolds = routeData.value?.source_hold_pool?.length
     ? routeData.value.source_hold_pool
-    : (holdPool.value.length ? holdPool.value : placedHolds.value);
+    : (holdPool.value.length ? holdPool.value : (placedHolds.value.length ? placedHolds.value : [draftHold]));
   return aggregateBoardPoolHolds(sourceHolds, 'board');
 });
 
@@ -913,6 +1064,78 @@ const getCoord = (id) => {
   const yIdx = parseInt(id.substring(1)) - 1
   return { left: `${8 + (xIdx / 10) * 84}%`, bottom: `${8 + (yIdx / 17) * 84}%` }
 }
+
+const makeHoldAt = (coord, source = draftHold) => {
+  const x = coord.charAt(0)
+  const y = Number(coord.slice(1))
+  const type = source.hold_type || source.type || 'Jug'
+  return {
+    id: coord,
+    x,
+    y,
+    hold_type: type,
+    type,
+    variant: source.variant || 'random',
+    rotation: Number(source.rotation ?? 0),
+    scale: Number(source.scale ?? 1),
+    is_start: false,
+  }
+}
+
+const placeHoldOnCurrentBoard = (coord, source = draftHold) => {
+  if (!currentBoard.value.placed_holds) currentBoard.value.placed_holds = []
+  const exists = currentBoard.value.placed_holds.some((hold) => hold.id === coord)
+  if (exists) {
+    alert(`孔位 ${coord} 已有岩点，请先移动或删除原岩点。`)
+    return null
+  }
+  const hold = makeHoldAt(coord, source)
+  currentBoard.value.placed_holds.push(hold)
+  selectedHold.value = hold
+  markUnsaved()
+  return hold
+}
+
+function placeDraftHoldAt(coord) {
+  if (isBetaEditorActive.value) return
+  placeHoldOnCurrentBoard(coord, draftHold)
+}
+
+function createNewBlankBoard() {
+  if (unsavedChanges.value && !confirm('当前岩板有未保存修改，确定新建空白岩板吗？')) return
+  allRoutes.value = []
+  activeRouteIndex.value = 0
+  currentIndex.value = 0
+  selectedHold.value = null
+  manualBoard.value = createBlankBoard({
+    route_name: '空白手动岩板',
+    owner_id: currentUser.value?.id || null,
+  })
+  unsavedChanges.value = false
+}
+
+function clearCurrentBoard() {
+  if (!currentBoard.value.placed_holds.length) return
+  if (!confirm('确定清空当前岩板上的所有岩点和动作序列吗？')) return
+  currentBoard.value.placed_holds = []
+  currentBoard.value.beta_sequence = []
+  selectedHold.value = null
+  currentIndex.value = 0
+  markUnsaved()
+}
+
+function syncSelectedHoldType() {
+  if (!selectedHold.value) return
+  selectedHold.value.type = selectedHold.value.hold_type
+  markUnsaved()
+}
+
+function toggleSelectedStart() {
+  if (!selectedHold.value) return
+  selectedHold.value.is_start = !selectedHold.value.is_start
+  markUnsaved()
+}
+
 const getShapeColor = (type) => ({ Jug: '#10b981', Crimp: '#ef4444', Sloper: '#f59e0b', Pinch: '#8b5cf6', Pocket: '#3b82f6', Foot: '#94a3b8' }[type] || '#10b981')
 const getLimbName = (limb) => ({ LH: '左手', RH: '右手', LF: '左脚', RF: '右脚' }[limb] || limb)
 const getLimbEmoji = (limb) => ({ LH: '✋', RH: '✋', LF: '🦶', RF: '🦶' }[limb] || limb)
@@ -933,10 +1156,10 @@ const betaEditModeLabel = computed(() => ({
 }[betaEditor.mode] || '编辑动作'))
 
 function startBetaEdit(mode, index) {
-  if (!routeData.value || index < 0 || index >= routeSteps.value.length) return
+  if (!currentBoard.value || index < 0 || index >= routeSteps.value.length) return
   betaEditor.mode = mode
   betaEditor.targetIndex = index
-  betaEditor.selectedLimb = routeSteps.value[index]?.limb || betaEditor.selectedLimb || 'LH'
+  betaEditor.selectedLimb = mode === 'edit' ? (routeSteps.value[index]?.limb || 'LH') : ''
   currentIndex.value = index
   if (autoPlayTimer) clearInterval(autoPlayTimer)
 }
@@ -961,8 +1184,8 @@ function createEditedStep(limb, holdId, fallbackIndex = 0) {
 }
 
 function normalizeBetaSequence(preferredIndex = currentIndex.value) {
-  if (!routeData.value) return
-  const sequence = routeData.value.beta_sequence || []
+  if (!currentBoard.value) return
+  const sequence = currentBoard.value.beta_sequence || []
   const limbs = { LH: null, RH: null, LF: null, RF: null }
 
   sequence.forEach((step, index) => {
@@ -984,8 +1207,12 @@ function normalizeBetaSequence(preferredIndex = currentIndex.value) {
 }
 
 function applyBetaEditToHold(hold) {
-  if (!routeData.value || !isBetaEditorActive.value || !hold?.id) return
-  const sequence = routeData.value.beta_sequence || []
+  if (!currentBoard.value || !isBetaEditorActive.value || !hold?.id) return
+  if (!limbOptions.includes(betaEditor.selectedLimb)) {
+    alert('请先选择要移动的四肢：左手、右手、左脚或右脚。')
+    return
+  }
+  const sequence = currentBoard.value.beta_sequence || []
   const targetIndex = betaEditor.targetIndex
   const newStep = createEditedStep(betaEditor.selectedLimb, hold.id, targetIndex)
 
@@ -1006,12 +1233,13 @@ function applyBetaEditToHold(hold) {
 }
 
 function deleteBetaStep(index) {
-  if (!routeData.value || index < 0 || index >= routeSteps.value.length) return
+  if (!currentBoard.value || index < 0 || index >= routeSteps.value.length) return
   const step = routeSteps.value[index]
   if (!confirm(`确定删除动作 ${step.step}: ${getLimbName(step.limb)} -> ${step.hold_id} 吗？`)) return
-  routeData.value.beta_sequence.splice(index, 1)
-  normalizeBetaSequence(Math.min(index, routeData.value.beta_sequence.length - 1))
+  currentBoard.value.beta_sequence.splice(index, 1)
+  normalizeBetaSequence(Math.min(index, currentBoard.value.beta_sequence.length - 1))
   cancelBetaEdit()
+  markUnsaved()
 }
 
 // --- Interactive Editor ---
@@ -1020,16 +1248,16 @@ const isFromTray = ref(false);
 const interaction = reactive({ type: null, startX: 0, startY: 0, startRotation: 0, startScale: 0 });
 
 function deletePlacedHold(hold) {
-  if (!routeData.value || !hold) return;
+  if (!currentBoard.value || !hold) return;
 
   const holdId = hold.id;
   if (!confirm(`确定删除岩板上的点 ${holdId} 吗？`)) {
     return;
   }
 
-  routeData.value.placed_holds = (routeData.value.placed_holds || []).filter(h => h.id !== holdId);
+  currentBoard.value.placed_holds = (currentBoard.value.placed_holds || []).filter(h => h.id !== holdId);
 
-  routeData.value.beta_sequence = (routeData.value.beta_sequence || [])
+  currentBoard.value.beta_sequence = (currentBoard.value.beta_sequence || [])
     .filter(step => step.hold_id !== holdId)
     .map(step => ({
       ...step,
@@ -1039,7 +1267,7 @@ function deletePlacedHold(hold) {
       rf: step.rf === holdId ? null : step.rf,
     }));
 
-  normalizeBetaSequence(Math.min(currentIndex.value, routeData.value.beta_sequence.length - 1));
+  normalizeBetaSequence(Math.min(currentIndex.value, currentBoard.value.beta_sequence.length - 1));
 
   if (selectedHold.value?.id === holdId) {
     selectedHold.value = null;
@@ -1049,6 +1277,7 @@ function deletePlacedHold(hold) {
   if (currentIndex.value > maxIndex.value) {
     currentIndex.value = maxIndex.value;
   }
+  markUnsaved()
 }
 
 function onHoldMouseDown(event, hold, fromTray = false) {
@@ -1060,9 +1289,9 @@ function onHoldMouseDown(event, hold, fromTray = false) {
   }
   
   if (fromTray) {
-    if (!routeData.value) return;
-    if (!Array.isArray(routeData.value.placed_holds)) {
-      routeData.value.placed_holds = [];
+    if (!currentBoard.value) return;
+    if (!Array.isArray(currentBoard.value.placed_holds)) {
+      currentBoard.value.placed_holds = [];
     }
     // 从托盘拖拽，创建一个副本
     const newHold = {
@@ -1075,9 +1304,10 @@ function onHoldMouseDown(event, hold, fromTray = false) {
       scale: Number(hold.scale ?? 1),
       x: 'A', y: 1
     };
-    routeData.value.placed_holds.push(newHold);
+    currentBoard.value.placed_holds.push(newHold);
     selectedHold.value = newHold;
     isFromTray.value = true;
+    markUnsaved()
   } else {
     selectedHold.value = hold;
     isFromTray.value = false;
@@ -1130,18 +1360,18 @@ function onMouseMove(event) {
       selectedHold.value.x = newX;
       selectedHold.value.y = safeYIdx;
 
-      if (routeData.value) {
-        routeData.value.beta_sequence.forEach(step => {
+      if (currentBoard.value) {
+        currentBoard.value.beta_sequence.forEach(step => {
           if (step.hold_id === oldId) step.hold_id = newId;
         });
         normalizeBetaSequence(currentIndex.value);
       }
+      markUnsaved()
     }
   }
 }
 
 function onMouseUp() {
-  selectedHold.value = null;
   interaction.type = null;
   window.removeEventListener('mousemove', onMouseMove);
   window.removeEventListener('mouseup', onMouseUp);
@@ -1158,19 +1388,23 @@ const fetchMyBoards = async () => {
 };
 
 const saveBoard = async () => {
-    if (!routeData.value) return;
+    if (!currentBoard.value?.placed_holds?.length) return;
+    const boardToSave = currentBoard.value;
+    boardToSave.owner_id = currentUser.value?.id || boardToSave.owner_id || null;
+    boardToSave.updated_at = new Date().toISOString();
     normalizeBetaSequence(currentIndex.value);
     try {
-        if (routeData.value.saved_id) {
-            await axios.put(`${API_BASE_URL}/api/my-boards/${routeData.value.saved_id}`, routeData.value);
+        if (boardToSave.saved_id) {
+            await axios.put(`${API_BASE_URL}/api/my-boards/${boardToSave.saved_id}`, boardToSave);
             alert('岩板更新成功!');
         } else {
-            const response = await axios.post(`${API_BASE_URL}/api/save-board`, routeData.value);
+            const response = await axios.post(`${API_BASE_URL}/api/save-board`, boardToSave);
             if (response.data?.saved_id) {
-                routeData.value.saved_id = response.data.saved_id;
+                boardToSave.saved_id = response.data.saved_id;
             }
             alert('岩板保存成功!');
         }
+        unsavedChanges.value = false;
         await fetchMyBoards(); // Refresh saved boards list
     } catch (error) {
         console.error("无法保存岩板:", error);
@@ -1271,7 +1505,76 @@ fetchMyBoards();
   font-family: 'Inter', -apple-system, sans-serif; overflow: hidden;
 }
 
-.main-layout { display: flex; height: 100%; position: relative; }
+.workspace-topbar {
+  height: 72px;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr minmax(260px, 360px);
+  align-items: center;
+  gap: 18px;
+  padding: 0 22px;
+  background: rgba(15, 23, 42, 0.88);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.22);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+  backdrop-filter: blur(14px);
+}
+.topbar-brand-block { display: flex; align-items: center; gap: 14px; }
+.topbar-logo {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  background: linear-gradient(135deg, #2563eb, #10b981);
+  border-radius: 14px; box-shadow: 0 12px 26px rgba(37, 99, 235, 0.28);
+  font-size: 1.35rem;
+}
+.topbar-kicker { color: #60a5fa; font-size: 0.72rem; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; }
+.topbar-brand-block h1 { margin: 2px 0 0; font-size: 1.15rem; letter-spacing: 0.5px; }
+.topbar-center { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.status-pill {
+  border: 1px solid rgba(59, 130, 246, 0.38);
+  background: rgba(37, 99, 235, 0.16);
+  color: #dbeafe;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.status-pill.manual { border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.16); color: #d1fae5; }
+.status-pill.generated { border-color: rgba(245, 158, 11, 0.48); background: rgba(245, 158, 11, 0.16); color: #fef3c7; }
+.status-pill.subtle { border-color: rgba(148, 163, 184, 0.2); background: rgba(30, 41, 59, 0.72); color: #cbd5e1; }
+.user-entry { display: flex; justify-content: flex-end; align-items: center; gap: 10px; min-width: 0; }
+.user-avatar {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: 50%; background: #3b82f6; color: white; font-weight: 900;
+}
+.user-meta { display: flex; flex-direction: column; min-width: 0; }
+.user-meta strong { font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-meta span { color: #94a3b8; font-size: 0.68rem; }
+.login-btn, .ghost-btn, .login-submit {
+  border: none; border-radius: 10px; cursor: pointer; font-weight: 900;
+}
+.login-btn, .login-submit {
+  padding: 10px 14px; color: #fff; background: linear-gradient(135deg, #2563eb, #7c3aed);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
+}
+.ghost-btn { padding: 8px 10px; background: #334155; color: #cbd5e1; }
+.login-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(2, 6, 23, 0.68);
+  display: grid; place-items: center; backdrop-filter: blur(8px);
+}
+.login-dialog {
+  width: 390px; padding: 22px;
+  background: linear-gradient(180deg, #1e293b, #0f172a);
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  border-radius: 22px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+}
+.login-dialog-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.login-dialog-header span { color: #60a5fa; font-size: 0.72rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; }
+.login-dialog-header h2 { margin: 4px 0 0; }
+.login-dialog-header button { background: #334155; color: #cbd5e1; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
+.login-note { color: #94a3b8; font-size: 0.82rem; line-height: 1.6; }
+.login-submit { width: 100%; margin-top: 8px; }
+
+.main-layout { display: flex; height: calc(100% - 72px); position: relative; }
 
 .sidebar {
   width: 350px; background: #1e293b;
@@ -1868,6 +2171,33 @@ fetchMyBoards();
 }
 .stage-header { display: flex; justify-content: center; text-align: center; align-items: flex-start; margin-bottom: 20px; gap: 20px; }
 
+.board-toolbar {
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: -4px 0 14px;
+  padding: 9px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  border-radius: 16px;
+}
+.board-toolbar button {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #cbd5e1;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.board-toolbar button:hover:not(:disabled) { transform: translateY(-1px); border-color: #60a5fa; color: #f8fafc; }
+.board-toolbar button:disabled { opacity: 0.45; cursor: not-allowed; }
+.board-toolbar .primary-tool { background: linear-gradient(135deg, #2563eb, #0891b2); color: white; border-color: transparent; }
+
 .route-info { flex: 1; }
 .route-info h2 { font-size: 1.8rem; margin: 0 0 15px 0; background: linear-gradient(90deg, #f8fafc, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
 
@@ -1969,6 +2299,23 @@ fetchMyBoards();
   box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.3); 
   border: 12px solid #1a120b;
 }
+.wall-frame.is-empty-board { box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(16, 185, 129, 0.18), inset 0 0 60px rgba(0,0,0,0.3); }
+.blank-board-hint {
+  position: absolute;
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 2;
+  width: 260px;
+  text-align: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.74);
+  border: 1px dashed rgba(16, 185, 129, 0.55);
+  border-radius: 18px;
+  color: #d1fae5;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+.blank-board-hint strong { display: block; margin-bottom: 8px; font-size: 1rem; }
+.blank-board-hint span { color: #a7f3d0; font-size: 0.78rem; line-height: 1.55; }
 
 /* 坐标轴样式 */
 .axis-x, .axis-y {
@@ -1981,7 +2328,10 @@ fetchMyBoards();
   position: absolute; width: 8px; height: 8px; 
   background: #1a120b; border-radius: 50%; transform: translate(-50%, 50%); 
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 1px 1px rgba(255,255,255,0.1);
+  cursor: copy;
+  transition: background 0.15s ease, box-shadow 0.15s ease, width 0.15s ease, height 0.15s ease;
 }
+.hole:hover { width: 13px; height: 13px; background: #10b981; box-shadow: 0 0 16px rgba(16,185,129,0.85); }
 
 .hold-entity { 
   position: absolute; transform: translate(-50%, 50%); z-index: 10; 
