@@ -1,0 +1,69 @@
+<template>
+  <div class="app-shell">
+    <aside class="nav-rail" aria-label="主导航">
+      <div class="brand-mark">
+        <Grid class="brand-icon" />
+      </div>
+      <button
+        v-for="item in items"
+        :key="item.key"
+        class="rail-item"
+        :class="{ active: active === item.key }"
+        :title="item.label"
+        @click="$emit('update:active', item.key)"
+      >
+        <component :is="item.icon" />
+        <span>{{ item.label }}</span>
+      </button>
+    </aside>
+
+    <div class="shell-main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Climbing Board Studio</p>
+          <h1>{{ title }}</h1>
+        </div>
+        <div class="topbar-status">
+          <span class="status-pill">{{ boardLabel }}</span>
+          <span class="status-pill">{{ holdCount }} 岩点</span>
+          <span class="status-pill" :class="{ dirty: dirty }">{{ dirty ? '未保存' : '已同步' }}</span>
+        </div>
+      </header>
+      <slot />
+    </div>
+
+    <nav class="mobile-tabs" aria-label="移动端导航">
+      <button
+        v-for="item in items"
+        :key="item.key"
+        :class="{ active: active === item.key }"
+        @click="$emit('update:active', item.key)"
+      >
+        <component :is="item.icon" />
+        <span>{{ item.short }}</span>
+      </button>
+    </nav>
+  </div>
+</template>
+
+<script setup>
+import { Collection, DataBoard, Grid, Histogram, Platform } from '@element-plus/icons-vue'
+
+defineProps({
+  active: { type: String, required: true },
+  title: { type: String, required: true },
+  boardLabel: { type: String, default: '未选择岩板' },
+  holdCount: { type: Number, default: 0 },
+  dirty: { type: Boolean, default: false },
+})
+
+defineEmits(['update:active'])
+
+const items = [
+  { key: 'dashboard', label: 'Dashboard', short: '总览', icon: DataBoard },
+  { key: 'studio', label: 'Studio', short: '工作台', icon: Platform },
+  { key: 'library', label: 'Hold Library', short: '岩点', icon: Collection },
+  { key: 'boards', label: 'Board Assets', short: '资产', icon: Grid },
+  { key: 'ai-lab', label: 'AI Lab', short: '实验室', icon: Histogram },
+]
+</script>
