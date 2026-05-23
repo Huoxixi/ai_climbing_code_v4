@@ -2,991 +2,1981 @@
   {
     "id": "A1",
     "x": "A",
-    "y": 1
+    "y": 1,
+    "x_mm": 220,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B1",
     "x": "B",
-    "y": 1
+    "y": 1,
+    "x_mm": 420,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C1",
     "x": "C",
-    "y": 1
+    "y": 1,
+    "x_mm": 620,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D1",
     "x": "D",
-    "y": 1
+    "y": 1,
+    "x_mm": 820,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E1",
     "x": "E",
-    "y": 1
+    "y": 1,
+    "x_mm": 1020,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F1",
     "x": "F",
-    "y": 1
+    "y": 1,
+    "x_mm": 1220,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G1",
     "x": "G",
-    "y": 1
+    "y": 1,
+    "x_mm": 1420,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H1",
     "x": "H",
-    "y": 1
+    "y": 1,
+    "x_mm": 1620,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I1",
     "x": "I",
-    "y": 1
+    "y": 1,
+    "x_mm": 1820,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J1",
     "x": "J",
-    "y": 1
+    "y": 1,
+    "x_mm": 2020,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K1",
     "x": "K",
-    "y": 1
+    "y": 1,
+    "x_mm": 2220,
+    "y_mm": 130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A2",
     "x": "A",
-    "y": 2
+    "y": 2,
+    "x_mm": 220,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B2",
     "x": "B",
-    "y": 2
+    "y": 2,
+    "x_mm": 420,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C2",
     "x": "C",
-    "y": 2
+    "y": 2,
+    "x_mm": 620,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D2",
     "x": "D",
-    "y": 2
+    "y": 2,
+    "x_mm": 820,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E2",
     "x": "E",
-    "y": 2
+    "y": 2,
+    "x_mm": 1020,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F2",
     "x": "F",
-    "y": 2
+    "y": 2,
+    "x_mm": 1220,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G2",
     "x": "G",
-    "y": 2
+    "y": 2,
+    "x_mm": 1420,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H2",
     "x": "H",
-    "y": 2
+    "y": 2,
+    "x_mm": 1620,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I2",
     "x": "I",
-    "y": 2
+    "y": 2,
+    "x_mm": 1820,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J2",
     "x": "J",
-    "y": 2
+    "y": 2,
+    "x_mm": 2020,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K2",
     "x": "K",
-    "y": 2
+    "y": 2,
+    "x_mm": 2220,
+    "y_mm": 330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A3",
     "x": "A",
-    "y": 3
+    "y": 3,
+    "x_mm": 220,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B3",
     "x": "B",
-    "y": 3
+    "y": 3,
+    "x_mm": 420,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C3",
     "x": "C",
-    "y": 3
+    "y": 3,
+    "x_mm": 620,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D3",
     "x": "D",
-    "y": 3
+    "y": 3,
+    "x_mm": 820,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E3",
     "x": "E",
-    "y": 3
+    "y": 3,
+    "x_mm": 1020,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F3",
     "x": "F",
-    "y": 3
+    "y": 3,
+    "x_mm": 1220,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G3",
     "x": "G",
-    "y": 3
+    "y": 3,
+    "x_mm": 1420,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H3",
     "x": "H",
-    "y": 3
+    "y": 3,
+    "x_mm": 1620,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I3",
     "x": "I",
-    "y": 3
+    "y": 3,
+    "x_mm": 1820,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J3",
     "x": "J",
-    "y": 3
+    "y": 3,
+    "x_mm": 2020,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K3",
     "x": "K",
-    "y": 3
+    "y": 3,
+    "x_mm": 2220,
+    "y_mm": 530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A4",
     "x": "A",
-    "y": 4
+    "y": 4,
+    "x_mm": 220,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B4",
     "x": "B",
-    "y": 4
+    "y": 4,
+    "x_mm": 420,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C4",
     "x": "C",
-    "y": 4
+    "y": 4,
+    "x_mm": 620,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D4",
     "x": "D",
-    "y": 4
+    "y": 4,
+    "x_mm": 820,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E4",
     "x": "E",
-    "y": 4
+    "y": 4,
+    "x_mm": 1020,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F4",
     "x": "F",
-    "y": 4
+    "y": 4,
+    "x_mm": 1220,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G4",
     "x": "G",
-    "y": 4
+    "y": 4,
+    "x_mm": 1420,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H4",
     "x": "H",
-    "y": 4
+    "y": 4,
+    "x_mm": 1620,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I4",
     "x": "I",
-    "y": 4
+    "y": 4,
+    "x_mm": 1820,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J4",
     "x": "J",
-    "y": 4
+    "y": 4,
+    "x_mm": 2020,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K4",
     "x": "K",
-    "y": 4
+    "y": 4,
+    "x_mm": 2220,
+    "y_mm": 730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A5",
     "x": "A",
-    "y": 5
+    "y": 5,
+    "x_mm": 220,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B5",
     "x": "B",
-    "y": 5
+    "y": 5,
+    "x_mm": 420,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C5",
     "x": "C",
-    "y": 5
+    "y": 5,
+    "x_mm": 620,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D5",
     "x": "D",
-    "y": 5
+    "y": 5,
+    "x_mm": 820,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E5",
     "x": "E",
-    "y": 5
+    "y": 5,
+    "x_mm": 1020,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F5",
     "x": "F",
-    "y": 5
+    "y": 5,
+    "x_mm": 1220,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G5",
     "x": "G",
-    "y": 5
+    "y": 5,
+    "x_mm": 1420,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H5",
     "x": "H",
-    "y": 5
+    "y": 5,
+    "x_mm": 1620,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I5",
     "x": "I",
-    "y": 5
+    "y": 5,
+    "x_mm": 1820,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J5",
     "x": "J",
-    "y": 5
+    "y": 5,
+    "x_mm": 2020,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K5",
     "x": "K",
-    "y": 5
+    "y": 5,
+    "x_mm": 2220,
+    "y_mm": 930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A6",
     "x": "A",
-    "y": 6
+    "y": 6,
+    "x_mm": 220,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B6",
     "x": "B",
-    "y": 6
+    "y": 6,
+    "x_mm": 420,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C6",
     "x": "C",
-    "y": 6
+    "y": 6,
+    "x_mm": 620,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D6",
     "x": "D",
-    "y": 6
+    "y": 6,
+    "x_mm": 820,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E6",
     "x": "E",
-    "y": 6
+    "y": 6,
+    "x_mm": 1020,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F6",
     "x": "F",
-    "y": 6
+    "y": 6,
+    "x_mm": 1220,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G6",
     "x": "G",
-    "y": 6
+    "y": 6,
+    "x_mm": 1420,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H6",
     "x": "H",
-    "y": 6
+    "y": 6,
+    "x_mm": 1620,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I6",
     "x": "I",
-    "y": 6
+    "y": 6,
+    "x_mm": 1820,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J6",
     "x": "J",
-    "y": 6
+    "y": 6,
+    "x_mm": 2020,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K6",
     "x": "K",
-    "y": 6
+    "y": 6,
+    "x_mm": 2220,
+    "y_mm": 1130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A7",
     "x": "A",
-    "y": 7
+    "y": 7,
+    "x_mm": 220,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B7",
     "x": "B",
-    "y": 7
+    "y": 7,
+    "x_mm": 420,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C7",
     "x": "C",
-    "y": 7
+    "y": 7,
+    "x_mm": 620,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D7",
     "x": "D",
-    "y": 7
+    "y": 7,
+    "x_mm": 820,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E7",
     "x": "E",
-    "y": 7
+    "y": 7,
+    "x_mm": 1020,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F7",
     "x": "F",
-    "y": 7
+    "y": 7,
+    "x_mm": 1220,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G7",
     "x": "G",
-    "y": 7
+    "y": 7,
+    "x_mm": 1420,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H7",
     "x": "H",
-    "y": 7
+    "y": 7,
+    "x_mm": 1620,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I7",
     "x": "I",
-    "y": 7
+    "y": 7,
+    "x_mm": 1820,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J7",
     "x": "J",
-    "y": 7
+    "y": 7,
+    "x_mm": 2020,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K7",
     "x": "K",
-    "y": 7
+    "y": 7,
+    "x_mm": 2220,
+    "y_mm": 1330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A8",
     "x": "A",
-    "y": 8
+    "y": 8,
+    "x_mm": 220,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B8",
     "x": "B",
-    "y": 8
+    "y": 8,
+    "x_mm": 420,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C8",
     "x": "C",
-    "y": 8
+    "y": 8,
+    "x_mm": 620,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D8",
     "x": "D",
-    "y": 8
+    "y": 8,
+    "x_mm": 820,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E8",
     "x": "E",
-    "y": 8
+    "y": 8,
+    "x_mm": 1020,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F8",
     "x": "F",
-    "y": 8
+    "y": 8,
+    "x_mm": 1220,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G8",
     "x": "G",
-    "y": 8
+    "y": 8,
+    "x_mm": 1420,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H8",
     "x": "H",
-    "y": 8
+    "y": 8,
+    "x_mm": 1620,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I8",
     "x": "I",
-    "y": 8
+    "y": 8,
+    "x_mm": 1820,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J8",
     "x": "J",
-    "y": 8
+    "y": 8,
+    "x_mm": 2020,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K8",
     "x": "K",
-    "y": 8
+    "y": 8,
+    "x_mm": 2220,
+    "y_mm": 1530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A9",
     "x": "A",
-    "y": 9
+    "y": 9,
+    "x_mm": 220,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B9",
     "x": "B",
-    "y": 9
+    "y": 9,
+    "x_mm": 420,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C9",
     "x": "C",
-    "y": 9
+    "y": 9,
+    "x_mm": 620,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D9",
     "x": "D",
-    "y": 9
+    "y": 9,
+    "x_mm": 820,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E9",
     "x": "E",
-    "y": 9
+    "y": 9,
+    "x_mm": 1020,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F9",
     "x": "F",
-    "y": 9
+    "y": 9,
+    "x_mm": 1220,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G9",
     "x": "G",
-    "y": 9
+    "y": 9,
+    "x_mm": 1420,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H9",
     "x": "H",
-    "y": 9
+    "y": 9,
+    "x_mm": 1620,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I9",
     "x": "I",
-    "y": 9
+    "y": 9,
+    "x_mm": 1820,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J9",
     "x": "J",
-    "y": 9
+    "y": 9,
+    "x_mm": 2020,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K9",
     "x": "K",
-    "y": 9
+    "y": 9,
+    "x_mm": 2220,
+    "y_mm": 1730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A10",
     "x": "A",
-    "y": 10
+    "y": 10,
+    "x_mm": 220,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B10",
     "x": "B",
-    "y": 10
+    "y": 10,
+    "x_mm": 420,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C10",
     "x": "C",
-    "y": 10
+    "y": 10,
+    "x_mm": 620,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D10",
     "x": "D",
-    "y": 10
+    "y": 10,
+    "x_mm": 820,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E10",
     "x": "E",
-    "y": 10
+    "y": 10,
+    "x_mm": 1020,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F10",
     "x": "F",
-    "y": 10
+    "y": 10,
+    "x_mm": 1220,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G10",
     "x": "G",
-    "y": 10
+    "y": 10,
+    "x_mm": 1420,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H10",
     "x": "H",
-    "y": 10
+    "y": 10,
+    "x_mm": 1620,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I10",
     "x": "I",
-    "y": 10
+    "y": 10,
+    "x_mm": 1820,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J10",
     "x": "J",
-    "y": 10
+    "y": 10,
+    "x_mm": 2020,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K10",
     "x": "K",
-    "y": 10
+    "y": 10,
+    "x_mm": 2220,
+    "y_mm": 1930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A11",
     "x": "A",
-    "y": 11
+    "y": 11,
+    "x_mm": 220,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B11",
     "x": "B",
-    "y": 11
+    "y": 11,
+    "x_mm": 420,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C11",
     "x": "C",
-    "y": 11
+    "y": 11,
+    "x_mm": 620,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D11",
     "x": "D",
-    "y": 11
+    "y": 11,
+    "x_mm": 820,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E11",
     "x": "E",
-    "y": 11
+    "y": 11,
+    "x_mm": 1020,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F11",
     "x": "F",
-    "y": 11
+    "y": 11,
+    "x_mm": 1220,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G11",
     "x": "G",
-    "y": 11
+    "y": 11,
+    "x_mm": 1420,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H11",
     "x": "H",
-    "y": 11
+    "y": 11,
+    "x_mm": 1620,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I11",
     "x": "I",
-    "y": 11
+    "y": 11,
+    "x_mm": 1820,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J11",
     "x": "J",
-    "y": 11
+    "y": 11,
+    "x_mm": 2020,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K11",
     "x": "K",
-    "y": 11
+    "y": 11,
+    "x_mm": 2220,
+    "y_mm": 2130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A12",
     "x": "A",
-    "y": 12
+    "y": 12,
+    "x_mm": 220,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B12",
     "x": "B",
-    "y": 12
+    "y": 12,
+    "x_mm": 420,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C12",
     "x": "C",
-    "y": 12
+    "y": 12,
+    "x_mm": 620,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D12",
     "x": "D",
-    "y": 12
+    "y": 12,
+    "x_mm": 820,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E12",
     "x": "E",
-    "y": 12
+    "y": 12,
+    "x_mm": 1020,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F12",
     "x": "F",
-    "y": 12
+    "y": 12,
+    "x_mm": 1220,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G12",
     "x": "G",
-    "y": 12
+    "y": 12,
+    "x_mm": 1420,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H12",
     "x": "H",
-    "y": 12
+    "y": 12,
+    "x_mm": 1620,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I12",
     "x": "I",
-    "y": 12
+    "y": 12,
+    "x_mm": 1820,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J12",
     "x": "J",
-    "y": 12
+    "y": 12,
+    "x_mm": 2020,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K12",
     "x": "K",
-    "y": 12
+    "y": 12,
+    "x_mm": 2220,
+    "y_mm": 2330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A13",
     "x": "A",
-    "y": 13
+    "y": 13,
+    "x_mm": 220,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B13",
     "x": "B",
-    "y": 13
+    "y": 13,
+    "x_mm": 420,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C13",
     "x": "C",
-    "y": 13
+    "y": 13,
+    "x_mm": 620,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D13",
     "x": "D",
-    "y": 13
+    "y": 13,
+    "x_mm": 820,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E13",
     "x": "E",
-    "y": 13
+    "y": 13,
+    "x_mm": 1020,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F13",
     "x": "F",
-    "y": 13
+    "y": 13,
+    "x_mm": 1220,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G13",
     "x": "G",
-    "y": 13
+    "y": 13,
+    "x_mm": 1420,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H13",
     "x": "H",
-    "y": 13
+    "y": 13,
+    "x_mm": 1620,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I13",
     "x": "I",
-    "y": 13
+    "y": 13,
+    "x_mm": 1820,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J13",
     "x": "J",
-    "y": 13
+    "y": 13,
+    "x_mm": 2020,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K13",
     "x": "K",
-    "y": 13
+    "y": 13,
+    "x_mm": 2220,
+    "y_mm": 2530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A14",
     "x": "A",
-    "y": 14
+    "y": 14,
+    "x_mm": 220,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B14",
     "x": "B",
-    "y": 14
+    "y": 14,
+    "x_mm": 420,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C14",
     "x": "C",
-    "y": 14
+    "y": 14,
+    "x_mm": 620,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D14",
     "x": "D",
-    "y": 14
+    "y": 14,
+    "x_mm": 820,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E14",
     "x": "E",
-    "y": 14
+    "y": 14,
+    "x_mm": 1020,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F14",
     "x": "F",
-    "y": 14
+    "y": 14,
+    "x_mm": 1220,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G14",
     "x": "G",
-    "y": 14
+    "y": 14,
+    "x_mm": 1420,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H14",
     "x": "H",
-    "y": 14
+    "y": 14,
+    "x_mm": 1620,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I14",
     "x": "I",
-    "y": 14
+    "y": 14,
+    "x_mm": 1820,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J14",
     "x": "J",
-    "y": 14
+    "y": 14,
+    "x_mm": 2020,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K14",
     "x": "K",
-    "y": 14
+    "y": 14,
+    "x_mm": 2220,
+    "y_mm": 2730,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A15",
     "x": "A",
-    "y": 15
+    "y": 15,
+    "x_mm": 220,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B15",
     "x": "B",
-    "y": 15
+    "y": 15,
+    "x_mm": 420,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C15",
     "x": "C",
-    "y": 15
+    "y": 15,
+    "x_mm": 620,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D15",
     "x": "D",
-    "y": 15
+    "y": 15,
+    "x_mm": 820,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E15",
     "x": "E",
-    "y": 15
+    "y": 15,
+    "x_mm": 1020,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F15",
     "x": "F",
-    "y": 15
+    "y": 15,
+    "x_mm": 1220,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G15",
     "x": "G",
-    "y": 15
+    "y": 15,
+    "x_mm": 1420,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H15",
     "x": "H",
-    "y": 15
+    "y": 15,
+    "x_mm": 1620,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I15",
     "x": "I",
-    "y": 15
+    "y": 15,
+    "x_mm": 1820,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J15",
     "x": "J",
-    "y": 15
+    "y": 15,
+    "x_mm": 2020,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K15",
     "x": "K",
-    "y": 15
+    "y": 15,
+    "x_mm": 2220,
+    "y_mm": 2930,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A16",
     "x": "A",
-    "y": 16
+    "y": 16,
+    "x_mm": 220,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B16",
     "x": "B",
-    "y": 16
+    "y": 16,
+    "x_mm": 420,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C16",
     "x": "C",
-    "y": 16
+    "y": 16,
+    "x_mm": 620,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D16",
     "x": "D",
-    "y": 16
+    "y": 16,
+    "x_mm": 820,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E16",
     "x": "E",
-    "y": 16
+    "y": 16,
+    "x_mm": 1020,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F16",
     "x": "F",
-    "y": 16
+    "y": 16,
+    "x_mm": 1220,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G16",
     "x": "G",
-    "y": 16
+    "y": 16,
+    "x_mm": 1420,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H16",
     "x": "H",
-    "y": 16
+    "y": 16,
+    "x_mm": 1620,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I16",
     "x": "I",
-    "y": 16
+    "y": 16,
+    "x_mm": 1820,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J16",
     "x": "J",
-    "y": 16
+    "y": 16,
+    "x_mm": 2020,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K16",
     "x": "K",
-    "y": 16
+    "y": 16,
+    "x_mm": 2220,
+    "y_mm": 3130,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A17",
     "x": "A",
-    "y": 17
+    "y": 17,
+    "x_mm": 220,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B17",
     "x": "B",
-    "y": 17
+    "y": 17,
+    "x_mm": 420,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C17",
     "x": "C",
-    "y": 17
+    "y": 17,
+    "x_mm": 620,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D17",
     "x": "D",
-    "y": 17
+    "y": 17,
+    "x_mm": 820,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E17",
     "x": "E",
-    "y": 17
+    "y": 17,
+    "x_mm": 1020,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F17",
     "x": "F",
-    "y": 17
+    "y": 17,
+    "x_mm": 1220,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G17",
     "x": "G",
-    "y": 17
+    "y": 17,
+    "x_mm": 1420,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H17",
     "x": "H",
-    "y": 17
+    "y": 17,
+    "x_mm": 1620,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I17",
     "x": "I",
-    "y": 17
+    "y": 17,
+    "x_mm": 1820,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J17",
     "x": "J",
-    "y": 17
+    "y": 17,
+    "x_mm": 2020,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K17",
     "x": "K",
-    "y": 17
+    "y": 17,
+    "x_mm": 2220,
+    "y_mm": 3330,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "A18",
     "x": "A",
-    "y": 18
+    "y": 18,
+    "x_mm": 220,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "B18",
     "x": "B",
-    "y": 18
+    "y": 18,
+    "x_mm": 420,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "C18",
     "x": "C",
-    "y": 18
+    "y": 18,
+    "x_mm": 620,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "D18",
     "x": "D",
-    "y": 18
+    "y": 18,
+    "x_mm": 820,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "E18",
     "x": "E",
-    "y": 18
+    "y": 18,
+    "x_mm": 1020,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "F18",
     "x": "F",
-    "y": 18
+    "y": 18,
+    "x_mm": 1220,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "G18",
     "x": "G",
-    "y": 18
+    "y": 18,
+    "x_mm": 1420,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "H18",
     "x": "H",
-    "y": 18
+    "y": 18,
+    "x_mm": 1620,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "I18",
     "x": "I",
-    "y": 18
+    "y": 18,
+    "x_mm": 1820,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "J18",
     "x": "J",
-    "y": 18
+    "y": 18,
+    "x_mm": 2020,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   },
   {
     "id": "K18",
     "x": "K",
-    "y": 18
+    "y": 18,
+    "x_mm": 2220,
+    "y_mm": 3530,
+    "unit": "mm",
+    "hole_spacing_x_mm": 200,
+    "hole_spacing_y_mm": 200
   }
 ]

@@ -1,24 +1,30 @@
-# backend/generate_wall.py
 import json
+from pathlib import Path
+import sys
 
-# 定义 11x18 标准矩阵
-X_AXIS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
-Y_AXIS = list(range(1, 19)) # 1 到 18
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
-holes = []
+from core.board_spec import DEFAULT_BOARD_SPEC
 
-# 生成纯净的孔位网格，不包含任何岩点类型和角度
-for y in Y_AXIS:
-    for x in X_AXIS:
-        hole = {
-            "id": f"{x}{y}",
-            "x": x,
-            "y": y
-        }
-        holes.append(hole)
 
-# 写入 JSON 数据库，建议改名为 empty_wall_grid.json 以示区分
-with open("empty_wall_grid.json", "w", encoding="utf-8") as f:
-    json.dump(holes, f, indent=2, ensure_ascii=False)
+def build_empty_wall():
+    holes = []
+    for y in range(1, DEFAULT_BOARD_SPEC.rows + 1):
+        for x in DEFAULT_BOARD_SPEC.x_labels:
+            holes.append({
+                "id": f"{x}{y}",
+                "x": x,
+                "y": y,
+                **DEFAULT_BOARD_SPEC.coord_to_mm(x, y),
+                "unit": DEFAULT_BOARD_SPEC.unit,
+                "hole_spacing_x_mm": DEFAULT_BOARD_SPEC.hole_spacing_x_mm,
+                "hole_spacing_y_mm": DEFAULT_BOARD_SPEC.hole_spacing_y_mm,
+            })
+    return holes
 
-print(f"✅ 创世成功！一面包含 {len(holes)} 个纯净孔位的标准矩阵墙已写入 empty_wall_grid.json")
+
+if __name__ == "__main__":
+    output_path = ROOT / "data" / "empty_wall_grid.json"
+    output_path.write_text(json.dumps(build_empty_wall(), indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Wrote {DEFAULT_BOARD_SPEC.total_holes} holes to {output_path}")

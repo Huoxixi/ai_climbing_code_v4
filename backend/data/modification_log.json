@@ -116,5 +116,20 @@
       "人工修正 Beta 后必须持久化保存，否则刷新或重新加载收藏岩板会丢失修改",
       "动作播放依赖每一步的肢体快照，编辑后必须重算以保证骨架和游标显示一致"
     ]
+  },
+  {
+    "timestamp": "2026-05-23T00:00:00+08:00",
+    "module": "frontend/src/constants/boardTemplates.js, frontend/src/components/BoardCanvas.vue, backend/core/board_spec.py, backend/data/empty_wall_grid.json",
+    "changes": [
+      "扩展 board_spec 为毫米制物理规格，包含孔距、岩板宽高、网格宽高、边距、角度、总孔位和参考体系",
+      "前端多模板规格从视觉像素改为真实毫米数据，并在画布上显示宽高、孔距、角度和孔位数量",
+      "后端生成器、验证器和 A* 求解器统一读取 DEFAULT_BOARD_SPEC，避免 11x18 与 0.2m 继续分散硬编码",
+      "empty_wall_grid.json 为每个孔位补充 x_mm/y_mm 与孔距字段"
+    ],
+    "reason": [
+      "用户要求岩板不能只数格子，必须明确标准岩板长宽、孔距和物理坐标",
+      "系统当前算法已隐含 200mm 孔距，本次将该假设显式化并与前端显示保持一致",
+      "保留 11x18 默认 AI 板以兼容历史生成逻辑，同时允许多模板作为手动建板规格"
+    ]
   }
 ]

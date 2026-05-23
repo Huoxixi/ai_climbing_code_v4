@@ -6,6 +6,7 @@ backend/core/generator.py
 import random
 from typing import List, Dict, Tuple, Set, Optional
 from collections import Counter
+from core.board_spec import DEFAULT_BOARD_SPEC
 from core.models import Hold, HoldType, RecipeItem, HoldSpec
 
 class RouteGenerator:
@@ -13,9 +14,10 @@ class RouteGenerator:
     基于配方生成高密度候选点阵图 (Board)。
     """
     def __init__(self):
-        self.GRID_WIDTH = 11  # A-K
-        self.GRID_HEIGHT = 18 # 1-18
-        self.X_LABELS = [chr(ord('A') + i) for i in range(self.GRID_WIDTH)]
+        self.board_spec = DEFAULT_BOARD_SPEC
+        self.GRID_WIDTH = self.board_spec.columns
+        self.GRID_HEIGHT = self.board_spec.rows
+        self.X_LABELS = self.board_spec.x_labels
 
     def _build_hold_spec_buckets(self, hold_pool: List[HoldSpec]) -> Dict[HoldType, List[HoldSpec]]:
         """按类型分组实例池，便于后续按类型顺序消费"""

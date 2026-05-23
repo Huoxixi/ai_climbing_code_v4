@@ -34,7 +34,7 @@
         >
           <span>{{ template.cellLabel }}</span>
           <strong>{{ template.label }}</strong>
-          <small>{{ template.angleLabel }}</small>
+          <small>{{ template.physicalLabel }} / {{ template.spacingLabel }}</small>
         </button>
       </div>
 
@@ -46,7 +46,10 @@
         </div>
         <div class="template-detail-meta">
           <span>{{ selectedDashboardTemplate.cellLabel }}</span>
+          <span>{{ selectedDashboardTemplate.physicalLabel }}</span>
+          <span>孔距 {{ selectedDashboardTemplate.spacingLabel }}</span>
           <span>{{ selectedDashboardTemplate.angleLabel }}</span>
+          <span>{{ selectedDashboardTemplate.total_holes }} 孔</span>
           <span>{{ selectedDashboardTemplate.material }}</span>
         </div>
         <el-button type="primary" :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">
@@ -73,6 +76,8 @@
           </div>
           <div class="state-list">
             <span>岩板：{{ studio.currentBoardSpec.cellLabel }}</span>
+            <span>规格：{{ studio.currentBoardSpec.physicalLabel }}</span>
+            <span>孔距：{{ studio.currentBoardSpec.spacingLabel }}</span>
             <span>材质：{{ studio.currentBoardSpec.material }}</span>
             <span>模式：手动模拟建板</span>
           </div>
@@ -125,6 +130,7 @@
           :holds="studio.placedHolds"
           :route-steps="studio.routeSteps"
           :selected-hold="studio.selectedHold"
+          :board-spec="studio.currentBoardSpec"
           :frame-style="studio.boardFrameStyle"
           :get-coord-style="studio.getCoordStyle"
           :resolve-hold-visual="library.resolveHoldVisual"
@@ -222,8 +228,23 @@
     </section>
 
     <section v-else class="page ai-page">
-      <div class="lab-panel">
+      <div class="lab-panel" :class="{ locked: !aiLabUnlocked }">
         <p class="eyebrow">AI Lab</p>
+        <template v-if="!aiLabUnlocked">
+          <h2 class="lab-title">实验室入口</h2>
+          <p class="lab-copy">这里用于提交当前岩板给 AI 生成实验。进入前需要输入访问密码。</p>
+          <div class="lab-login">
+            <el-input
+              v-model="aiLabPassword"
+              type="password"
+              show-password
+              placeholder="请输入实验室密码"
+              @keyup.enter="unlockAiLab"
+            />
+            <el-button type="primary" @click="unlockAiLab">进入实验室</el-button>
+            <el-button @click="activePage = 'studio'">返回 Studio</el-button>
+          </div>
+        </template>
         <h2>实验室入口</h2>
         <div class="command-row">
           <el-button type="primary" :loading="routeGen.loading" @click="runAiExperiment">用当前岩板试验生成</el-button>
@@ -255,6 +276,8 @@ const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
+const aiLabPassword = ref('')
+const aiLabUnlocked = ref(false)
 
 const pageTitle = computed(() => ({
   dashboard: '总览',
@@ -337,6 +360,16 @@ function onUploadFile(uploadFile) {
 
 function removeUploadFile() {
   library.uploadInfo.file = null
+}
+
+function unlockAiLab() {
+  if (aiLabPassword.value === 'DXY666') {
+    aiLabUnlocked.value = true
+    aiLabPassword.value = ''
+    ElMessage.success('实验室已解锁')
+    return
+  }
+  ElMessage.error('实验室密码不正确')
 }
 
 function runAiExperiment() {

@@ -20,9 +20,13 @@ export function useStudioEditor() {
   const boardFrameStyle = computed(() => {
     const spec = currentBoardSpec.value
     return {
-      '--board-ratio': `${spec.width || 560} / ${spec.height || 760}`,
+      '--board-ratio': `${spec.board_width_mm || spec.width || 560} / ${spec.board_height_mm || spec.height || 760}`,
       '--board-columns': spec.columns,
       '--board-rows': spec.rows,
+      '--grid-left': `${(Number(spec.margin_left_mm || 0) / Number(spec.board_width_mm || spec.width || 1)) * 100}%`,
+      '--grid-right': `${(Number(spec.margin_right_mm || 0) / Number(spec.board_width_mm || spec.width || 1)) * 100}%`,
+      '--grid-bottom': `${(Number(spec.margin_bottom_mm || 0) / Number(spec.board_height_mm || spec.height || 1)) * 100}%`,
+      '--grid-top': `${(Number(spec.margin_top_mm || 0) / Number(spec.board_height_mm || spec.height || 1)) * 100}%`,
     }
   })
 
@@ -40,11 +44,14 @@ export function useStudioEditor() {
     const { column, row } = getCoordParts(coord)
     const xIndex = coordinateColumns.value.indexOf(column)
     const yIndex = coordinateRows.value.indexOf(row)
-    const maxX = Math.max(1, currentBoardSpec.value.columns - 1)
-    const maxY = Math.max(1, currentBoardSpec.value.rows - 1)
+    const spec = currentBoardSpec.value
+    const boardWidth = Number(spec.board_width_mm || spec.width || 1)
+    const boardHeight = Number(spec.board_height_mm || spec.height || 1)
+    const xMm = Number(spec.margin_left_mm || 0) + Math.max(0, xIndex) * Number(spec.hole_spacing_x_mm || 200)
+    const yMm = Number(spec.margin_bottom_mm || 0) + Math.max(0, yIndex) * Number(spec.hole_spacing_y_mm || 200)
     return {
-      left: `${8 + (Math.max(0, xIndex) / maxX) * 84}%`,
-      bottom: `${8 + (Math.max(0, yIndex) / maxY) * 84}%`,
+      left: `${(xMm / boardWidth) * 100}%`,
+      bottom: `${(yMm / boardHeight) * 100}%`,
     }
   }
 

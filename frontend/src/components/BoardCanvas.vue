@@ -1,6 +1,9 @@
 <template>
   <div class="canvas-wrap">
     <div class="board-frame" :style="frameStyle">
+      <div class="dimension-label dimension-label-top">宽 {{ boardSpec.board_width_mm }}mm</div>
+      <div class="dimension-label dimension-label-side">高 {{ boardSpec.board_height_mm }}mm</div>
+      <div class="dimension-label dimension-label-spacing">孔距 {{ boardSpec.hole_spacing_x_mm }}mm</div>
       <div class="axis axis-x">
         <span v-for="column in columns" :key="column">{{ column }}</span>
       </div>
@@ -49,6 +52,7 @@ const props = defineProps({
   holds: { type: Array, default: () => [] },
   routeSteps: { type: Array, default: () => [] },
   selectedHold: { type: Object, default: null },
+  boardSpec: { type: Object, required: true },
   frameStyle: { type: Object, default: () => ({}) },
   getCoordStyle: { type: Function, required: true },
   resolveHoldVisual: { type: Function, required: true },

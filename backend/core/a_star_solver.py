@@ -6,6 +6,7 @@ backend/core/a_star_solver.py
 import math
 import heapq
 from typing import List, Dict, Tuple, Optional, Set
+from core.board_spec import DEFAULT_BOARD_SPEC
 from core.models import Hold, HoldType, Limb, BetaStep, RouteCandidate
 
 class State:
@@ -54,9 +55,10 @@ class AStarSolver:
     def __init__(self, climber_height_cm: int, climber_span_cm: int):
         self.height_m = climber_height_cm / 100.0
         self.span_m = climber_span_cm / 100.0
-        self.GRID_SPACING = 0.2
-        self.GRID_HEIGHT = 18
-        self.GRID_WIDTH = 11
+        self.board_spec = DEFAULT_BOARD_SPEC
+        self.GRID_SPACING = self.board_spec.hole_spacing_m
+        self.GRID_HEIGHT = self.board_spec.rows
+        self.GRID_WIDTH = self.board_spec.columns
 
         # 稳定性参数：用于抑制“大字型横向发力”和“双脚上下断层”
         self.SOFT_HAND_SPAN_LIMIT = 4
