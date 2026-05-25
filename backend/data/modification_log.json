@@ -86,50 +86,5 @@
       "用户要求脚在移动时垂直跨度不能超过4格",
       "通过搜索阶段硬拦截可避免产生超跨度脚步动作，同时保留多步连续提脚的可行上升路径"
     ]
-  },
-  {
-    "timestamp": "2026-04-28T19:39:00+08:00",
-    "module": "backend/core/a_star_solver.py",
-    "changes": [
-      "将 MAX_FOOT_MOVE_VERTICAL_DELTA 从 4 收紧为 3",
-      "单次脚步上提拦截阈值同步收紧为 target_y-current_y > 3 直接跳过"
-    ],
-    "reason": [
-      "用户要求进一步降低单次脚垂直移动最大距离",
-      "更小的单步上提跨度可减少大幅提脚动作，提升动作连续性与稳定性"
-    ]
-  },
-  {
-    "timestamp": "2026-04-28T19:58:00+08:00",
-    "module": "frontend/src/App.vue, backend/main.py",
-    "changes": [
-      "新增前端 Beta 动作序列编辑器：支持修改动作、在动作前/后插入新动作、删除动作",
-      "新增按肢体选择岩板已有岩点的交互：用户可指定 LH/RH/LF/RF 移动到某个已有点",
-      "调整前插/后插交互：插入新动作时不再默认沿用当前动作肢体，必须显式选择 LH/RH/LF/RF",
-      "新增 beta_sequence 规范化逻辑：编辑后自动重排 step、重算 lh/rh/lf/rf 快照，并维护最后一步 is_top",
-      "扩展保存逻辑：新岩板保存后回填 saved_id，已保存岩板可通过 PUT /api/my-boards/{saved_id} 覆盖更新完整内容",
-      "后端 PUT /api/my-boards/{saved_id} 兼容仅重命名与完整岩板更新两种请求"
-    ],
-    "reason": [
-      "用户需要在生成后的攀爬动作序列之间人工加入新动作或更改已有动作",
-      "插入新动作属于新增动作意图，默认沿用当前手/脚容易造成误插，因此需要强制用户明确选择四肢",
-      "人工修正 Beta 后必须持久化保存，否则刷新或重新加载收藏岩板会丢失修改",
-      "动作播放依赖每一步的肢体快照，编辑后必须重算以保证骨架和游标显示一致"
-    ]
-  },
-  {
-    "timestamp": "2026-05-23T00:00:00+08:00",
-    "module": "frontend/src/constants/boardTemplates.js, frontend/src/components/BoardCanvas.vue, backend/core/board_spec.py, backend/data/empty_wall_grid.json",
-    "changes": [
-      "扩展 board_spec 为毫米制物理规格，包含孔距、岩板宽高、网格宽高、边距、角度、总孔位和参考体系",
-      "前端多模板规格从视觉像素改为真实毫米数据，并在画布上显示宽高、孔距、角度和孔位数量",
-      "后端生成器、验证器和 A* 求解器统一读取 DEFAULT_BOARD_SPEC，避免 11x18 与 0.2m 继续分散硬编码",
-      "empty_wall_grid.json 为每个孔位补充 x_mm/y_mm 与孔距字段"
-    ],
-    "reason": [
-      "用户要求岩板不能只数格子，必须明确标准岩板长宽、孔距和物理坐标",
-      "系统当前算法已隐含 200mm 孔距，本次将该假设显式化并与前端显示保持一致",
-      "保留 11x18 默认 AI 板以兼容历史生成逻辑，同时允许多模板作为手动建板规格"
-    ]
   }
 ]

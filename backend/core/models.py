@@ -79,7 +79,6 @@ class FinalRoute(BaseModel):
     saved_id: Optional[str] = Field(None, description="收藏后的唯一ID")
     route_name: str
     setter_commentary: str
-    board_spec: Optional[Dict[str, Any]] = Field(None, description="岩板物理规格快照")
     placed_holds: List[Hold]
     beta_sequence: List[BetaStep]
 

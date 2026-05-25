@@ -15,7 +15,6 @@ from core.state import active_tasks
 
 from core.config import settings
 from core.models import RouteRequest, RouteResponse, RouteCandidate, HoldType, FinalRoute
-from core.board_spec import DEFAULT_BOARD_SPEC
 from core.generator import RouteGenerator
 from core.a_star_solver import AStarSolver
 from core.validator import PhysicsValidator
@@ -208,7 +207,6 @@ async def generate_route_with_reflection(request: RouteRequest, task_id: str) ->
         final_routes.append(FinalRoute(
             route_name=selection["name"],
             setter_commentary=selection["comment"],
-            board_spec=DEFAULT_BOARD_SPEC.to_snapshot(),
             placed_holds=final_holds,
             beta_sequence=c.beta_sequence
         ))

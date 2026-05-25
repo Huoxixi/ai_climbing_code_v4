@@ -1,1 +1,16 @@
-{}
+{
+  "Jug": {
+    "Jug classic 1": "/images/3b128731-01cc-4895-a158-70d8d89b9c3c.png",
+    "Jug classic 2": "/images/11474499-6518-47e7-9347-1e65cd8dc83b.png",
+    "Jug classic 3": "/images/7f91cf32-8994-48fe-8dec-39f0aa05f149.png"
+  },
+  "Crimp": {
+    "Crimp classic3": "/images/4620d6e6-dd35-456b-8fd1-18fcfa104f43.png",
+    "Crimp classic1": "/images/5b85fda7-5c54-47af-97fe-b4bb3dc73a9b.png",
+    "Crimp classic2": "/images/7b3c8d36-f644-42b3-8363-194fdaa814d8.png"
+  },
+  "Foot": {
+    "Foot classic 2": "/images/9e186998-2243-47bb-aa36-90e09b450614.png",
+    "Foot classic 1": "/images/377113a2-6480-43e3-8d76-a9b12637e165.png"
+  }
+}

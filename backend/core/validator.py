@@ -5,7 +5,6 @@ backend/core/validator.py
 
 import math
 from typing import List, Tuple, Dict, Set
-from core.board_spec import DEFAULT_BOARD_SPEC
 from core.models import Hold, HoldType, BetaStep
 
 class PhysicsValidator:
@@ -14,10 +13,9 @@ class PhysicsValidator:
     负责对批量生成的路线进行快速物理校验，淘汰绝大部分不合理的路线。
     """
     def __init__(self):
-        self.board_spec = DEFAULT_BOARD_SPEC
-        self.GRID_WIDTH = self.board_spec.columns
-        self.GRID_HEIGHT = self.board_spec.rows
-        self.GRID_SPACING = self.board_spec.hole_spacing_m
+        self.GRID_WIDTH = 11  # A-K
+        self.GRID_HEIGHT = 18 # 1-18
+        self.GRID_SPACING = 0.2 # 每个网格的物理间距 (米)
 
     def _coord_to_meters(self, x_label: str, y_label: int) -> Tuple[float, float]:
         x_idx = ord(x_label.upper()) - ord('A')
