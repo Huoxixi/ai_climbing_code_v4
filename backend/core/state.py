@@ -1,5 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
-# active_tasks 用于跟踪所有任务的状态、结果或错误
-# 格式: {task_id: {"status": "RUNNING" | "SUCCESS" | "ERROR", "result": RouteResponse | None, "error": str | None}}
+# {task_id: {"status": "pending|running|completed|failed|cancelled", "result": Any, "error": str | None}}
 active_tasks: Dict[str, Dict[str, Any]] = {}

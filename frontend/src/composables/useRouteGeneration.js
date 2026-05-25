@@ -12,6 +12,7 @@ export function useRouteGeneration() {
   async function generateRoute(payload) {
     loading.value = true
     error.value = ''
+    result.value = null
     try {
       const response = await apiClient.post('/api/generate', payload)
       taskId.value = response.data?.task_id
@@ -28,13 +29,15 @@ export function useRouteGeneration() {
     pollingTimer.value = setInterval(async () => {
       try {
         const response = await apiClient.get(`/api/result/${id}`)
-        if (response.data?.status === 'completed' || response.data?.route_name) {
-          result.value = response.data
+        const status = response.data?.status
+        if (status === 'completed') {
+          result.value = response.data?.result || null
           loading.value = false
           clearInterval(pollingTimer.value)
           ElMessage.success('AI 实验结果已返回')
+          return
         }
-        if (response.data?.status === 'failed') {
+        if (status === 'failed' || status === 'cancelled') {
           throw new Error(response.data?.error || '任务失败')
         }
       } catch (err) {

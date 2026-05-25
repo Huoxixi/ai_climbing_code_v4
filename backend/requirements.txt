@@ -80,6 +80,7 @@ Pygments
 pyparsing
 python-dateutil
 python-dotenv
+python-multipart
 pytz
 PyYAML
 pyzmq

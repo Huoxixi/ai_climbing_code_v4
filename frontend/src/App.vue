@@ -246,6 +246,21 @@
           </div>
         </template>
         <h2>实验室入口</h2>
+        <div class="experiment-controls">
+          <el-segmented
+            v-model="aiExperiment.mode"
+            :options="[
+              { label: '重新组合路线', value: 'compose_route' },
+              { label: '提出修改建议', value: 'review_route' },
+            ]"
+          />
+          <el-input
+            v-model="aiExperiment.user_requirements"
+            type="textarea"
+            :rows="3"
+            placeholder="输入本次实验要求，例如：多一点动态动作，或检查脚点是否过高"
+          />
+        </div>
         <div class="command-row">
           <el-button type="primary" :loading="routeGen.loading" @click="runAiExperiment">用当前岩板试验生成</el-button>
           <el-button v-if="routeGen.loading" @click="routeGen.cancelGeneration">取消任务</el-button>
@@ -253,6 +268,25 @@
         </div>
         <el-alert v-if="routeGen.taskId" type="info" :closable="false" :title="`任务 ID：${routeGen.taskId}`" />
         <el-alert v-if="routeGen.error" type="error" :closable="false" :title="routeGen.error" />
+        <section v-if="routeGen.result" class="experiment-result">
+          <template v-if="routeGen.result.mode === 'compose_route'">
+            <article v-for="route in routeGen.result.selected_routes" :key="route.route_name" class="result-card">
+              <strong>{{ route.route_name }}</strong>
+              <p>{{ route.setter_commentary }}</p>
+              <span>{{ route.placed_holds?.length || 0 }} 岩点 / {{ route.beta_sequence?.length || 0 }} Beta</span>
+              <el-button @click="loadBoardIntoStudio(route)">载入 Studio</el-button>
+            </article>
+          </template>
+          <template v-else>
+            <strong>{{ routeGen.result.review_summary }}</strong>
+            <p>风险等级：{{ routeGen.result.risk_level }}</p>
+            <article v-for="suggestion in routeGen.result.suggestions" :key="suggestion.title" class="result-card">
+              <strong>{{ suggestion.title }}</strong>
+              <p>{{ suggestion.detail }}</p>
+              <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join(', ') }}</span>
+            </article>
+          </template>
+        </section>
       </div>
     </section>
   </AppShell>
@@ -278,6 +312,10 @@ const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
 const aiLabPassword = ref('')
 const aiLabUnlocked = ref(false)
+const aiExperiment = reactive({
+  mode: 'compose_route',
+  user_requirements: '',
+})
 
 const pageTitle = computed(() => ({
   dashboard: '总览',
@@ -374,6 +412,11 @@ function unlockAiLab() {
 
 function runAiExperiment() {
   ElMessage.info('AI Lab 为实验入口，任务会使用当前岩板数据提交。')
-  routeGen.generateRoute(studio.currentBoard)
+  routeGen.generateRoute({
+    mode: aiExperiment.mode,
+    board: studio.currentBoard,
+    user_requirements: aiExperiment.user_requirements,
+    target_difficulty: studio.currentBoard.difficulty || 'V3',
+  })
 }
 </script>
