@@ -1,0 +1,108 @@
+insert into public.board_templates (
+  id,
+  template_key,
+  label,
+  columns,
+  rows,
+  hole_spacing_x_mm,
+  hole_spacing_y_mm,
+  board_width_mm,
+  board_height_mm,
+  margins,
+  angle_degrees,
+  material,
+  skin_class,
+  description,
+  is_system
+)
+values
+  (
+    'classic-11x18',
+    'spray-small',
+    'MoonBoard style standard board',
+    11,
+    18,
+    200,
+    200,
+    2440,
+    3660,
+    '{"left":220,"right":220,"bottom":130,"top":130}',
+    40,
+    'dark wood composite panel',
+    'skin-wood-classic',
+    'Default 200mm spacing 11 x 18 board for AI route generation compatibility.',
+    true
+  ),
+  (
+    'studio-14x20',
+    'spray-medium',
+    'Studio extended spray board',
+    14,
+    20,
+    200,
+    200,
+    3040,
+    4060,
+    '{"left":220,"right":220,"bottom":130,"top":130}',
+    10,
+    'birch texture with dense holes',
+    'skin-birch-studio',
+    'Medium system board for manual hold placement and free route composition.',
+    true
+  ),
+  (
+    'commercial-16x24',
+    'spray-large',
+    'Commercial large spray board',
+    16,
+    24,
+    200,
+    200,
+    3440,
+    4860,
+    '{"left":220,"right":220,"bottom":130,"top":130}',
+    15,
+    'dark anti-slip panel',
+    'skin-commercial-dark',
+    'Large system board with more lateral movement space and route capacity.',
+    true
+  ),
+  (
+    'competition-18x22',
+    'competition-wide',
+    'Competition wide training board',
+    18,
+    22,
+    200,
+    200,
+    3840,
+    4460,
+    '{"left":220,"right":220,"bottom":130,"top":130}',
+    20,
+    'blue gray competition panel',
+    'skin-competition-blue',
+    'Wide training board for large lateral moves, coordination moves, and complex combinations.',
+    true
+  )
+on conflict (id) do update set
+  template_key = excluded.template_key,
+  label = excluded.label,
+  columns = excluded.columns,
+  rows = excluded.rows,
+  hole_spacing_x_mm = excluded.hole_spacing_x_mm,
+  hole_spacing_y_mm = excluded.hole_spacing_y_mm,
+  board_width_mm = excluded.board_width_mm,
+  board_height_mm = excluded.board_height_mm,
+  margins = excluded.margins,
+  angle_degrees = excluded.angle_degrees,
+  material = excluded.material,
+  skin_class = excluded.skin_class,
+  description = excluded.description,
+  is_system = excluded.is_system;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('hold-images', 'hold-images', true, 5242880, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;

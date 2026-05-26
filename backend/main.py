@@ -29,6 +29,12 @@ from core.models import (
     TaskEnvelope,
 )
 from core.state import active_tasks
+from core.supabase_repo import (
+    SupabaseRepository,
+    SupabaseRepositoryError,
+    extract_user_id_from_auth_header,
+    is_supabase_configured,
+)
 
 load_dotenv()
 
@@ -60,6 +66,7 @@ EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 app.mount("/images", StaticFiles(directory=HOLDS_IMAGES_DIR), name="images")
 
 tasks: Dict[str, asyncio.Task] = {}
+supabase_repo = SupabaseRepository()
 
 
 def utc_now() -> str:
@@ -92,8 +99,18 @@ def serialize_result(result: Any) -> Any:
     return result
 
 
-async def run_and_store_generation(task_id: str, payload: Dict[str, Any]) -> None:
+async def update_supabase_task(task_id: str, status: str, result: Any = None, error: str | None = None) -> None:
+    if not is_supabase_configured():
+        return
+    try:
+        await supabase_repo.update_task(task_id, status, result=result, error=error)
+    except SupabaseRepositoryError as exc:
+        print(f"Supabase task update skipped: {exc}")
+
+
+async def run_and_store_generation(task_id: str, payload: Dict[str, Any], owner_id: str | None = None) -> None:
     active_tasks[task_id] = task_envelope(task_id, "running")
+    await update_supabase_task(task_id, "running")
     current_task = asyncio.current_task()
     if current_task:
         tasks[task_id] = current_task
@@ -102,7 +119,9 @@ async def run_and_store_generation(task_id: str, payload: Dict[str, Any]) -> Non
             result = await run_ai_experiment(AIExperimentRequest(**payload))
         else:
             result = await generate_route_with_reflection(RouteRequest(**payload), task_id)
-        active_tasks[task_id] = task_envelope(task_id, "completed", serialize_result(result))
+        serialized = serialize_result(result)
+        active_tasks[task_id] = task_envelope(task_id, "completed", serialized)
+        await update_supabase_task(task_id, "completed", result=serialized)
     except asyncio.CancelledError:
         active_tasks[task_id] = task_envelope(task_id, "cancelled", error="任务已被用户取消")
     except Exception as exc:
@@ -110,6 +129,7 @@ async def run_and_store_generation(task_id: str, payload: Dict[str, Any]) -> Non
 
         print(f"Task {task_id} failed: {exc}\n{traceback.format_exc()}")
         active_tasks[task_id] = task_envelope(task_id, "failed", error=str(exc))
+        await update_supabase_task(task_id, "failed", error=str(exc))
     finally:
         tasks.pop(task_id, None)
 
@@ -155,11 +175,21 @@ async def get_wall_grid():
 
 @app.get("/api/holds/mapping")
 async def get_holds_mapping():
+    if is_supabase_configured():
+        try:
+            return await supabase_repo.get_holds_mapping()
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase holds mapping fallback: {exc}")
     return load_json(HOLDS_MAPPING_FILE, {})
 
 
 @app.get("/api/holds/vectors")
 async def get_holds_vectors():
+    if is_supabase_configured():
+        try:
+            return await supabase_repo.get_holds_vectors()
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase holds vectors fallback: {exc}")
     return load_json(HOLDS_VECTORS_FILE, {})
 
 
@@ -218,6 +248,23 @@ async def upload_hold_image(request: Request):
     try:
         ext = os.path.splitext(getattr(file, "filename", "") or "")[1] or ".png"
         filename = f"{uuid.uuid4()}{ext}"
+        svg_path = extract_svg_path_from_image(image_bytes)
+        if is_supabase_configured():
+            try:
+                content_type = getattr(file, "content_type", None) or "image/png"
+                storage_path = await supabase_repo.upload_hold_image(filename, image_bytes, content_type)
+                saved = await supabase_repo.upsert_hold_asset(
+                    hold_type,
+                    variant,
+                    storage_path,
+                    svg_path,
+                    extract_user_id_from_auth_header(request.headers.get("authorization")),
+                    is_system=False,
+                )
+                return {"success": True, "image_path": saved.get("public_image_url"), "svg_path": saved.get("svg_path")}
+            except SupabaseRepositoryError as exc:
+                print(f"Supabase hold upload fallback: {exc}")
+
         save_path = os.path.join(HOLDS_IMAGES_DIR, filename)
         os.makedirs(HOLDS_IMAGES_DIR, exist_ok=True)
         with open(save_path, "wb") as buffer:
@@ -228,7 +275,7 @@ async def upload_hold_image(request: Request):
         save_json(HOLDS_MAPPING_FILE, mapping)
 
         vectors = load_json(HOLDS_VECTORS_FILE, {})
-        vectors.setdefault(hold_type, {})[variant] = extract_svg_path_from_image(image_bytes)
+        vectors.setdefault(hold_type, {})[variant] = svg_path
         save_json(HOLDS_VECTORS_FILE, vectors)
 
         return {"success": True, "image_path": mapping[hold_type][variant], "svg_path": vectors[hold_type][variant]}
@@ -238,12 +285,20 @@ async def upload_hold_image(request: Request):
 
 @app.delete("/api/holds/{hold_type}/{variant}")
 async def delete_hold(hold_type: str, variant: str):
+    if is_supabase_configured():
+        try:
+            archived = await supabase_repo.archive_hold_asset(hold_type, variant)
+            if not archived:
+                raise HTTPException(status_code=404, detail="未找到该岩点")
+            return {"success": True, "message": "岩点已归档"}
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase hold archive fallback: {exc}")
+
     mapping = load_json(HOLDS_MAPPING_FILE, {})
     vectors = load_json(HOLDS_VECTORS_FILE, {})
-    image_path_to_delete = None
 
     if hold_type in mapping and variant in mapping[hold_type]:
-        image_path_to_delete = mapping[hold_type].pop(variant)
+        mapping[hold_type].pop(variant)
         if not mapping[hold_type]:
             del mapping[hold_type]
         save_json(HOLDS_MAPPING_FILE, mapping)
@@ -254,16 +309,20 @@ async def delete_hold(hold_type: str, variant: str):
             del vectors[hold_type]
         save_json(HOLDS_VECTORS_FILE, vectors)
 
-    if image_path_to_delete:
-        physical_path = os.path.join(HOLDS_IMAGES_DIR, os.path.basename(image_path_to_delete))
-        if os.path.exists(physical_path):
-            os.remove(physical_path)
-
     return {"success": True, "message": "岩点已删除"}
 
 
 @app.post("/api/save-board")
-async def save_board(payload: Dict[str, Any]):
+async def save_board(payload: Dict[str, Any], request: Request):
+    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    if is_supabase_configured():
+        try:
+            normalized = normalize_board_payload(payload).model_dump(mode="json")
+            saved = await supabase_repo.create_board(normalized, owner_id)
+            return {"success": True, "message": "岩板已保存", **saved}
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase board create fallback: {exc}")
+
     boards = load_boards()
     board = normalize_board_payload(payload)
     board.saved_id = str(uuid.uuid4())
@@ -273,12 +332,28 @@ async def save_board(payload: Dict[str, Any]):
 
 
 @app.get("/api/my-boards", response_model=List[BoardAsset])
-async def get_my_boards():
+async def get_my_boards(request: Request):
+    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    if is_supabase_configured():
+        try:
+            return [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(owner_id)]
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase board list fallback: {exc}")
     return [normalize_board_payload(board).model_dump(mode="json") for board in load_boards()]
 
 
 @app.put("/api/my-boards/{saved_id}")
-async def update_saved_board(saved_id: str, payload: Dict[str, Any]):
+async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Request):
+    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    if is_supabase_configured():
+        try:
+            if not str(payload.get("route_name", "")).strip():
+                raise HTTPException(status_code=400, detail="岩板名称不能为空")
+            saved = await supabase_repo.update_board(saved_id, payload, owner_id)
+            return {"success": True, "message": "岩板已更新", **saved}
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase board update fallback: {exc}")
+
     boards = load_boards()
     target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
     if target_index is None:
@@ -297,6 +372,15 @@ async def update_saved_board(saved_id: str, payload: Dict[str, Any]):
 
 @app.delete("/api/my-boards/{saved_id}")
 async def delete_saved_board(saved_id: str):
+    if is_supabase_configured():
+        try:
+            archived = await supabase_repo.archive_board(saved_id)
+            if not archived:
+                raise HTTPException(status_code=404, detail="未找到该岩板")
+            return {"success": True, "message": "岩板已归档"}
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase board archive fallback: {exc}")
+
     boards = load_boards()
     filtered = [board for board in boards if board.get("saved_id") != saved_id]
     if len(filtered) == len(boards):
@@ -306,16 +390,27 @@ async def delete_saved_board(saved_id: str):
 
 
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
-async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks):
+async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks, request: Request):
     task_id = str(uuid.uuid4())
+    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
     active_tasks[task_id] = task_envelope(task_id, "pending")
-    background_tasks.add_task(run_and_store_generation, task_id, payload)
+    if is_supabase_configured():
+        try:
+            await supabase_repo.create_task(task_id, payload, owner_id)
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase task create skipped: {exc}")
+    background_tasks.add_task(run_and_store_generation, task_id, payload, owner_id)
     return GenerationInitiated(task_id=task_id, status="pending")
 
 
 @app.get("/api/result/{task_id}", response_model=TaskEnvelope)
 async def get_generation_result(task_id: str):
     task_info = active_tasks.get(task_id)
+    if not task_info and is_supabase_configured():
+        try:
+            task_info = await supabase_repo.get_task(task_id)
+        except SupabaseRepositoryError as exc:
+            print(f"Supabase task result fallback: {exc}")
     if not task_info:
         raise HTTPException(status_code=404, detail="任务未找到或已过期")
     return task_info
@@ -330,6 +425,7 @@ async def cancel_generation_task(task_id: str):
         raise HTTPException(status_code=404, detail="未找到正在运行的任务")
 
     task.cancel()
+    await update_supabase_task(task_id, "cancelled", error="取消请求已发送")
     active_tasks[task_id] = task_envelope(task_id, "cancelled", error="取消请求已发送")
     return {"status": "cancelled", "message": "取消请求已发送"}
 

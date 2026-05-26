@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # 兼容你 .env 里的 OPENAI_BASE_URL
     base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.apiyi.com/v1")
     model_name: str = os.getenv("LLM_MODEL_NAME", "gpt-4o")
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "hold-images")
 
     # 🌟 核心修复：Pydantic V2 的配置字典
     model_config = SettingsConfigDict(
