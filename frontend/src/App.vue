@@ -1,29 +1,56 @@
 <template>
-  <main v-if="!auth.currentUser" class="auth-page">
-    <section class="auth-panel">
-      <p class="eyebrow">Climbing Board Studio</p>
-      <h1>Supabase 登录</h1>
-      <el-form class="auth-form" @submit.prevent>
-        <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" />
+  <main v-if="!currentUser" class="auth-page">
+    <section class="auth-layout" aria-label="Climbing Board Studio 登录">
+      <div class="auth-brand">
+        <span class="auth-kicker">Climbing Board Studio</span>
+        <h1>专业攀岩定线工作台</h1>
+        <p>统一管理岩板资产、岩点资源与 AI 线路实验，为教学和研发团队提供稳定、清晰的创作入口。</p>
+        <dl class="auth-summary">
+          <div>
+            <dt>Board</dt>
+            <dd>规格化岩板资产</dd>
+          </div>
+          <div>
+            <dt>Holds</dt>
+            <dd>结构化岩点库</dd>
+          </div>
+          <div>
+            <dt>AI Lab</dt>
+            <dd>可追踪生成实验</dd>
+          </div>
+        </dl>
+      </div>
+
+      <section class="auth-panel">
+        <div class="auth-panel-heading">
+          <p class="eyebrow">Secure Access</p>
+          <h2>{{ authMode === 'login' ? '登录账户' : '创建账户' }}</h2>
+          <span>{{ authMode === 'login' ? '进入你的工作台并继续管理线路资产。' : '注册后即可保存和同步你的定线数据。' }}</span>
+        </div>
+        <el-form class="auth-form" @submit.prevent>
+          <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" :prefix-icon="Message" />
         <el-input
           v-model="authForm.password"
           type="password"
           show-password
           placeholder="密码"
           autocomplete="current-password"
+          :prefix-icon="Lock"
           @keyup.enter="submitAuth"
         />
-        <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" />
+        <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" :prefix-icon="User" />
         <el-alert v-if="authError" type="error" :closable="false" :title="authError" />
         <div class="auth-actions">
-          <el-button type="primary" :loading="authLoading" @click="submitAuth">
+          <el-button type="primary" :loading="authLoading" :icon="Right" @click="submitAuth">
             {{ authMode === 'login' ? '登录' : '注册' }}
           </el-button>
           <el-button text @click="toggleAuthMode">
             {{ authMode === 'login' ? '创建账号' : '返回登录' }}
           </el-button>
         </div>
-      </el-form>
+        </el-form>
+        <p class="auth-footnote">企业级数据服务由 Supabase 认证保护。</p>
+      </section>
     </section>
   </main>
   <AppShell
@@ -33,7 +60,7 @@
     :board-label="studio.currentBoardSpec.label"
     :hold-count="studio.placedHolds.length"
     :dirty="studio.unsavedChanges"
-    :user-email="auth.currentUser.email"
+    :user-email="currentUser.email"
     @logout="handleLogout"
   >
     <section v-if="activePage === 'dashboard'" class="page dashboard-page">
@@ -324,7 +351,7 @@
 
 <script setup>
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
-import { Collection, Delete, DocumentChecked, Edit, EditPen, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
+import { Collection, Delete, DocumentChecked, Edit, EditPen, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AppShell from './components/AppShell.vue'
 import { useAuth } from './composables/useAuth'
@@ -336,7 +363,7 @@ import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
 
 const activePage = ref('dashboard')
-const auth = useAuth()
+const { currentUser, login, register, logout } = useAuth()
 const authMode = ref('login')
 const authLoading = ref(false)
 const authError = ref('')
@@ -362,9 +389,9 @@ async function submitAuth() {
   authLoading.value = true
   try {
     if (authMode.value === 'register') {
-      await auth.register(authForm)
+      await register(authForm)
     } else {
-      await auth.login(authForm)
+      await login(authForm)
     }
     await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
   } catch (error) {
@@ -380,7 +407,7 @@ function toggleAuthMode() {
 }
 
 async function handleLogout() {
-  await auth.logout()
+  await logout()
   activePage.value = 'dashboard'
 }
 
@@ -418,7 +445,7 @@ const HoldPreview = defineComponent({
 })
 
 onMounted(async () => {
-  if (auth.currentUser) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
+  if (currentUser.value) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
 })
 
 function startBlankStudio() {
