@@ -1,10 +1,40 @@
 <template>
+  <main v-if="!auth.currentUser" class="auth-page">
+    <section class="auth-panel">
+      <p class="eyebrow">Climbing Board Studio</p>
+      <h1>Supabase 登录</h1>
+      <el-form class="auth-form" @submit.prevent>
+        <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" />
+        <el-input
+          v-model="authForm.password"
+          type="password"
+          show-password
+          placeholder="密码"
+          autocomplete="current-password"
+          @keyup.enter="submitAuth"
+        />
+        <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" />
+        <el-alert v-if="authError" type="error" :closable="false" :title="authError" />
+        <div class="auth-actions">
+          <el-button type="primary" :loading="authLoading" @click="submitAuth">
+            {{ authMode === 'login' ? '登录' : '注册' }}
+          </el-button>
+          <el-button text @click="toggleAuthMode">
+            {{ authMode === 'login' ? '创建账号' : '返回登录' }}
+          </el-button>
+        </div>
+      </el-form>
+    </section>
+  </main>
   <AppShell
+    v-else
     v-model:active="activePage"
     :title="pageTitle"
     :board-label="studio.currentBoardSpec.label"
     :hold-count="studio.placedHolds.length"
     :dirty="studio.unsavedChanges"
+    :user-email="auth.currentUser.email"
+    @logout="handleLogout"
   >
     <section v-if="activePage === 'dashboard'" class="page dashboard-page">
       <div class="dashboard-hero">
@@ -297,6 +327,7 @@ import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { Collection, Delete, DocumentChecked, Edit, EditPen, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AppShell from './components/AppShell.vue'
+import { useAuth } from './composables/useAuth'
 import BoardCanvas from './components/BoardCanvas.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
 import { useBoardPersistence } from './composables/useBoardPersistence'
@@ -305,6 +336,15 @@ import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
 
 const activePage = ref('dashboard')
+const auth = useAuth()
+const authMode = ref('login')
+const authLoading = ref(false)
+const authError = ref('')
+const authForm = reactive({
+  email: '',
+  password: '',
+  name: '',
+})
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
@@ -316,6 +356,33 @@ const aiExperiment = reactive({
   mode: 'compose_route',
   user_requirements: '',
 })
+
+async function submitAuth() {
+  authError.value = ''
+  authLoading.value = true
+  try {
+    if (authMode.value === 'register') {
+      await auth.register(authForm)
+    } else {
+      await auth.login(authForm)
+    }
+    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
+  } catch (error) {
+    authError.value = error?.message || '登录失败'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+function toggleAuthMode() {
+  authMode.value = authMode.value === 'login' ? 'register' : 'login'
+  authError.value = ''
+}
+
+async function handleLogout() {
+  await auth.logout()
+  activePage.value = 'dashboard'
+}
 
 const pageTitle = computed(() => ({
   dashboard: '总览',
@@ -351,7 +418,7 @@ const HoldPreview = defineComponent({
 })
 
 onMounted(async () => {
-  await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
+  if (auth.currentUser) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
 })
 
 function startBlankStudio() {

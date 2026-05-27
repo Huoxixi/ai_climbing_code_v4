@@ -44,6 +44,34 @@ body { margin: 0; min-width: 320px; background: var(--bg); }
 button, input, textarea, select { font: inherit; letter-spacing: 0; }
 button { cursor: pointer; }
 
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.auth-panel {
+  width: min(420px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 24px;
+}
+.auth-panel h1 {
+  margin: 0 0 18px;
+}
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 88px 1fr; background: var(--bg); }
 .nav-rail { position: sticky; top: 0; height: 100vh; padding: 16px 10px; border-right: 1px solid var(--line); background: #11141a; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .brand-mark { width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--radius); color: var(--blue); background: var(--surface); margin-bottom: 12px; }

@@ -22,6 +22,8 @@
         <div>
           <p class="eyebrow">Climbing Board Studio</p>
           <h1>{{ title }}</h1>
+          <span v-if="userEmail" class="status-pill">{{ userEmail }}</span>
+          <el-button v-if="userEmail" size="small" @click="$emit('logout')">退出</el-button>
         </div>
         <div class="topbar-status">
           <span class="status-pill">{{ boardLabel }}</span>
@@ -55,9 +57,10 @@ defineProps({
   boardLabel: { type: String, default: '未选择岩板' },
   holdCount: { type: Number, default: 0 },
   dirty: { type: Boolean, default: false },
+  userEmail: { type: String, default: '' },
 })
 
-defineEmits(['update:active'])
+defineEmits(['update:active', 'logout'])
 
 const items = [
   { key: 'dashboard', label: 'Dashboard', short: '总览', icon: DataBoard },

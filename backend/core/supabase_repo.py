@@ -44,6 +44,13 @@ def extract_user_id_from_auth_header(authorization: Optional[str]) -> Optional[s
         return None
 
 
+def extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.removeprefix("Bearer ").strip()
+    return token or None
+
+
 class SupabaseRepository:
     def __init__(self) -> None:
         self.base_url = settings.supabase_url.rstrip("/")
@@ -93,6 +100,34 @@ class SupabaseRepository:
         rows = await self._request("GET", self._table_url("board_assets"), headers=self._headers(), params=params)
         return [self._board_from_row(row) for row in rows or []]
 
+    async def get_auth_user(self, access_token: str) -> Optional[Dict[str, Any]]:
+        user = await self._request(
+            "GET",
+            f"{self.base_url}/auth/v1/user",
+            headers={
+                "apikey": self.key,
+                "Authorization": f"Bearer {access_token}",
+            },
+        )
+        return user if user and user.get("id") else None
+
+    async def ensure_profile(self, user: Dict[str, Any]) -> None:
+        user_id = user.get("id")
+        if not user_id:
+            return
+        metadata = user.get("user_metadata") or {}
+        display_name = metadata.get("name") or (user.get("email") or "").split("@")[0]
+        await self._request(
+            "POST",
+            self._table_url("profiles"),
+            headers=self._headers("resolution=merge-duplicates"),
+            json={
+                "id": user_id,
+                "display_name": display_name or "",
+                "role": metadata.get("role") or "route-setter",
+            },
+        )
+
     async def create_board(self, payload: Dict[str, Any], owner_id: Optional[str]) -> Dict[str, Any]:
         board = self._normalize_board(payload)
         board_id = str(uuid.uuid4())
@@ -115,11 +150,14 @@ class SupabaseRepository:
         if owner_id is None:
             patch.pop("owner_id", None)
 
+        params = {"id": f"eq.{saved_id}", "archived_at": "is.null"}
+        if owner_id:
+            params["owner_id"] = f"eq.{owner_id}"
         rows = await self._request(
             "PATCH",
             self._table_url("board_assets"),
             headers=self._headers("return=representation"),
-            params={"id": f"eq.{saved_id}", "archived_at": "is.null"},
+            params=params,
             json=patch,
         )
         if not rows:
@@ -127,12 +165,15 @@ class SupabaseRepository:
         await self._replace_board_children(saved_id, board)
         return await self.get_board(saved_id)
 
-    async def archive_board(self, saved_id: str) -> bool:
+    async def archive_board(self, saved_id: str, owner_id: Optional[str]) -> bool:
+        params = {"id": f"eq.{saved_id}", "archived_at": "is.null"}
+        if owner_id:
+            params["owner_id"] = f"eq.{owner_id}"
         rows = await self._request(
             "PATCH",
             self._table_url("board_assets"),
             headers=self._headers("return=representation"),
-            params={"id": f"eq.{saved_id}", "archived_at": "is.null"},
+            params=params,
             json={"archived_at": datetime.now(timezone.utc).isoformat()},
         )
         return bool(rows)
@@ -148,12 +189,17 @@ class SupabaseRepository:
             raise SupabaseRepositoryError("Board not found")
         return self._board_from_row(rows[0])
 
-    async def get_holds_mapping(self) -> Dict[str, Dict[str, str]]:
+    async def get_holds_mapping(self, owner_id: Optional[str] = None) -> Dict[str, Dict[str, str]]:
+        params = {"select": "hold_type,variant,public_image_url,image_path", "archived_at": "is.null", "order": "hold_type.asc,variant.asc"}
+        if owner_id:
+            params["or"] = f"(is_system.eq.true,owner_id.eq.{owner_id})"
+        else:
+            params["is_system"] = "eq.true"
         rows = await self._request(
             "GET",
             self._table_url("hold_assets"),
             headers=self._headers(),
-            params={"select": "hold_type,variant,public_image_url,image_path", "archived_at": "is.null", "order": "hold_type.asc,variant.asc"},
+            params=params,
         )
         mapping: Dict[str, Dict[str, str]] = {}
         for row in rows or []:
@@ -162,12 +208,17 @@ class SupabaseRepository:
                 mapping.setdefault(row["hold_type"], {})[row["variant"]] = image_url
         return mapping
 
-    async def get_holds_vectors(self) -> Dict[str, Dict[str, str]]:
+    async def get_holds_vectors(self, owner_id: Optional[str] = None) -> Dict[str, Dict[str, str]]:
+        params = {"select": "hold_type,variant,svg_path", "archived_at": "is.null", "order": "hold_type.asc,variant.asc"}
+        if owner_id:
+            params["or"] = f"(is_system.eq.true,owner_id.eq.{owner_id})"
+        else:
+            params["is_system"] = "eq.true"
         rows = await self._request(
             "GET",
             self._table_url("hold_assets"),
             headers=self._headers(),
-            params={"select": "hold_type,variant,svg_path", "archived_at": "is.null", "order": "hold_type.asc,variant.asc"},
+            params=params,
         )
         vectors: Dict[str, Dict[str, str]] = {}
         for row in rows or []:
@@ -203,6 +254,7 @@ class SupabaseRepository:
                 "select": "id",
                 "hold_type": f"eq.{hold_type}",
                 "variant": f"eq.{variant}",
+                "owner_id": "is.null" if owner_id is None else f"eq.{owner_id}",
                 "archived_at": "is.null",
                 "limit": "1",
             },
@@ -220,18 +272,25 @@ class SupabaseRepository:
         rows = await self._request("POST", self._table_url("hold_assets"), headers=self._headers("return=representation"), json=row)
         return rows[0]
 
-    async def archive_hold_asset(self, hold_type: str, variant: str) -> bool:
+    async def archive_hold_asset(self, hold_type: str, variant: str, owner_id: Optional[str]) -> bool:
+        params = {
+            "hold_type": f"eq.{hold_type}",
+            "variant": f"eq.{variant}",
+            "archived_at": "is.null",
+        }
+        if owner_id:
+            params["owner_id"] = f"eq.{owner_id}"
         rows = await self._request(
             "PATCH",
             self._table_url("hold_assets"),
             headers=self._headers("return=representation"),
-            params={"hold_type": f"eq.{hold_type}", "variant": f"eq.{variant}", "archived_at": "is.null"},
+            params=params,
             json={"archived_at": datetime.now(timezone.utc).isoformat()},
         )
         return bool(rows)
 
-    async def upload_hold_image(self, filename: str, image_bytes: bytes, content_type: str) -> str:
-        object_name = f"system/{filename}"
+    async def upload_hold_image(self, filename: str, image_bytes: bytes, content_type: str, owner_id: Optional[str]) -> str:
+        object_name = f"users/{owner_id}/{filename}" if owner_id else f"system/{filename}"
         url = f"{self.base_url}/storage/v1/object/{self.bucket}/{object_name}"
         await self._request(
             "POST",

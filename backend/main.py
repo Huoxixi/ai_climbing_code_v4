@@ -32,6 +32,7 @@ from core.state import active_tasks
 from core.supabase_repo import (
     SupabaseRepository,
     SupabaseRepositoryError,
+    extract_bearer_token,
     extract_user_id_from_auth_header,
     is_supabase_configured,
 )
@@ -67,6 +68,22 @@ app.mount("/images", StaticFiles(directory=HOLDS_IMAGES_DIR), name="images")
 
 tasks: Dict[str, asyncio.Task] = {}
 supabase_repo = SupabaseRepository()
+
+
+async def resolve_supabase_user(request: Request) -> dict | None:
+    if not is_supabase_configured():
+        return None
+    token = extract_bearer_token(request.headers.get("authorization"))
+    if not token:
+        return None
+    try:
+        user = await supabase_repo.get_auth_user(token)
+        if user:
+            await supabase_repo.ensure_profile(user)
+        return user
+    except SupabaseRepositoryError as exc:
+        print(f"Supabase auth validation failed: {exc}")
+        return None
 
 
 def utc_now() -> str:
@@ -174,20 +191,22 @@ async def get_wall_grid():
 
 
 @app.get("/api/holds/mapping")
-async def get_holds_mapping():
+async def get_holds_mapping(request: Request):
     if is_supabase_configured():
         try:
-            return await supabase_repo.get_holds_mapping()
+            user = await resolve_supabase_user(request)
+            return await supabase_repo.get_holds_mapping(user["id"] if user else None)
         except SupabaseRepositoryError as exc:
             print(f"Supabase holds mapping fallback: {exc}")
     return load_json(HOLDS_MAPPING_FILE, {})
 
 
 @app.get("/api/holds/vectors")
-async def get_holds_vectors():
+async def get_holds_vectors(request: Request):
     if is_supabase_configured():
         try:
-            return await supabase_repo.get_holds_vectors()
+            user = await resolve_supabase_user(request)
+            return await supabase_repo.get_holds_vectors(user["id"] if user else None)
         except SupabaseRepositoryError as exc:
             print(f"Supabase holds vectors fallback: {exc}")
     return load_json(HOLDS_VECTORS_FILE, {})
@@ -252,13 +271,16 @@ async def upload_hold_image(request: Request):
         if is_supabase_configured():
             try:
                 content_type = getattr(file, "content_type", None) or "image/png"
-                storage_path = await supabase_repo.upload_hold_image(filename, image_bytes, content_type)
+                user = await resolve_supabase_user(request)
+                if not user:
+                    raise HTTPException(status_code=401, detail="Supabase login required")
+                storage_path = await supabase_repo.upload_hold_image(filename, image_bytes, content_type, user["id"])
                 saved = await supabase_repo.upsert_hold_asset(
                     hold_type,
                     variant,
                     storage_path,
                     svg_path,
-                    extract_user_id_from_auth_header(request.headers.get("authorization")),
+                    user["id"],
                     is_system=False,
                 )
                 return {"success": True, "image_path": saved.get("public_image_url"), "svg_path": saved.get("svg_path")}
@@ -279,15 +301,20 @@ async def upload_hold_image(request: Request):
         save_json(HOLDS_VECTORS_FILE, vectors)
 
         return {"success": True, "image_path": mapping[hold_type][variant], "svg_path": vectors[hold_type][variant]}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"图片上传或向量化失败: {exc}") from exc
 
 
 @app.delete("/api/holds/{hold_type}/{variant}")
-async def delete_hold(hold_type: str, variant: str):
+async def delete_hold(hold_type: str, variant: str, request: Request):
     if is_supabase_configured():
+        user = await resolve_supabase_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
-            archived = await supabase_repo.archive_hold_asset(hold_type, variant)
+            archived = await supabase_repo.archive_hold_asset(hold_type, variant, user["id"])
             if not archived:
                 raise HTTPException(status_code=404, detail="未找到该岩点")
             return {"success": True, "message": "岩点已归档"}
@@ -314,8 +341,11 @@ async def delete_hold(hold_type: str, variant: str):
 
 @app.post("/api/save-board")
 async def save_board(payload: Dict[str, Any], request: Request):
-    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    user = await resolve_supabase_user(request)
+    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
     if is_supabase_configured():
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
             normalized = normalize_board_payload(payload).model_dump(mode="json")
             saved = await supabase_repo.create_board(normalized, owner_id)
@@ -333,8 +363,11 @@ async def save_board(payload: Dict[str, Any], request: Request):
 
 @app.get("/api/my-boards", response_model=List[BoardAsset])
 async def get_my_boards(request: Request):
-    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    user = await resolve_supabase_user(request)
+    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
     if is_supabase_configured():
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
             return [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(owner_id)]
         except SupabaseRepositoryError as exc:
@@ -344,8 +377,11 @@ async def get_my_boards(request: Request):
 
 @app.put("/api/my-boards/{saved_id}")
 async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Request):
-    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    user = await resolve_supabase_user(request)
+    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
     if is_supabase_configured():
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
             if not str(payload.get("route_name", "")).strip():
                 raise HTTPException(status_code=400, detail="岩板名称不能为空")
@@ -371,10 +407,13 @@ async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Re
 
 
 @app.delete("/api/my-boards/{saved_id}")
-async def delete_saved_board(saved_id: str):
+async def delete_saved_board(saved_id: str, request: Request):
     if is_supabase_configured():
+        user = await resolve_supabase_user(request)
+        if not user:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
-            archived = await supabase_repo.archive_board(saved_id)
+            archived = await supabase_repo.archive_board(saved_id, user["id"])
             if not archived:
                 raise HTTPException(status_code=404, detail="未找到该岩板")
             return {"success": True, "message": "岩板已归档"}
@@ -392,9 +431,12 @@ async def delete_saved_board(saved_id: str):
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
 async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks, request: Request):
     task_id = str(uuid.uuid4())
-    owner_id = extract_user_id_from_auth_header(request.headers.get("authorization"))
+    user = await resolve_supabase_user(request)
+    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
     active_tasks[task_id] = task_envelope(task_id, "pending")
     if is_supabase_configured():
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="Supabase login required")
         try:
             await supabase_repo.create_task(task_id, payload, owner_id)
         except SupabaseRepositoryError as exc:

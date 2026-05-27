@@ -9,6 +9,11 @@ export function useAuth() {
     return currentUser.value
   }
 
+  const register = async (payload) => {
+    currentUser.value = await authService.register(payload)
+    return currentUser.value
+  }
+
   const logout = async () => {
     await authService.logout()
     currentUser.value = null
@@ -17,6 +22,7 @@ export function useAuth() {
   return {
     currentUser,
     login,
+    register,
     logout,
   }
 }
