@@ -95,7 +95,7 @@ export function useHoldLibrary() {
 
   async function deleteHold(hold_type, variant) {
     try {
-      await ElMessageBox.confirm(`确定删除岩点 ${hold_type} / ${variant}？此操作不可撤销。`, '删除岩点', {
+      await ElMessageBox.confirm(`确定删除岩点 ${hold_type} / ${variant}？此操作会归档该资源。`, '删除岩点', {
         confirmButtonText: '删除',
         cancelButtonText: '取消',
         type: 'warning',

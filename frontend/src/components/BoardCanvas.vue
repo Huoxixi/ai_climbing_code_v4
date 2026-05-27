@@ -12,11 +12,6 @@
       </div>
 
       <button
-        v-for="row in rows"
-        :key="`row-${row}`"
-        v-show="false"
-      />
-      <button
         v-for="coord in coords"
         :key="coord"
         class="board-hole"
@@ -31,6 +26,7 @@
         class="placed-hold"
         :class="{ selected: selectedHold?.id === hold.id, start: hold.is_start, top: isTop(hold.id) }"
         :style="{ ...getCoordStyle(hold.id), transform: `translate(-50%, 50%) rotate(${hold.rotation || 0}deg) scale(${hold.scale || 1})` }"
+        :title="hold.id"
         @click.stop="$emit('select', hold)"
       >
         <svg v-if="resolveHoldVisual(hold).svgPath" viewBox="0 0 100 100" aria-hidden="true">
@@ -67,6 +63,6 @@ function isTop(id) {
 }
 
 function shapeColor(type) {
-  return { Jug: '#43b284', Crimp: '#e45c5c', Sloper: '#d7a84f', Pinch: '#9a7ae6', Pocket: '#4b8fd9', Foot: '#8ea2b5' }[type] || '#43b284'
+  return { Jug: '#24876b', Crimp: '#d94b52', Sloper: '#c8912f', Pinch: '#7457d8', Pocket: '#2f72c8', Foot: '#718096' }[type] || '#24876b'
 }
 </script>

@@ -71,7 +71,7 @@ export function useBoardPersistence() {
     }
 
     try {
-      await ElMessageBox.confirm(`确定删除收藏岩板「${board.route_name || board.saved_id}」？`, '删除岩板资产', {
+      await ElMessageBox.confirm(`确定删除岩板“${board.route_name || board.saved_id}”？此操作会归档该资产。`, '删除岩板资产', {
         confirmButtonText: '删除',
         cancelButtonText: '取消',
         type: 'warning',

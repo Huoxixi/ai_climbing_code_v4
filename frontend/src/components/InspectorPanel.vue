@@ -5,8 +5,10 @@
         <h3>当前岩板</h3>
         <span>{{ board.board_spec?.cellLabel }}</span>
       </div>
-      <el-input v-model="board.route_name" @input="$emit('dirty')" />
-      <el-input v-model="board.setter_commentary" type="textarea" :rows="3" @input="$emit('dirty')" />
+      <label>线路名称</label>
+      <el-input v-model="board.route_name" placeholder="输入岩板或线路名称" @input="$emit('dirty')" />
+      <label>定线说明</label>
+      <el-input v-model="board.setter_commentary" type="textarea" :rows="3" placeholder="记录定线目标、风格或注意事项" @input="$emit('dirty')" />
       <div class="compact-stats">
         <span>{{ board.placed_holds?.length || 0 }} 岩点</span>
         <span>{{ board.beta_sequence?.length || 0 }} Beta</span>
@@ -30,7 +32,7 @@
         <el-checkbox :model-value="Boolean(selectedHold.is_start)" @change="update({ is_start: $event })">设为起点</el-checkbox>
         <el-button type="danger" plain @click="$emit('delete-hold')">删除岩点</el-button>
       </template>
-      <div v-else class="empty-text">在画布上选择一个岩点后可编辑属性。</div>
+      <div v-else class="empty-text">在画布上选择一个岩点后，可在这里编辑属性。</div>
     </section>
 
     <section class="panel">

@@ -1,8 +1,11 @@
 <template>
   <div class="app-shell">
     <aside class="nav-rail" aria-label="主导航">
-      <div class="brand-mark">
-        <Grid class="brand-icon" />
+      <div class="brand-block">
+        <div class="brand-mark">
+          <Grid class="brand-icon" />
+        </div>
+        <span>Climb OS</span>
       </div>
       <button
         v-for="item in items"
@@ -19,16 +22,16 @@
 
     <div class="shell-main">
       <header class="topbar">
-        <div>
+        <div class="topbar-title">
           <p class="eyebrow">Climbing Board Studio</p>
           <h1>{{ title }}</h1>
-          <span v-if="userEmail" class="status-pill">{{ userEmail }}</span>
-          <el-button v-if="userEmail" size="small" @click="$emit('logout')">退出</el-button>
         </div>
         <div class="topbar-status">
           <span class="status-pill">{{ boardLabel }}</span>
           <span class="status-pill">{{ holdCount }} 岩点</span>
           <span class="status-pill" :class="{ dirty: dirty }">{{ dirty ? '未保存' : '已同步' }}</span>
+          <span v-if="userEmail" class="status-pill user-pill">{{ userEmail }}</span>
+          <el-button v-if="userEmail" size="small" @click="$emit('logout')">退出</el-button>
         </div>
       </header>
       <slot />
@@ -63,10 +66,10 @@ defineProps({
 defineEmits(['update:active', 'logout'])
 
 const items = [
-  { key: 'dashboard', label: 'Dashboard', short: '总览', icon: DataBoard },
-  { key: 'studio', label: 'Studio', short: '工作台', icon: Platform },
-  { key: 'library', label: 'Hold Library', short: '岩点', icon: Collection },
-  { key: 'boards', label: 'Board Assets', short: '资产', icon: Grid },
-  { key: 'ai-lab', label: 'AI Lab', short: '实验室', icon: Histogram },
+  { key: 'dashboard', label: '总览', short: '总览', icon: DataBoard },
+  { key: 'studio', label: 'Studio', short: '创作', icon: Platform },
+  { key: 'library', label: '岩点库', short: '岩点', icon: Collection },
+  { key: 'boards', label: '岩板资产', short: '资产', icon: Grid },
+  { key: 'ai-lab', label: 'AI Lab', short: 'AI', icon: Histogram },
 ]
 </script>

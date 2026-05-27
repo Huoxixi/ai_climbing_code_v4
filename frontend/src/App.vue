@@ -4,19 +4,19 @@
       <div class="auth-brand">
         <span class="auth-kicker">Climbing Board Studio</span>
         <h1>专业攀岩定线工作台</h1>
-        <p>统一管理岩板资产、岩点资源与 AI 线路实验，为教学和研发团队提供稳定、清晰的创作入口。</p>
+        <p>统一管理岩板资产、岩点资源与 AI 线路实验，为教学、研发和商业定线团队提供清晰可靠的创作入口。</p>
         <dl class="auth-summary">
           <div>
             <dt>Board</dt>
-            <dd>规格化岩板资产</dd>
+            <dd>结构化岩板资产</dd>
           </div>
           <div>
             <dt>Holds</dt>
-            <dd>结构化岩点库</dd>
+            <dd>可追踪岩点资源库</dd>
           </div>
           <div>
             <dt>AI Lab</dt>
-            <dd>可追踪生成实验</dd>
+            <dd>可查询生成任务</dd>
           </div>
         </dl>
       </div>
@@ -24,35 +24,37 @@
       <section class="auth-panel">
         <div class="auth-panel-heading">
           <p class="eyebrow">Secure Access</p>
-          <h2>{{ authMode === 'login' ? '登录账户' : '创建账户' }}</h2>
-          <span>{{ authMode === 'login' ? '进入你的工作台并继续管理线路资产。' : '注册后即可保存和同步你的定线数据。' }}</span>
+          <h2>{{ authMode === 'login' ? '登录账号' : '创建账号' }}</h2>
+          <span>{{ authMode === 'login' ? '进入你的工作台，继续管理线路资产。' : '注册后即可保存和同步你的定线数据。' }}</span>
         </div>
         <el-form class="auth-form" @submit.prevent>
           <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" :prefix-icon="Message" />
-        <el-input
-          v-model="authForm.password"
-          type="password"
-          show-password
-          placeholder="密码"
-          autocomplete="current-password"
-          :prefix-icon="Lock"
-          @keyup.enter="submitAuth"
-        />
-        <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" :prefix-icon="User" />
-        <el-alert v-if="authError" type="error" :closable="false" :title="authError" />
-        <div class="auth-actions">
-          <el-button type="primary" :loading="authLoading" :icon="Right" @click="submitAuth">
-            {{ authMode === 'login' ? '登录' : '注册' }}
-          </el-button>
-          <el-button text @click="toggleAuthMode">
-            {{ authMode === 'login' ? '创建账号' : '返回登录' }}
-          </el-button>
-        </div>
+          <el-input
+            v-model="authForm.password"
+            type="password"
+            show-password
+            placeholder="密码"
+            autocomplete="current-password"
+            :prefix-icon="Lock"
+            @keyup.enter="submitAuth"
+          />
+          <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" :prefix-icon="User" />
+          <el-alert v-if="authSuccess" type="success" :closable="false" :title="authSuccess" />
+          <el-alert v-if="authError" type="error" :closable="false" :title="authError" />
+          <div class="auth-actions">
+            <el-button type="primary" :loading="authLoading" :icon="Right" @click="submitAuth">
+              {{ authMode === 'login' ? '登录' : '注册' }}
+            </el-button>
+            <el-button text @click="toggleAuthMode">
+              {{ authMode === 'login' ? '创建账号' : '返回登录' }}
+            </el-button>
+          </div>
         </el-form>
-        <p class="auth-footnote">企业级数据服务由 Supabase 认证保护。</p>
+        <p class="auth-footnote">数据访问由 Supabase Auth 保护。前端仅使用 publishable key。</p>
       </section>
     </section>
   </main>
+
   <AppShell
     v-else
     v-model:active="activePage"
@@ -64,79 +66,94 @@
     @logout="handleLogout"
   >
     <section v-if="activePage === 'dashboard'" class="page dashboard-page">
-      <div class="dashboard-hero">
+      <div class="workbench-hero">
         <div>
-          <p class="eyebrow">专业深色工作台</p>
-          <h2>工作台总览</h2>
-          <div class="command-row">
-            <el-button type="primary" :icon="Plus" @click="startBlankStudio">新建岩板</el-button>
-            <el-button :icon="Collection" @click="activePage = 'library'">管理岩点库</el-button>
+          <p class="eyebrow">Operations Dashboard</p>
+          <h2>定线工作台总览</h2>
+          <p>集中查看当前岩板、资源库和 AI 实验状态，快速进入高频工作流。</p>
+        </div>
+        <div class="command-row">
+          <el-button type="primary" :icon="Plus" @click="startBlankStudio">新建岩板</el-button>
+          <el-button :icon="Collection" @click="activePage = 'library'">管理岩点库</el-button>
+          <el-button :icon="Histogram" @click="activePage = 'ai-lab'">进入 AI Lab</el-button>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div><strong>{{ studio.placedHolds.length }}</strong><span>当前岩点</span></div>
+        <div><strong>{{ studio.routeSteps.length }}</strong><span>Beta 动作</span></div>
+        <div><strong>{{ boards.savedBoards.length }}</strong><span>岩板资产</span></div>
+        <div><strong>{{ library.managedHolds.length }}</strong><span>岩点资源</span></div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Board Templates</p>
+            <h3>选择岩板模板</h3>
+          </div>
+          <el-button type="primary" plain :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">使用当前模板</el-button>
+        </div>
+        <div class="template-grid">
+          <button
+            v-for="template in studio.boardPresets"
+            :key="template.id"
+            class="template-card"
+            :class="{ active: selectedDashboardTemplateId === template.id }"
+            @click="selectedDashboardTemplateId = template.id"
+          >
+            <span>{{ template.cellLabel }}</span>
+            <strong>{{ template.label }}</strong>
+            <small>{{ template.physicalLabel }} / {{ template.spacingLabel }}</small>
+          </button>
+        </div>
+        <div class="template-detail-panel">
+          <div>
+            <h3>{{ selectedDashboardTemplate.label }}</h3>
+            <p>{{ selectedDashboardTemplate.description }}</p>
+          </div>
+          <div class="template-detail-meta">
+            <span>{{ selectedDashboardTemplate.cellLabel }}</span>
+            <span>{{ selectedDashboardTemplate.angleLabel }}</span>
+            <span>{{ selectedDashboardTemplate.total_holes }} 孔位</span>
+            <span>{{ selectedDashboardTemplate.material }}</span>
           </div>
         </div>
-        <div class="metric-grid">
-          <div><strong>{{ studio.placedHolds.length }}</strong><span>当前岩点</span></div>
-          <div><strong>{{ studio.routeSteps.length }}</strong><span>Beta 动作</span></div>
-          <div><strong>{{ boards.savedBoards.length }}</strong><span>岩板资产</span></div>
-          <div><strong>{{ library.managedHolds.length }}</strong><span>岩点资源</span></div>
-        </div>
-      </div>
-
-      <div class="template-grid">
-        <button
-          v-for="template in studio.boardPresets"
-          :key="template.id"
-          class="template-card"
-          :class="{ active: selectedDashboardTemplateId === template.id }"
-          @click="selectedDashboardTemplateId = template.id"
-        >
-          <span>{{ template.cellLabel }}</span>
-          <strong>{{ template.label }}</strong>
-          <small>{{ template.physicalLabel }} / {{ template.spacingLabel }}</small>
-        </button>
-      </div>
-
-      <section class="panel template-detail-panel">
-        <div>
-          <p class="eyebrow">岩板规格</p>
-          <h3>{{ selectedDashboardTemplate.label }}</h3>
-          <p>{{ selectedDashboardTemplate.description }}</p>
-        </div>
-        <div class="template-detail-meta">
-          <span>{{ selectedDashboardTemplate.cellLabel }}</span>
-          <span>{{ selectedDashboardTemplate.physicalLabel }}</span>
-          <span>孔距 {{ selectedDashboardTemplate.spacingLabel }}</span>
-          <span>{{ selectedDashboardTemplate.angleLabel }}</span>
-          <span>{{ selectedDashboardTemplate.total_holes }} 孔</span>
-          <span>{{ selectedDashboardTemplate.material }}</span>
-        </div>
-        <el-button type="primary" :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">
-          确认使用
-        </el-button>
       </section>
 
-      <div class="two-column">
-        <section class="panel">
-          <div class="panel-heading">
-            <h3>最近岩板</h3>
+      <div class="dashboard-grid">
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Recent Boards</p>
+              <h3>最近岩板</h3>
+            </div>
             <el-button text @click="activePage = 'boards'">查看全部</el-button>
           </div>
-          <div v-if="!boards.savedBoards.length" class="empty-text">暂无已保存岩板。</div>
+          <div v-if="!boards.savedBoards.length" class="empty-state">
+            <strong>暂无已保存岩板</strong>
+            <span>从 Studio 新建并保存第一块岩板后，它会显示在这里。</span>
+          </div>
           <button v-for="board in boards.savedBoards.slice(0, 5)" :key="board.saved_id || board.route_name" class="asset-row" @click="loadBoardIntoStudio(board)">
             <span>{{ board.route_name || '未命名岩板' }}</span>
             <small>{{ board.beta_sequence?.length || 0 }} Beta / {{ board.placed_holds?.length || 0 }} 岩点</small>
           </button>
         </section>
-        <section class="panel">
-          <div class="panel-heading">
-            <h3>工作状态</h3>
-            <span>{{ studio.unsavedChanges ? '有未保存修改' : '已同步' }}</span>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Current State</p>
+              <h3>工作状态</h3>
+            </div>
+            <span class="state-badge" :class="{ dirty: studio.unsavedChanges }">{{ studio.unsavedChanges ? '有未保存修改' : '已同步' }}</span>
           </div>
           <div class="state-list">
             <span>岩板：{{ studio.currentBoardSpec.cellLabel }}</span>
             <span>规格：{{ studio.currentBoardSpec.physicalLabel }}</span>
             <span>孔距：{{ studio.currentBoardSpec.spacingLabel }}</span>
             <span>材质：{{ studio.currentBoardSpec.material }}</span>
-            <span>模式：手动模拟建板</span>
+            <span>模式：手动定线 + AI 实验</span>
           </div>
         </section>
       </div>
@@ -176,7 +193,7 @@
                 <span>{{ hold.hold_type }}</span>
                 <small>{{ hold.variant }}</small>
               </button>
-              <div v-if="!library.filteredHolds.length" class="empty-text">没有匹配的岩点资源。</div>
+              <div v-if="!library.filteredHolds.length" class="empty-text">暂无匹配岩点。请刷新资源库或上传新岩点。</div>
             </div>
           </section>
         </aside>
@@ -214,13 +231,16 @@
       <div class="page-header">
         <div>
           <p class="eyebrow">Hold Library</p>
-          <h2>岩点库</h2>
+          <h2>岩点资源库</h2>
         </div>
-        <el-button :icon="Refresh" :loading="library.loading" @click="library.fetchAllHoldData">刷新岩点库</el-button>
+        <el-button :icon="Refresh" :loading="library.loading" @click="library.fetchAllHoldData">刷新资源库</el-button>
       </div>
       <div class="library-grid">
-        <section class="panel upload-panel">
-          <h3>上传岩点</h3>
+        <section class="section-block upload-panel">
+          <div>
+            <p class="eyebrow">Upload</p>
+            <h3>上传岩点</h3>
+          </div>
           <el-select v-model="library.uploadInfo.hold_type">
             <el-option v-for="type in library.holdTypes" :key="type" :label="type" :value="type" />
           </el-select>
@@ -231,10 +251,13 @@
           <el-button type="primary" :loading="library.loading" @click="library.uploadImage">上传</el-button>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <h3>已录入岩点</h3>
-            <span>{{ library.filteredHolds.length }} / {{ library.managedHolds.length }}</span>
+        <section class="section-block">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Inventory</p>
+              <h3>已录入岩点</h3>
+            </div>
+            <span class="state-badge">{{ library.filteredHolds.length }} / {{ library.managedHolds.length }}</span>
           </div>
           <div class="filter-row">
             <el-input v-model="library.search" placeholder="搜索岩点" clearable :prefix-icon="Search" />
@@ -252,7 +275,10 @@
               <el-button text type="danger" :icon="Delete" @click="library.deleteHold(hold.hold_type, hold.variant)">删除</el-button>
             </article>
           </div>
-          <div v-if="!library.filteredHolds.length" class="empty-state">暂无岩点资源。上传后可在 Studio 中使用。</div>
+          <div v-if="!library.filteredHolds.length" class="empty-state">
+            <strong>暂无岩点资源</strong>
+            <span>上传岩点或导入系统资源后，可在 Studio 中选择使用。</span>
+          </div>
         </section>
       </div>
     </section>
@@ -280,7 +306,10 @@
             <el-button type="danger" plain :icon="Delete" @click="deleteBoard(board)">删除</el-button>
           </div>
         </article>
-        <div v-if="!boards.savedBoards.length" class="empty-state">暂无保存的岩板资产。</div>
+        <div v-if="!boards.savedBoards.length" class="empty-state">
+          <strong>暂无保存的岩板资产</strong>
+          <span>完成一次保存后，岩板会在这里形成可追踪资产。</span>
+        </div>
       </div>
     </section>
 
@@ -289,7 +318,7 @@
         <p class="eyebrow">AI Lab</p>
         <template v-if="!aiLabUnlocked">
           <h2 class="lab-title">实验室入口</h2>
-          <p class="lab-copy">这里用于提交当前岩板给 AI 生成实验。进入前需要输入访问密码。</p>
+          <p class="lab-copy">AI Lab 用于提交当前岩板给生成或审查任务。进入前请输入访问密码。</p>
           <div class="lab-login">
             <el-input
               v-model="aiLabPassword"
@@ -302,7 +331,7 @@
             <el-button @click="activePage = 'studio'">返回 Studio</el-button>
           </div>
         </template>
-        <h2>实验室入口</h2>
+        <h2>实验任务</h2>
         <div class="experiment-controls">
           <el-segmented
             v-model="aiExperiment.mode"
@@ -315,11 +344,11 @@
             v-model="aiExperiment.user_requirements"
             type="textarea"
             :rows="3"
-            placeholder="输入本次实验要求，例如：多一点动态动作，或检查脚点是否过高"
+            placeholder="输入本次实验要求，例如：增加动态动作，或检查脚点是否过高"
           />
         </div>
         <div class="command-row">
-          <el-button type="primary" :loading="routeGen.loading" @click="runAiExperiment">用当前岩板试验生成</el-button>
+          <el-button type="primary" :loading="routeGen.loading" @click="runAiExperiment">提交当前岩板</el-button>
           <el-button v-if="routeGen.loading" @click="routeGen.cancelGeneration">取消任务</el-button>
           <el-button @click="activePage = 'studio'">返回 Studio</el-button>
         </div>
@@ -351,7 +380,7 @@
 
 <script setup>
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
-import { Collection, Delete, DocumentChecked, Edit, EditPen, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
+import { Collection, Delete, DocumentChecked, Edit, EditPen, Histogram, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AppShell from './components/AppShell.vue'
 import { useAuth } from './composables/useAuth'
@@ -367,6 +396,7 @@ const { currentUser, login, register, logout } = useAuth()
 const authMode = ref('login')
 const authLoading = ref(false)
 const authError = ref('')
+const authSuccess = ref('')
 const authForm = reactive({
   email: '',
   password: '',
@@ -386,16 +416,22 @@ const aiExperiment = reactive({
 
 async function submitAuth() {
   authError.value = ''
+  authSuccess.value = ''
   authLoading.value = true
   try {
     if (authMode.value === 'register') {
-      await register(authForm)
+      const user = await register(authForm)
+      if (!user) {
+        authSuccess.value = '注册已提交。请先打开邮箱完成确认，然后返回登录。'
+        authForm.password = ''
+        return
+      }
     } else {
       await login(authForm)
     }
     await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
   } catch (error) {
-    authError.value = error?.message || '登录失败'
+    authError.value = normalizeAuthError(error)
   } finally {
     authLoading.value = false
   }
@@ -404,6 +440,15 @@ async function submitAuth() {
 function toggleAuthMode() {
   authMode.value = authMode.value === 'login' ? 'register' : 'login'
   authError.value = ''
+  authSuccess.value = ''
+}
+
+function normalizeAuthError(error) {
+  const message = error?.message || ''
+  if (message.toLowerCase().includes('email not confirmed')) {
+    return '邮箱尚未确认。请先点击 Supabase 发送的确认邮件，再返回登录。'
+  }
+  return message || '登录失败'
 }
 
 async function handleLogout() {
@@ -430,7 +475,7 @@ const HoldPreview = defineComponent({
   },
   setup(props) {
     return () => {
-      const color = { Jug: '#43b284', Crimp: '#e45c5c', Sloper: '#d7a84f', Pinch: '#9a7ae6', Pocket: '#4b8fd9', Foot: '#8ea2b5' }[props.hold.hold_type] || '#43b284'
+      const color = { Jug: '#24876b', Crimp: '#d94b52', Sloper: '#c8912f', Pinch: '#7457d8', Pocket: '#2f72c8', Foot: '#718096' }[props.hold.hold_type] || '#24876b'
       if (props.mode === 'image' && props.hold.imageUrl) {
         return h('div', { class: 'hold-preview' }, [h('img', { src: props.hold.imageUrl, alt: '' })])
       }
@@ -505,7 +550,7 @@ function unlockAiLab() {
 }
 
 function runAiExperiment() {
-  ElMessage.info('AI Lab 为实验入口，任务会使用当前岩板数据提交。')
+  ElMessage.info('已提交当前岩板数据，AI Lab 将返回可查询任务结果。')
   routeGen.generateRoute({
     mode: aiExperiment.mode,
     board: studio.currentBoard,
