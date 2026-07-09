@@ -36,6 +36,8 @@ class Hold(BaseModel):
     is_start: bool = False
     variant: str = "default"
     type: Optional[str] = Field(None, description="Frontend compatibility alias")
+    imageUrl: Optional[str] = Field(None, description="Frontend hold image URL")
+    svgPath: Optional[str] = Field(None, description="Frontend hold vector path")
 
 
 class BetaStep(BaseModel):
@@ -197,3 +199,77 @@ class AIExperimentResponse(BaseModel):
     risk_level: Optional[Literal["low", "medium", "high"]] = None
     board: Optional[BoardAsset] = None
     failure_suggestion: Optional[str] = None
+
+
+class StandardBoardRouteFeatures(BaseModel):
+    hold_count: int
+    x_span: int
+    y_span: int
+    min_y: int
+    max_y: int
+    start_count: int
+    mid_count: int
+    end_count: int
+
+
+class VirtualLedPoint(BaseModel):
+    coord_id: str
+    led_index: int
+    row: int
+    col: int
+    role: Literal["start", "start_hand", "start_foot", "mid", "end"]
+    color: str
+
+
+class RouteOverlayPoint(VirtualLedPoint):
+    pass
+
+
+class StandardBoardRouteSummary(BaseModel):
+    source_id: str
+    display_name: str
+    grade: str
+    v_grade: str
+    is_benchmark: bool = False
+    repeats: int = 0
+    score: float
+    quality_score: Optional[float] = None
+    quality_tier: Literal["excellent", "good", "climbable", "review", "rejected"] = "review"
+    score_breakdown: Dict[str, float] = Field(default_factory=dict)
+    marker_summary: Dict[str, Any] = Field(default_factory=dict)
+    review_reasons: List[str] = Field(default_factory=list)
+    features: StandardBoardRouteFeatures
+    valid_for_climb: bool = True
+
+
+class StandardBoardRouteDetail(StandardBoardRouteSummary):
+    source_type: str = "standard-board-dataset"
+    source_url: Optional[str] = None
+    roles: Dict[Literal["start", "mid", "end"], List[str]]
+    route_roles: Dict[Literal["start", "mid", "end"], List[str]]
+    board_setup: List[Hold] = Field(default_factory=list)
+    route_overlay: List[RouteOverlayPoint] = Field(default_factory=list)
+    virtual_led: List[VirtualLedPoint]
+    board_asset: BoardAsset
+    validation: Dict[str, Any] = Field(default_factory=dict)
+
+
+class StandardBoardRouteQueryResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    routes: List[StandardBoardRouteSummary]
+
+
+class StandardBoardGenerateRequest(BaseModel):
+    target_difficulty: str = "V3"
+    benchmark_only: bool = False
+    variation: bool = True
+
+
+class StandardBoardGenerateResponse(BaseModel):
+    route: StandardBoardRouteDetail
+    source_route_id: str
+    reuse_rate: float
+    reuse_quality: Literal["below_pass", "pass", "optimal"]
+    validation: Dict[str, Any]

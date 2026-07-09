@@ -29,3 +29,6 @@ build/
 
 # Logs
 *.log
+
+# Generated hold image cache
+backend/data/holds_images_processed/

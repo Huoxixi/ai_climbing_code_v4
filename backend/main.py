@@ -26,8 +26,13 @@ from core.models import (
     GenerationInitiated,
     RouteRequest,
     RouteResponse,
+    StandardBoardGenerateRequest,
+    StandardBoardGenerateResponse,
+    StandardBoardRouteDetail,
+    StandardBoardRouteQueryResponse,
     TaskEnvelope,
 )
+from core.standard_board import detail_for, find_standard_route, generate_standard_route, query_standard_routes
 from core.state import active_tasks
 from core.supabase_repo import (
     SupabaseRepository,
@@ -59,19 +64,27 @@ app.add_middleware(
 
 DATA_DIR = "data"
 HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
+PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")
 HOLDS_VECTORS_FILE = os.path.join(DATA_DIR, "holds_vectors.json")
 SAVED_BOARDS_FILE = os.path.join(DATA_DIR, "saved_boards.json")
 EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 
+os.makedirs(PROCESSED_HOLDS_IMAGES_DIR, exist_ok=True)
 app.mount("/images", StaticFiles(directory=HOLDS_IMAGES_DIR), name="images")
+app.mount("/processed-images", StaticFiles(directory=PROCESSED_HOLDS_IMAGES_DIR), name="processed-images")
 
 tasks: Dict[str, asyncio.Task] = {}
 supabase_repo = SupabaseRepository()
 
 
+def is_local_demo_request(request: Request) -> bool:
+    token = extract_bearer_token(request.headers.get("authorization"))
+    return bool(token and token.startswith("mock-token-local-demo"))
+
+
 async def resolve_supabase_user(request: Request) -> dict | None:
-    if not is_supabase_configured():
+    if is_local_demo_request(request) or not is_supabase_configured():
         return None
     token = extract_bearer_token(request.headers.get("authorization"))
     if not token:
@@ -192,7 +205,7 @@ async def get_wall_grid():
 
 @app.get("/api/holds/mapping")
 async def get_holds_mapping(request: Request):
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         try:
             user = await resolve_supabase_user(request)
             return await supabase_repo.get_holds_mapping(user["id"] if user else None)
@@ -203,7 +216,7 @@ async def get_holds_mapping(request: Request):
 
 @app.get("/api/holds/vectors")
 async def get_holds_vectors(request: Request):
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         try:
             user = await resolve_supabase_user(request)
             return await supabase_repo.get_holds_vectors(user["id"] if user else None)
@@ -268,7 +281,7 @@ async def upload_hold_image(request: Request):
         ext = os.path.splitext(getattr(file, "filename", "") or "")[1] or ".png"
         filename = f"{uuid.uuid4()}{ext}"
         svg_path = extract_svg_path_from_image(image_bytes)
-        if is_supabase_configured():
+        if is_supabase_configured() and not is_local_demo_request(request):
             try:
                 content_type = getattr(file, "content_type", None) or "image/png"
                 user = await resolve_supabase_user(request)
@@ -309,7 +322,7 @@ async def upload_hold_image(request: Request):
 
 @app.delete("/api/holds/{hold_type}/{variant}")
 async def delete_hold(hold_type: str, variant: str, request: Request):
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         user = await resolve_supabase_user(request)
         if not user:
             raise HTTPException(status_code=401, detail="Supabase login required")
@@ -343,7 +356,7 @@ async def delete_hold(hold_type: str, variant: str, request: Request):
 async def save_board(payload: Dict[str, Any], request: Request):
     user = await resolve_supabase_user(request)
     owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         if not owner_id:
             raise HTTPException(status_code=401, detail="Supabase login required")
         try:
@@ -365,7 +378,7 @@ async def save_board(payload: Dict[str, Any], request: Request):
 async def get_my_boards(request: Request):
     user = await resolve_supabase_user(request)
     owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         if not owner_id:
             raise HTTPException(status_code=401, detail="Supabase login required")
         try:
@@ -379,7 +392,7 @@ async def get_my_boards(request: Request):
 async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Request):
     user = await resolve_supabase_user(request)
     owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         if not owner_id:
             raise HTTPException(status_code=401, detail="Supabase login required")
         try:
@@ -408,7 +421,7 @@ async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Re
 
 @app.delete("/api/my-boards/{saved_id}")
 async def delete_saved_board(saved_id: str, request: Request):
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         user = await resolve_supabase_user(request)
         if not user:
             raise HTTPException(status_code=401, detail="Supabase login required")
@@ -428,13 +441,56 @@ async def delete_saved_board(saved_id: str, request: Request):
     return {"success": True, "message": "岩板已删除"}
 
 
+@app.get("/api/standard-board/routes", response_model=StandardBoardRouteQueryResponse)
+async def list_standard_board_routes(
+    difficulty: str | None = None,
+    benchmark_only: bool = False,
+    min_holds: int | None = None,
+    max_holds: int | None = None,
+    sort: str = "score_desc",
+    limit: int = 24,
+    offset: int = 0,
+    valid_only: bool = True,
+):
+    return query_standard_routes(
+        difficulty=difficulty,
+        benchmark_only=benchmark_only,
+        min_holds=min_holds,
+        max_holds=max_holds,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+        valid_only=valid_only,
+    )
+
+
+@app.get("/api/standard-board/routes/{source_id}", response_model=StandardBoardRouteDetail)
+async def get_standard_board_route(source_id: str):
+    route = find_standard_route(source_id)
+    if not route:
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return detail_for(route)
+
+
+@app.post("/api/standard-board/generate", response_model=StandardBoardGenerateResponse)
+async def generate_standard_board_route(payload: StandardBoardGenerateRequest):
+    try:
+        return generate_standard_route(
+            target_difficulty=payload.target_difficulty,
+            benchmark_only=payload.benchmark_only,
+            variation=payload.variation,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
 async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks, request: Request):
     task_id = str(uuid.uuid4())
     user = await resolve_supabase_user(request)
     owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
     active_tasks[task_id] = task_envelope(task_id, "pending")
-    if is_supabase_configured():
+    if is_supabase_configured() and not is_local_demo_request(request):
         if not owner_id:
             raise HTTPException(status_code=401, detail="Supabase login required")
         try:

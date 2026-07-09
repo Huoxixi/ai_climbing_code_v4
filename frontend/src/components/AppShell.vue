@@ -70,6 +70,7 @@ const items = [
   { key: 'studio', label: 'Studio', short: '创作', icon: Platform },
   { key: 'library', label: '岩点库', short: '岩点', icon: Collection },
   { key: 'boards', label: '岩板资产', short: '资产', icon: Grid },
+  { key: 'standard-board', label: '标准板库', short: '板库', icon: Grid },
   { key: 'ai-lab', label: 'AI Lab', short: 'AI', icon: Histogram },
 ]
 </script>

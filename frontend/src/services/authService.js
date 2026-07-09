@@ -1,4 +1,5 @@
 const SESSION_KEY = 'zxt_supabase_session'
+const DEMO_TOKEN = 'mock-token-local-demo'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
@@ -44,7 +45,7 @@ function sessionToUser(session) {
     name: user.user_metadata?.name || user.email?.split('@')[0] || 'Route Setter',
     email: user.email,
     role: user.user_metadata?.role || 'route-setter',
-    provider: 'supabase',
+    provider: session.provider || 'supabase',
   }
 }
 
@@ -79,6 +80,23 @@ export const authService = {
       }),
     })
     if (session.access_token) saveSession(session)
+    return sessionToUser(session)
+  },
+
+  async skipLogin() {
+    const session = {
+      provider: 'local-demo',
+      access_token: DEMO_TOKEN,
+      user: {
+        id: 'local-demo-user',
+        email: 'demo@local.dev',
+        user_metadata: {
+          name: '本地体验用户',
+          role: 'route-setter',
+        },
+      },
+    }
+    saveSession(session)
     return sessionToUser(session)
   },
 

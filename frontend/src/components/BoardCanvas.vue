@@ -21,6 +21,23 @@
       />
 
       <button
+        v-for="hold in baseHolds"
+        :key="`setup-${hold.id}`"
+        class="placed-hold setup-hold"
+        :class="setupClass(hold)"
+        :style="{ ...getCoordStyle(hold.id), transform: `translate(-50%, 50%) rotate(${hold.rotation || 0}deg) scale(${hold.scale || 1})` }"
+        :title="setupTitle(hold)"
+        @click.stop="$emit('select', hold)"
+      >
+        <img v-if="visualFor(hold).imageUrl" :src="visualFor(hold).imageUrl" alt="" />
+        <svg v-else-if="visualFor(hold).svgPath" viewBox="0 0 100 100" aria-hidden="true">
+          <path :d="visualFor(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
+        </svg>
+        <span v-else :class="['hold-shape', (hold.hold_type || hold.type || 'Jug').toLowerCase()]" />
+      </button>
+
+      <button
+        v-if="!baseHolds.length"
         v-for="hold in holds"
         :key="hold.id"
         class="placed-hold"
@@ -29,10 +46,10 @@
         :title="hold.id"
         @click.stop="$emit('select', hold)"
       >
-        <svg v-if="resolveHoldVisual(hold).svgPath" viewBox="0 0 100 100" aria-hidden="true">
-          <path :d="resolveHoldVisual(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
+        <img v-if="visualFor(hold).imageUrl" :src="visualFor(hold).imageUrl" alt="" />
+        <svg v-else-if="visualFor(hold).svgPath" viewBox="0 0 100 100" aria-hidden="true">
+          <path :d="visualFor(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
         </svg>
-        <img v-else-if="resolveHoldVisual(hold).imageUrl" :src="resolveHoldVisual(hold).imageUrl" alt="" />
         <span v-else :class="['hold-shape', (hold.hold_type || hold.type || 'Jug').toLowerCase()]" />
       </button>
     </div>
@@ -45,6 +62,8 @@ import { computed } from 'vue'
 const props = defineProps({
   columns: { type: Array, required: true },
   rows: { type: Array, required: true },
+  baseHolds: { type: Array, default: () => [] },
+  routeOverlay: { type: Array, default: () => [] },
   holds: { type: Array, default: () => [] },
   routeSteps: { type: Array, default: () => [] },
   selectedHold: { type: Object, default: null },
@@ -57,9 +76,46 @@ const props = defineProps({
 defineEmits(['place', 'select'])
 
 const coords = computed(() => props.rows.flatMap((row) => props.columns.map((column) => `${column}${row}`)))
+const overlayByCoord = computed(() => {
+  const map = new Map()
+  props.routeOverlay.forEach((point) => map.set(point.coord_id, point))
+  return map
+})
 
 function isTop(id) {
   return props.routeSteps.some((step) => step.hold_id === id && step.is_top)
+}
+
+function setupClass(hold) {
+  const overlay = overlayByCoord.value.get(hold.id)
+  return {
+    lit: Boolean(overlay),
+    start: overlay?.role === 'start',
+    startHand: overlay?.role === 'start_hand',
+    startFoot: overlay?.role === 'start_foot',
+    mid: overlay?.role === 'mid',
+    top: overlay?.role === 'end',
+  }
+}
+
+function setupTitle(hold) {
+  const overlay = overlayByCoord.value.get(hold.id)
+  const label = {
+    start: '起点',
+    start_hand: '起点手点',
+    start_foot: '起点脚点',
+    mid: '中间点',
+    end: '终点',
+  }[overlay?.role] || overlay?.role
+  return overlay ? `${hold.id} ${label} LED ${overlay.led_index}` : hold.id
+}
+
+function visualFor(hold) {
+  const resolved = props.resolveHoldVisual(hold)
+  return {
+    svgPath: hold.svgPath || resolved.svgPath,
+    imageUrl: hold.imageUrl || resolved.imageUrl,
+  }
 }
 
 function shapeColor(type) {

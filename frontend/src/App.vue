@@ -3,21 +3,12 @@
     <section class="auth-layout" aria-label="Climbing Board Studio 登录">
       <div class="auth-brand">
         <span class="auth-kicker">Climbing Board Studio</span>
-        <h1>专业攀岩定线工作台</h1>
-        <p>统一管理岩板资产、岩点资源与 AI 线路实验，为教学、研发和商业定线团队提供清晰可靠的创作入口。</p>
+        <h1>攀岩定线工作台</h1>
+        <p>管理岩板、岩点资产、Beta 序列与实验任务。</p>
         <dl class="auth-summary">
-          <div>
-            <dt>Board</dt>
-            <dd>结构化岩板资产</dd>
-          </div>
-          <div>
-            <dt>Holds</dt>
-            <dd>可追踪岩点资源库</dd>
-          </div>
-          <div>
-            <dt>AI Lab</dt>
-            <dd>可查询生成任务</dd>
-          </div>
+          <div><dt>Board</dt><dd>岩板规格与线路资产</dd></div>
+          <div><dt>Holds</dt><dd>岩点库存与放置</dd></div>
+          <div><dt>AI Lab</dt><dd>实验任务入口</dd></div>
         </dl>
       </div>
 
@@ -25,7 +16,7 @@
         <div class="auth-panel-heading">
           <p class="eyebrow">Secure Access</p>
           <h2>{{ authMode === 'login' ? '登录账号' : '创建账号' }}</h2>
-          <span>{{ authMode === 'login' ? '进入你的工作台，继续管理线路资产。' : '注册后即可保存和同步你的定线数据。' }}</span>
+          <span>{{ authMode === 'login' ? '进入工作台继续管理线路资产。' : '注册后即可保存和同步定线数据。' }}</span>
         </div>
         <el-form class="auth-form" @submit.prevent>
           <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" :prefix-icon="Message" />
@@ -45,12 +36,15 @@
             <el-button type="primary" :loading="authLoading" :icon="Right" @click="submitAuth">
               {{ authMode === 'login' ? '登录' : '注册' }}
             </el-button>
+            <el-button :loading="authLoading" :icon="Right" @click="skipAuth">
+              跳过登录
+            </el-button>
             <el-button text @click="toggleAuthMode">
               {{ authMode === 'login' ? '创建账号' : '返回登录' }}
             </el-button>
           </div>
         </el-form>
-        <p class="auth-footnote">数据访问由 Supabase Auth 保护。前端仅使用 publishable key。</p>
+        <p class="auth-footnote">跳过登录会进入本地体验模式，数据保存在本机 fallback 存储中。</p>
       </section>
     </section>
   </main>
@@ -69,12 +63,13 @@
       <div class="workbench-hero">
         <div>
           <p class="eyebrow">Operations Dashboard</p>
-          <h2>定线工作台总览</h2>
-          <p>集中查看当前岩板、资源库和 AI 实验状态，快速进入高频工作流。</p>
+          <h2>工作台总览</h2>
+          <p>选择岩板规格、查看资产状态，并进入 Studio 或 AI Lab。</p>
         </div>
         <div class="command-row">
           <el-button type="primary" :icon="Plus" @click="startBlankStudio">新建岩板</el-button>
-          <el-button :icon="Collection" @click="activePage = 'library'">管理岩点库</el-button>
+          <el-button :icon="Collection" @click="activePage = 'library'">管理岩点</el-button>
+          <el-button :icon="Grid" @click="activePage = 'standard-board'">标准板库</el-button>
           <el-button :icon="Histogram" @click="activePage = 'ai-lab'">进入 AI Lab</el-button>
         </div>
       </div>
@@ -83,16 +78,16 @@
         <div><strong>{{ studio.placedHolds.length }}</strong><span>当前岩点</span></div>
         <div><strong>{{ studio.routeSteps.length }}</strong><span>Beta 动作</span></div>
         <div><strong>{{ boards.savedBoards.length }}</strong><span>岩板资产</span></div>
-        <div><strong>{{ library.managedHolds.length }}</strong><span>岩点资源</span></div>
+        <div><strong>{{ library.managedHolds.length }}</strong><span>岩点资产</span></div>
       </div>
 
       <section class="section-block">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Board Templates</p>
-            <h3>选择岩板模板</h3>
+            <h3>选择岩板规格</h3>
           </div>
-          <el-button type="primary" plain :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">使用当前模板</el-button>
+          <el-button type="primary" plain :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">确认使用</el-button>
         </div>
         <div class="template-grid">
           <button
@@ -104,7 +99,7 @@
           >
             <span>{{ template.cellLabel }}</span>
             <strong>{{ template.label }}</strong>
-            <small>{{ template.physicalLabel }} / {{ template.spacingLabel }}</small>
+            <small>{{ template.physicalLabel || template.angleLabel }}</small>
           </button>
         </div>
         <div class="template-detail-panel">
@@ -115,7 +110,6 @@
           <div class="template-detail-meta">
             <span>{{ selectedDashboardTemplate.cellLabel }}</span>
             <span>{{ selectedDashboardTemplate.angleLabel }}</span>
-            <span>{{ selectedDashboardTemplate.total_holes }} 孔位</span>
             <span>{{ selectedDashboardTemplate.material }}</span>
           </div>
         </div>
@@ -131,8 +125,8 @@
             <el-button text @click="activePage = 'boards'">查看全部</el-button>
           </div>
           <div v-if="!boards.savedBoards.length" class="empty-state">
-            <strong>暂无已保存岩板</strong>
-            <span>从 Studio 新建并保存第一块岩板后，它会显示在这里。</span>
+            <strong>暂无保存的岩板资产</strong>
+            <span>保存岩板后会在这里显示。</span>
           </div>
           <button v-for="board in boards.savedBoards.slice(0, 5)" :key="board.saved_id || board.route_name" class="asset-row" @click="loadBoardIntoStudio(board)">
             <span>{{ board.route_name || '未命名岩板' }}</span>
@@ -144,16 +138,14 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Current State</p>
-              <h3>工作状态</h3>
+              <h3>当前状态</h3>
             </div>
-            <span class="state-badge" :class="{ dirty: studio.unsavedChanges }">{{ studio.unsavedChanges ? '有未保存修改' : '已同步' }}</span>
+            <span class="state-badge">{{ studio.unsavedChanges ? '未保存' : '已同步' }}</span>
           </div>
           <div class="state-list">
             <span>岩板：{{ studio.currentBoardSpec.cellLabel }}</span>
-            <span>规格：{{ studio.currentBoardSpec.physicalLabel }}</span>
-            <span>孔距：{{ studio.currentBoardSpec.spacingLabel }}</span>
             <span>材质：{{ studio.currentBoardSpec.material }}</span>
-            <span>模式：手动定线 + AI 实验</span>
+            <span>模式：手动模拟建板</span>
           </div>
         </section>
       </div>
@@ -171,9 +163,12 @@
 
       <div class="studio-layout">
         <aside class="tool-panel">
-          <section class="panel">
-            <div class="panel-heading">
-              <h3>岩点选择</h3>
+          <section class="section-block">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Hold Palette</p>
+                <h3>岩点选择</h3>
+              </div>
               <el-segmented v-model="library.previewMode" :options="['vector', 'image']" />
             </div>
             <el-input v-model="library.search" placeholder="搜索类型或变体" clearable :prefix-icon="Search" />
@@ -193,7 +188,7 @@
                 <span>{{ hold.hold_type }}</span>
                 <small>{{ hold.variant }}</small>
               </button>
-              <div v-if="!library.filteredHolds.length" class="empty-text">暂无匹配岩点。请刷新资源库或上传新岩点。</div>
+              <div v-if="!library.filteredHolds.length" class="empty-text">没有匹配的岩点资源。</div>
             </div>
           </section>
         </aside>
@@ -277,7 +272,7 @@
           </div>
           <div v-if="!library.filteredHolds.length" class="empty-state">
             <strong>暂无岩点资源</strong>
-            <span>上传岩点或导入系统资源后，可在 Studio 中选择使用。</span>
+            <span>上传岩点后可在 Studio 中使用。</span>
           </div>
         </section>
       </div>
@@ -308,29 +303,145 @@
         </article>
         <div v-if="!boards.savedBoards.length" class="empty-state">
           <strong>暂无保存的岩板资产</strong>
-          <span>完成一次保存后，岩板会在这里形成可追踪资产。</span>
+          <span>完成保存后会在这里显示。</span>
         </div>
       </div>
     </section>
 
-    <section v-else class="page ai-page">
-      <div class="lab-panel" :class="{ locked: !aiLabUnlocked }">
-        <p class="eyebrow">AI Lab</p>
-        <template v-if="!aiLabUnlocked">
-          <h2 class="lab-title">实验室入口</h2>
-          <p class="lab-copy">AI Lab 用于提交当前岩板给生成或审查任务。进入前请输入访问密码。</p>
-          <div class="lab-login">
-            <el-input
-              v-model="aiLabPassword"
-              type="password"
-              show-password
-              placeholder="请输入实验室密码"
-              @keyup.enter="unlockAiLab"
-            />
-            <el-button type="primary" @click="unlockAiLab">进入实验室</el-button>
-            <el-button @click="activePage = 'studio'">返回 Studio</el-button>
+    <section v-else-if="activePage === 'standard-board'" class="page standard-board-page">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow">Standard Board Dataset</p>
+          <h2>标准训练板线路库</h2>
+        </div>
+        <div class="command-row">
+          <el-button :icon="Refresh" :loading="standardBoard.loading" @click="fetchStandardRoutes">刷新</el-button>
+          <el-button type="primary" :loading="standardBoard.generating" @click="generateStandardRoute">生成验证线路</el-button>
+        </div>
+      </div>
+
+      <section class="section-block standard-filters">
+        <el-select v-model="standardBoard.filters.difficulty" placeholder="难度">
+          <el-option v-for="grade in standardBoard.difficulties" :key="grade" :label="grade" :value="grade" />
+        </el-select>
+        <el-select v-model="standardBoard.filters.sort" placeholder="排序">
+          <el-option label="综合评分优先" value="score_desc" />
+          <el-option label="重复次数优先" value="repeats_desc" />
+          <el-option label="横向跨度优先" value="span_desc" />
+          <el-option label="岩点更少优先" value="holds_asc" />
+        </el-select>
+        <el-checkbox v-model="standardBoard.filters.benchmark_only">只看标杆线</el-checkbox>
+        <el-button type="primary" plain :loading="standardBoard.loading" @click="fetchStandardRoutes">应用筛选</el-button>
+      </section>
+
+      <el-alert v-if="standardBoard.error" type="error" :closable="false" :title="standardBoard.error" />
+      <el-alert
+        v-if="standardBoard.generatedMeta"
+        type="success"
+        :closable="false"
+        :title="`已生成标准板线路：重用率 ${(standardBoard.generatedMeta.reuse_rate * 100).toFixed(1)}%，${standardBoard.generatedMeta.reuse_quality}`"
+      />
+
+      <div class="standard-board-layout">
+        <section class="section-block route-list-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Routes</p>
+              <h3>{{ standardBoard.total }} 条匹配线路</h3>
+            </div>
+            <span class="state-badge">虚拟点亮</span>
           </div>
-        </template>
+          <div v-if="!standardBoard.routes.length" class="empty-state">
+            <strong>暂无匹配线路</strong>
+            <span>调整难度或标杆线条件后再试。</span>
+          </div>
+          <button
+            v-for="route in standardBoard.routes"
+            :key="route.source_id"
+            class="standard-route-row"
+            :class="{ active: standardBoard.selected?.source_id === route.source_id }"
+            @click="loadStandardRoute(route.source_id)"
+          >
+            <span>
+              <strong>{{ route.display_name }}</strong>
+              <small>{{ route.v_grade }} / Font {{ route.grade }} / {{ route.features.hold_count }} 点 / {{ tierLabel(route.quality_tier) }}</small>
+            </span>
+            <span>
+              <em>{{ route.quality_score ?? Math.round(route.score) }}</em>
+              <small class="quality-tier">{{ tierLabel(route.quality_tier) }}</small>
+              <small>{{ route.repeats }} repeats</small>
+            </span>
+          </button>
+        </section>
+
+        <section class="standard-preview-column">
+          <div class="standard-preview-canvas">
+            <BoardCanvas
+              :columns="studio.coordinateColumns"
+              :rows="studio.coordinateRows"
+              :base-holds="standardBoard.selected?.board_setup || []"
+              :route-overlay="standardBoard.selected?.route_overlay || standardBoard.selected?.virtual_led || []"
+              :holds="standardBoard.selected?.board_asset?.placed_holds || []"
+              :route-steps="standardBoard.selected?.board_asset?.beta_sequence || []"
+              :selected-hold="null"
+              :board-spec="standardBoard.selected?.board_asset?.board_spec || studio.currentBoardSpec"
+              :frame-style="studio.boardFrameStyle"
+              :get-coord-style="studio.getCoordStyle"
+              :resolve-hold-visual="library.resolveHoldVisual"
+              @place="() => {}"
+              @select="() => {}"
+            />
+          </div>
+
+          <section class="section-block standard-detail-panel">
+            <template v-if="standardBoard.selected">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Selected Route</p>
+                  <h3>{{ standardBoard.selected.display_name }}</h3>
+                </div>
+                <el-button type="primary" plain @click="loadStandardIntoStudio">载入 Studio</el-button>
+              </div>
+              <div class="standard-stats">
+                <span>{{ standardBoard.selected.v_grade }}</span>
+                <span>{{ standardBoard.selected.quality_score ?? 0 }} 分</span>
+                <span>{{ tierLabel(standardBoard.selected.quality_tier) }}</span>
+                <span>{{ standardBoard.selected.features.x_span }} 列跨度</span>
+                <span>{{ standardBoard.selected.features.y_span }} 行高度</span>
+                <span>{{ standardBoard.selected.validation?.valid_for_climb ? '可攀路线' : '需复核' }}</span>
+              </div>
+              <div class="score-breakdown">
+                <span v-for="item in scoreBreakdownItems(standardBoard.selected.score_breakdown)" :key="item.key">
+                  {{ item.label }} {{ item.value }}
+                </span>
+              </div>
+              <div class="marker-legend">
+                <span>手起点 {{ standardBoard.selected.marker_summary?.counts?.start_hands || 0 }}</span>
+                <span>脚起点 {{ standardBoard.selected.marker_summary?.counts?.start_feet || 0 }}</span>
+                <span>中间点 {{ standardBoard.selected.features.mid_count }}</span>
+                <span>终点 {{ standardBoard.selected.features.end_count }}</span>
+              </div>
+              <div v-if="standardBoard.selected.review_reasons?.length" class="review-reasons">
+                <span v-for="reason in standardBoard.selected.review_reasons" :key="reason">{{ reason }}</span>
+              </div>
+              <div class="virtual-led-list">
+                <span v-for="point in standardBoard.selected.route_overlay || standardBoard.selected.virtual_led" :key="point.coord_id">
+                  {{ point.coord_id }} {{ markerLabel(point.role) }} -> LED {{ point.led_index }}
+                </span>
+              </div>
+            </template>
+            <div v-else class="empty-state">
+              <strong>选择一条线路</strong>
+              <span>系统会在网页画布中进行虚拟点亮，不连接任何真实控制器。</span>
+            </div>
+          </section>
+        </section>
+      </div>
+    </section>
+
+    <section v-else class="page ai-page">
+      <div class="lab-panel">
+        <p class="eyebrow">AI Lab</p>
         <h2>实验任务</h2>
         <div class="experiment-controls">
           <el-segmented
@@ -380,87 +491,55 @@
 
 <script setup>
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
-import { Collection, Delete, DocumentChecked, Edit, EditPen, Histogram, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
+import { Collection, Delete, DocumentChecked, Edit, EditPen, Grid, Histogram, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AppShell from './components/AppShell.vue'
-import { useAuth } from './composables/useAuth'
 import BoardCanvas from './components/BoardCanvas.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
+import { useAuth } from './composables/useAuth'
 import { useBoardPersistence } from './composables/useBoardPersistence'
 import { useHoldLibrary } from './composables/useHoldLibrary'
 import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
+import standardBoardService from './services/standardBoardService'
 
 const activePage = ref('dashboard')
-const { currentUser, login, register, logout } = useAuth()
+const { currentUser, login, register, skipLogin, logout } = useAuth()
 const authMode = ref('login')
 const authLoading = ref(false)
 const authError = ref('')
 const authSuccess = ref('')
-const authForm = reactive({
-  email: '',
-  password: '',
-  name: '',
-})
+const authForm = reactive({ email: '', password: '', name: '' })
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
-const aiLabPassword = ref('')
-const aiLabUnlocked = ref(false)
-const aiExperiment = reactive({
-  mode: 'compose_route',
-  user_requirements: '',
+const aiExperiment = reactive({ mode: 'compose_route', user_requirements: '' })
+const standardBoard = reactive({
+  loading: false,
+  generating: false,
+  error: '',
+  routes: [],
+  selected: null,
+  generatedMeta: null,
+  total: 0,
+  difficulties: ['V0', 'V1', 'V2', 'V3', 'V4', 'V5'],
+  filters: {
+    difficulty: 'V3',
+    benchmark_only: false,
+    sort: 'score_desc',
+    limit: 24,
+    offset: 0,
+  },
 })
-
-async function submitAuth() {
-  authError.value = ''
-  authSuccess.value = ''
-  authLoading.value = true
-  try {
-    if (authMode.value === 'register') {
-      const user = await register(authForm)
-      if (!user) {
-        authSuccess.value = '注册已提交。请先打开邮箱完成确认，然后返回登录。'
-        authForm.password = ''
-        return
-      }
-    } else {
-      await login(authForm)
-    }
-    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
-  } catch (error) {
-    authError.value = normalizeAuthError(error)
-  } finally {
-    authLoading.value = false
-  }
-}
-
-function toggleAuthMode() {
-  authMode.value = authMode.value === 'login' ? 'register' : 'login'
-  authError.value = ''
-  authSuccess.value = ''
-}
-
-function normalizeAuthError(error) {
-  const message = error?.message || ''
-  if (message.toLowerCase().includes('email not confirmed')) {
-    return '邮箱尚未确认。请先点击 Supabase 发送的确认邮件，再返回登录。'
-  }
-  return message || '登录失败'
-}
-
-async function handleLogout() {
-  await logout()
-  activePage.value = 'dashboard'
-}
 
 const pageTitle = computed(() => ({
   dashboard: '总览',
   studio: 'Studio 工作台',
   library: '岩点库',
   boards: '岩板资产',
+  'standard-board': '标准板库',
   'ai-lab': 'AI Lab',
 }[activePage.value] || 'Climbing Board Studio'))
 
@@ -490,8 +569,65 @@ const HoldPreview = defineComponent({
 })
 
 onMounted(async () => {
-  if (currentUser.value) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards()])
+  if (currentUser.value) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
 })
+
+async function submitAuth() {
+  authError.value = ''
+  authSuccess.value = ''
+  authLoading.value = true
+  try {
+    if (authMode.value === 'register') {
+      const user = await register(authForm)
+      if (!user) {
+        authSuccess.value = '注册已提交。请先打开邮箱完成确认，然后返回登录。'
+        authForm.password = ''
+        return
+      }
+    } else {
+      await login(authForm)
+    }
+    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
+  } catch (error) {
+    authError.value = normalizeAuthError(error)
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function skipAuth() {
+  authError.value = ''
+  authSuccess.value = ''
+  authLoading.value = true
+  try {
+    await skipLogin()
+    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
+    ElMessage.success('已进入本地体验模式')
+  } catch (error) {
+    authError.value = error?.message || '跳过登录失败'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+function toggleAuthMode() {
+  authMode.value = authMode.value === 'login' ? 'register' : 'login'
+  authError.value = ''
+  authSuccess.value = ''
+}
+
+function normalizeAuthError(error) {
+  const message = error?.message || ''
+  if (message.toLowerCase().includes('email not confirmed')) {
+    return '邮箱尚未确认。请先点击 Supabase 发送的确认邮件，再返回登录。'
+  }
+  return message || '登录失败'
+}
+
+async function handleLogout() {
+  await logout()
+  activePage.value = 'dashboard'
+}
 
 function startBlankStudio() {
   studio.newBlankBoard().then((created) => {
@@ -531,22 +667,102 @@ async function deleteBoard(board) {
   if (deleted && studio.currentBoard.saved_id === board.saved_id) await studio.newBlankBoard()
 }
 
+async function fetchStandardRoutes() {
+  standardBoard.loading = true
+  standardBoard.error = ''
+  try {
+    const response = await standardBoardService.listRoutes(standardBoard.filters)
+    standardBoard.routes = response.data?.routes || []
+    standardBoard.total = response.data?.total || 0
+    const selectedStillVisible = standardBoard.routes.some((route) => route.source_id === standardBoard.selected?.source_id)
+    if ((!standardBoard.selected || !selectedStillVisible) && standardBoard.routes.length) {
+      await loadStandardRoute(standardBoard.routes[0].source_id)
+    }
+  } catch (error) {
+    standardBoard.error = error.response?.data?.detail || error.message || '标准板线路加载失败'
+  } finally {
+    standardBoard.loading = false
+  }
+}
+
+async function loadStandardRoute(sourceId) {
+  standardBoard.error = ''
+  try {
+    const response = await standardBoardService.getRoute(sourceId)
+    standardBoard.selected = response.data
+  } catch (error) {
+    standardBoard.error = error.response?.data?.detail || error.message || '标准板线路详情加载失败'
+  }
+}
+
+async function generateStandardRoute() {
+  standardBoard.generating = true
+  standardBoard.error = ''
+  standardBoard.generatedMeta = null
+  try {
+    const response = await standardBoardService.generateRoute({
+      target_difficulty: standardBoard.filters.difficulty,
+      benchmark_only: standardBoard.filters.benchmark_only,
+      variation: true,
+    })
+    standardBoard.selected = response.data?.route || null
+    standardBoard.generatedMeta = {
+      reuse_rate: response.data?.reuse_rate || 0,
+      reuse_quality: response.data?.reuse_quality || 'below_pass',
+    }
+    ElMessage.success('标准板线路已生成并完成虚拟点亮')
+  } catch (error) {
+    standardBoard.error = error.response?.data?.detail || error.message || '标准板线路生成失败'
+  } finally {
+    standardBoard.generating = false
+  }
+}
+
+function loadStandardIntoStudio() {
+  if (!standardBoard.selected?.board_asset) return
+  studio.loadBoard(standardBoard.selected.board_asset)
+  activePage.value = 'studio'
+}
+
+function tierLabel(tier) {
+  return {
+    excellent: '优质',
+    good: '好线',
+    climbable: '可爬',
+    review: '需复核',
+    rejected: '已淘汰',
+  }[tier] || '需复核'
+}
+
+function markerLabel(role) {
+  return {
+    start: '起点',
+    start_hand: '手起点',
+    start_foot: '脚起点',
+    mid: '中间点',
+    end: '终点',
+  }[role] || role
+}
+
+function scoreBreakdownItems(breakdown = {}) {
+  const labels = {
+    movement_quality: '动作质量',
+    climbable_structure: '可攀结构',
+    grade_confidence: '难度可信',
+    aesthetics: '线路变化',
+    data_support: '数据辅助',
+  }
+  return Object.entries(labels)
+    .filter(([key]) => breakdown[key] !== undefined)
+    .map(([key, label]) => ({ key, label, value: Number(breakdown[key]).toFixed(1) }))
+}
+
 function onUploadFile(uploadFile) {
   library.uploadInfo.file = uploadFile.raw
 }
 
 function removeUploadFile() {
   library.uploadInfo.file = null
-}
-
-function unlockAiLab() {
-  if (aiLabPassword.value === 'DXY666') {
-    aiLabUnlocked.value = true
-    aiLabPassword.value = ''
-    ElMessage.success('实验室已解锁')
-    return
-  }
-  ElMessage.error('实验室密码不正确')
 }
 
 function runAiExperiment() {

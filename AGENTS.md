@@ -66,6 +66,23 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
+# User Communication / Product Interpretation
+
+Treat the user as non-technical by default. User requests may be emotional, imprecise, incomplete, or expressed in everyday language rather than engineering terms.
+
+Before turning a request into implementation:
+- First interpret the product intent: what user-facing outcome, workflow, pain point, or business goal is probably being requested.
+- Translate vague language into concrete product requirements and state the interpretation briefly.
+- Avoid exposing unnecessary technical jargon. Explain technical constraints in plain language and connect them to user impact.
+- If the request can reasonably mean multiple things, list the likely interpretations and ask only the smallest blocking question.
+- If a safe, minimal assumption is enough to proceed, state that assumption and continue.
+- Keep communication calm and direct even when the user's wording is impatient or emotionally charged.
+- Do not blindly implement literal wording when it conflicts with the likely product goal; surface the mismatch and recommend the product-sensible path.
+
+Success means the agent behaves like a product-minded engineer: clarify the real need, reduce user decision burden, and convert non-technical requests into verifiable implementation steps.
+
+---
+
 # Project-Specific Database / Supabase Rules
 
 本部分用于约束 AI Agent 在本项目中使用 Supabase / 数据库时的行为。
@@ -204,3 +221,26 @@ Supabase 操作：
 ```text
 只读检查完成，没有修改任何文件或数据库。
 ```
+
+---
+
+# Project-Specific Server Deployment Rule
+
+When giving server deployment commands for this project, use the user's preferred GitHub-to-server sync workflow by default. Do not assume `/root/ai_climbing_code` should be updated with `git pull`.
+
+Preferred sync workflow:
+
+```bash
+cd /tmp
+rm -rf ai_climbing_code_v4
+git clone git@github.com:Huoxixi/ai_climbing_code_v4.git
+
+rsync -av \
+  --exclude='backend/.env' \
+  --exclude='backend/.venv' \
+  --exclude='node_modules' \
+  --exclude='frontend/node_modules' \
+  /tmp/ai_climbing_code_v4/ /root/ai_climbing_code/
+```
+
+After this sync, run project-specific build, dependency install, Nginx reload, or backend restart commands from `/root/ai_climbing_code` as needed.

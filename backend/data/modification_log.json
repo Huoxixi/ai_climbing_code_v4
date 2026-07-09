@@ -86,5 +86,83 @@
       "用户要求脚在移动时垂直跨度不能超过4格",
       "通过搜索阶段硬拦截可避免产生超跨度脚步动作，同时保留多步连续提脚的可行上升路径"
     ]
+  },
+  {
+    "timestamp": "2026-07-08T17:45:00+08:00",
+    "module": "backend/core/standard_board.py, frontend/src/components/BoardCanvas.vue",
+    "changes": [
+      "Separated fixed 11x18 board setup from route overlay for the standard-board module",
+      "Loaded backend/data/mock_holds.json as the 198-hold board_setup instead of synthesizing route-only holds",
+      "Made default standard-board queries return only valid_for_climb routes",
+      "Updated standard-board validation to require explicit start roles, at least two starts, at least one high end, 6-12 holds, Y1-Y5 starts, and no narrow ladder routes",
+      "Constrained generation to valid routes and mid-hold mutation while preserving start and end holds"
+    ],
+    "reason": [
+      "The standard board should render as a full fixed setup with only selected route coordinates highlighted",
+      "Imported raw routes without explicit starts or with impossible geometry were polluting the default library and generated results",
+      "Start holds at Y5 should remain valid when the source role is explicit"
+    ]
+  },
+  {
+    "timestamp": "2026-07-08T18:10:00+08:00",
+    "module": "backend/core/standard_board.py, backend/core/models.py, frontend/src/components/BoardCanvas.vue, frontend/src/style.css",
+    "changes": [
+      "Replaced mock_holds.json standard-board setup generation with the 8 user-recorded hold variants from holds_mapping.json",
+      "Added imageUrl/svgPath fields to Hold so the standard-board API can return recorded hold images directly",
+      "Standard-board setup now fills all A1-K18 coordinates with fixed scale 0.78 and deterministic rotations",
+      "BoardCanvas now prefers recorded PNG images over SVG paths when rendering holds",
+      "Standard-board preview constrains setup hold images to a uniform visual size and uses a wood-board background"
+    ],
+    "reason": [
+      "The user requested recorded hold assets instead of automatic SVG hold shapes",
+      "Uniform sizing and deterministic rotation make the board read like a real fixed training board without visual overlap",
+      "Using the recorded 8-hold pool keeps the setup visually consistent with the user's own asset library"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:00:00+08:00",
+    "module": "backend/core/hold_image_processing.py, backend/core/standard_board.py, backend/main.py",
+    "changes": [
+      "Added non-destructive processing for recorded hold PNGs by removing border-connected white background pixels into holds_images_processed",
+      "Mounted processed hold images at /processed-images and made standard-board setup prefer those URLs",
+      "Replaced the 0/90/180/270 setup rotation cycle with deterministic 0-359 degree coordinate-based rotations",
+      "Added tests for processed image transparency, processed image URL usage, and broad rotation coverage"
+    ],
+    "reason": [
+      "Recorded hold images had opaque white border/background pixels that looked poor on the wood board",
+      "The original assets should remain untouched so the processed transparent images are reversible cache artifacts",
+      "A real fixed training board should show varied orientations, not only quarter-turn rotations"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:25:00+08:00",
+    "module": "backend/core/hold_image_processing.py, backend/test_standard_board.py",
+    "changes": [
+      "Replaced the previous semi-transparent border cleanup with GrabCut foreground extraction",
+      "Changed processed hold output to cutout_v3 files so the standard-board module no longer reuses damaged cached images",
+      "Cropped processed images to the foreground and added transparent safety padding around each hold",
+      "Strengthened tests so processed image borders must have zero non-transparent pixels"
+    ],
+    "reason": [
+      "The previous halo cleanup left semi-transparent rectangular image bounds that became visible after arbitrary rotation",
+      "Standard-board holds need fully transparent outer borders to avoid rotated square artifacts",
+      "Versioned processed images prevent stale broken cache files from remaining in use"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:45:00+08:00",
+    "module": "backend/core/standard_board.py, frontend/src/style.css, backend/test_standard_board.py",
+    "changes": [
+      "Changed standard-board setup image URLs back to original recorded /images assets",
+      "Stopped the standard-board preview from automatically using processed/cutout images as the primary hold source",
+      "Kept deterministic 0-359 degree setup rotations while applying them to intact original hold images",
+      "Added non-destructive CSS blending for standard-board setup images to reduce white-background visibility",
+      "Updated tests to assert standard-board setup uses original image URLs"
+    ],
+    "reason": [
+      "Processed cutout images could display as damaged or incomplete holds on the board",
+      "The first priority is complete, recognizable hold rendering; white-background cleanup must not damage the source visual",
+      "CSS blending is reversible and does not mutate uploaded hold assets"
+    ]
   }
 ]

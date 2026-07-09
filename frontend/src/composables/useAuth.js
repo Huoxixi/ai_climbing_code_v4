@@ -14,6 +14,11 @@ export function useAuth() {
     return currentUser.value
   }
 
+  const skipLogin = async () => {
+    currentUser.value = await authService.skipLogin()
+    return currentUser.value
+  }
+
   const logout = async () => {
     await authService.logout()
     currentUser.value = null
@@ -23,6 +28,7 @@ export function useAuth() {
     currentUser,
     login,
     register,
+    skipLogin,
     logout,
   }
 }
