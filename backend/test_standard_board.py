@@ -9,6 +9,7 @@ from core.standard_board import (
     generate_standard_route,
     load_board_setup,
     load_standard_routes,
+    query_standard_board_repairs,
     query_standard_routes,
     validate_standard_roles,
 )
@@ -132,6 +133,21 @@ class StandardBoardDataTest(unittest.TestCase):
             queue = json.load(file)
         self.assertGreater(queue["total_rejected"], 0)
         self.assertTrue(queue["routes"][0]["review_reasons"])
+
+    def test_start_marker_repair_candidates_are_revalidated(self):
+        response = query_standard_board_repairs(status="repaired", limit=5)
+        self.assertGreater(response.total, 0)
+        candidate = response.routes[0]
+        self.assertEqual(candidate.repair_status, "repaired")
+        self.assertTrue(candidate.added_start_hands)
+        self.assertTrue(candidate.derived_start_feet)
+        self.assertTrue(candidate.validation["valid_for_climb"])
+        self.assertIsNotNone(candidate.quality_score)
+
+    def test_structural_failures_are_not_repaired_as_good_routes(self):
+        response = query_standard_board_repairs(status="unrepairable", limit=20)
+        self.assertGreater(response.total, 0)
+        self.assertTrue(all(candidate.repair_status == "unrepairable" for candidate in response.routes))
 
 
 if __name__ == "__main__":

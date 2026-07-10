@@ -188,6 +188,8 @@ class RouteReviewSuggestion(BaseModel):
     title: str
     detail: str
     hold_ids: List[str] = Field(default_factory=list)
+    group: Literal["must_fix", "should_fix", "optional"] = "optional"
+    candidate_route: Optional[FinalRoute] = None
 
 
 class AIExperimentResponse(BaseModel):
@@ -199,6 +201,12 @@ class AIExperimentResponse(BaseModel):
     risk_level: Optional[Literal["low", "medium", "high"]] = None
     board: Optional[BoardAsset] = None
     failure_suggestion: Optional[str] = None
+    analysis_summary: Optional[str] = None
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    candidate_routes: List[Dict[str, Any]] = Field(default_factory=list)
+    applied_constraints: List[str] = Field(default_factory=list)
+    algorithm_notes: List[str] = Field(default_factory=list)
+    llm_enriched: bool = False
 
 
 class StandardBoardRouteFeatures(BaseModel):
@@ -238,6 +246,13 @@ class StandardBoardRouteSummary(BaseModel):
     score_breakdown: Dict[str, float] = Field(default_factory=dict)
     marker_summary: Dict[str, Any] = Field(default_factory=dict)
     review_reasons: List[str] = Field(default_factory=list)
+    difficulty_score: Optional[float] = None
+    predicted_v_grade: Optional[str] = None
+    grade_delta: Optional[int] = None
+    difficulty_confidence: Optional[float] = None
+    difficulty_breakdown: Dict[str, float] = Field(default_factory=dict)
+    difficulty_reasons: List[str] = Field(default_factory=list)
+    grade_warning: Literal["none", "soft", "hard", "uncertain"] = "none"
     features: StandardBoardRouteFeatures
     valid_for_climb: bool = True
 
@@ -273,3 +288,83 @@ class StandardBoardGenerateResponse(BaseModel):
     reuse_rate: float
     reuse_quality: Literal["below_pass", "pass", "optimal"]
     validation: Dict[str, Any]
+
+
+class StandardRouteRatingRequest(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+
+
+class StandardRouteAscentLogRequest(BaseModel):
+    result: Literal["flash", "send", "attempt", "fail"]
+    attempts: int = Field(1, ge=1, le=999)
+    perceived_grade: Optional[str] = None
+    notes: str = ""
+
+
+class StandardRouteActivityLog(BaseModel):
+    id: str
+    result: Literal["flash", "send", "attempt", "fail"]
+    attempts: int
+    perceived_grade: Optional[str] = None
+    notes: str = ""
+    created_at: str
+
+
+class StandardRouteActivityStats(BaseModel):
+    attempts_total: int = 0
+    sends_total: int = 0
+    flashes_total: int = 0
+    last_result: Optional[str] = None
+
+
+class StandardRouteActivityResponse(BaseModel):
+    favorite: bool = False
+    rating: Optional[int] = None
+    logs: List[StandardRouteActivityLog] = Field(default_factory=list)
+    stats: StandardRouteActivityStats = Field(default_factory=StandardRouteActivityStats)
+
+
+class StandardBoardRepairCandidate(BaseModel):
+    source_id: str
+    repair_status: Literal["repairable", "repaired", "unrepairable"]
+    original_roles: Dict[Literal["start", "mid", "end"], List[str]]
+    repaired_roles: Optional[Dict[Literal["start", "mid", "end"], List[str]]] = None
+    added_start_hands: List[str] = Field(default_factory=list)
+    derived_start_feet: List[str] = Field(default_factory=list)
+    validation: Dict[str, Any] = Field(default_factory=dict)
+    quality_score: Optional[float] = None
+    difficulty_score: Optional[float] = None
+    predicted_v_grade: Optional[str] = None
+    grade_delta: Optional[int] = None
+    difficulty_confidence: Optional[float] = None
+    difficulty_breakdown: Dict[str, float] = Field(default_factory=dict)
+    difficulty_reasons: List[str] = Field(default_factory=list)
+    grade_warning: Literal["none", "soft", "hard", "uncertain"] = "none"
+    review_reasons: List[str] = Field(default_factory=list)
+
+
+class StandardBoardRepairQueryResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    routes: List[StandardBoardRepairCandidate]
+
+
+class StandardBoardRepairComparison(BaseModel):
+    candidate: StandardBoardRepairCandidate
+    original: StandardBoardRouteDetail
+    repaired: Optional[StandardBoardRouteDetail] = None
+
+
+class StandardBoardRepairPublishRequest(BaseModel):
+    source_ids: List[str] = Field(default_factory=list)
+
+
+class StandardBoardRepairPublishSkipped(BaseModel):
+    source_id: str
+    reason: str
+
+
+class StandardBoardRepairPublishResponse(BaseModel):
+    published: List[StandardBoardRouteSummary] = Field(default_factory=list)
+    skipped: List[StandardBoardRepairPublishSkipped] = Field(default_factory=list)

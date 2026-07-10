@@ -15,7 +15,21 @@ class SupabaseRepositoryError(RuntimeError):
     pass
 
 
+LOCAL_ONLY_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def is_local_only_mode() -> bool:
+    local_only = os.getenv("LOCAL_ONLY", "")
+    disable_supabase = os.getenv("DISABLE_SUPABASE", "")
+    return (
+        local_only.strip().lower() in LOCAL_ONLY_TRUE_VALUES
+        or disable_supabase.strip().lower() in LOCAL_ONLY_TRUE_VALUES
+    )
+
+
 def is_supabase_configured() -> bool:
+    if is_local_only_mode():
+        return False
     return bool(settings.supabase_url and settings.supabase_service_role_key)
 
 
@@ -78,8 +92,11 @@ class SupabaseRepository:
         if not self.enabled:
             raise SupabaseRepositoryError("Supabase is not configured")
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.request(method, url, **kwargs)
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.request(method, url, **kwargs)
+        except httpx.HTTPError as exc:
+            raise SupabaseRepositoryError(f"Supabase {method} {url} request failed: {exc}") from exc
 
         if response.status_code >= 400:
             raise SupabaseRepositoryError(f"Supabase {method} {url} failed: {response.status_code} {response.text}")
@@ -357,6 +374,48 @@ class SupabaseRepository:
             "result": row.get("result_payload"),
             "error": row.get("error_message"),
         }
+
+    async def list_standard_route_feedback(self, owner_id: str, source_id: str) -> List[Dict[str, Any]]:
+        rows = await self._request(
+            "GET",
+            self._table_url("route_feedback"),
+            headers=self._headers(),
+            params={
+                "select": "id,rating,feedback_type,content,metadata,created_at",
+                "owner_id": f"eq.{owner_id}",
+                "metadata->>source_id": f"eq.{source_id}",
+                "order": "created_at.desc",
+            },
+        )
+        return rows or []
+
+    async def insert_standard_route_feedback(
+        self,
+        owner_id: str,
+        source_id: str,
+        activity_type: str,
+        content: str,
+        rating: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        payload_metadata = {
+            "source_id": source_id,
+            "activity_type": activity_type,
+            **(metadata or {}),
+        }
+        rows = await self._request(
+            "POST",
+            self._table_url("route_feedback"),
+            headers=self._headers("return=representation"),
+            json={
+                "owner_id": owner_id,
+                "feedback_type": "preference",
+                "content": content,
+                "rating": rating,
+                "metadata": payload_metadata,
+            },
+        )
+        return rows[0]
 
     def _normalize_board(self, payload: Dict[str, Any]) -> BoardAsset:
         return BoardAsset(**payload)

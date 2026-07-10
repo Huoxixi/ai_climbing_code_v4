@@ -34,6 +34,7 @@
           <path :d="visualFor(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
         </svg>
         <span v-else :class="['hold-shape', (hold.hold_type || hold.type || 'Jug').toLowerCase()]" />
+        <span v-if="overlayFor(hold)" class="hold-marker-badge">{{ overlayLabel(overlayFor(hold)) }}</span>
       </button>
 
       <button
@@ -87,7 +88,7 @@ function isTop(id) {
 }
 
 function setupClass(hold) {
-  const overlay = overlayByCoord.value.get(hold.id)
+  const overlay = overlayFor(hold)
   return {
     lit: Boolean(overlay),
     start: overlay?.role === 'start',
@@ -99,7 +100,7 @@ function setupClass(hold) {
 }
 
 function setupTitle(hold) {
-  const overlay = overlayByCoord.value.get(hold.id)
+  const overlay = overlayFor(hold)
   const label = {
     start: '起点',
     start_hand: '起点手点',
@@ -108,6 +109,20 @@ function setupTitle(hold) {
     end: '终点',
   }[overlay?.role] || overlay?.role
   return overlay ? `${hold.id} ${label} LED ${overlay.led_index}` : hold.id
+}
+
+function overlayFor(hold) {
+  return overlayByCoord.value.get(hold.id)
+}
+
+function overlayLabel(overlay) {
+  return {
+    start: '起',
+    start_hand: '手',
+    start_foot: '脚',
+    mid: '线',
+    end: '顶',
+  }[overlay?.role] || '点'
 }
 
 function visualFor(hold) {

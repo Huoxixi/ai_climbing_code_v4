@@ -26,19 +26,39 @@ from core.models import (
     GenerationInitiated,
     RouteRequest,
     RouteResponse,
+    StandardBoardRepairCandidate,
+    StandardBoardRepairComparison,
+    StandardBoardRepairPublishRequest,
+    StandardBoardRepairPublishResponse,
+    StandardBoardRepairQueryResponse,
     StandardBoardGenerateRequest,
     StandardBoardGenerateResponse,
     StandardBoardRouteDetail,
     StandardBoardRouteQueryResponse,
+    StandardRouteActivityLog,
+    StandardRouteActivityResponse,
+    StandardRouteActivityStats,
+    StandardRouteAscentLogRequest,
+    StandardRouteRatingRequest,
     TaskEnvelope,
 )
-from core.standard_board import detail_for, find_standard_route, generate_standard_route, query_standard_routes
+from core.standard_board import (
+    detail_for,
+    find_standard_board_repair,
+    find_standard_route,
+    generate_standard_route,
+    publish_standard_board_repairs,
+    query_standard_board_repairs,
+    query_standard_routes,
+    repair_comparison,
+)
 from core.state import active_tasks
 from core.supabase_repo import (
     SupabaseRepository,
     SupabaseRepositoryError,
     extract_bearer_token,
     extract_user_id_from_auth_header,
+    is_local_only_mode,
     is_supabase_configured,
 )
 
@@ -69,6 +89,7 @@ HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")
 HOLDS_VECTORS_FILE = os.path.join(DATA_DIR, "holds_vectors.json")
 SAVED_BOARDS_FILE = os.path.join(DATA_DIR, "saved_boards.json")
 EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
+STANDARD_BOARD_ACTIVITY_FILE = os.path.join(DATA_DIR, "standard_board_activity.json")
 
 os.makedirs(PROCESSED_HOLDS_IMAGES_DIR, exist_ok=True)
 app.mount("/images", StaticFiles(directory=HOLDS_IMAGES_DIR), name="images")
@@ -83,8 +104,16 @@ def is_local_demo_request(request: Request) -> bool:
     return bool(token and token.startswith("mock-token-local-demo"))
 
 
+def should_use_supabase(request: Request | None = None) -> bool:
+    if is_local_only_mode() or not is_supabase_configured():
+        return False
+    if request is not None and is_local_demo_request(request):
+        return False
+    return True
+
+
 async def resolve_supabase_user(request: Request) -> dict | None:
-    if is_local_demo_request(request) or not is_supabase_configured():
+    if not should_use_supabase(request):
         return None
     token = extract_bearer_token(request.headers.get("authorization"))
     if not token:
@@ -130,7 +159,7 @@ def serialize_result(result: Any) -> Any:
 
 
 async def update_supabase_task(task_id: str, status: str, result: Any = None, error: str | None = None) -> None:
-    if not is_supabase_configured():
+    if not should_use_supabase():
         return
     try:
         await supabase_repo.update_task(task_id, status, result=result, error=error)
@@ -193,6 +222,106 @@ def normalize_board_payload(payload: Dict[str, Any], saved_id: str | None = None
     return BoardAsset(**data)
 
 
+def local_activity_key(user_key: str, source_id: str) -> str:
+    return f"{user_key}:{source_id}"
+
+
+def load_standard_activity_store() -> Dict[str, Any]:
+    store = load_json(STANDARD_BOARD_ACTIVITY_FILE, {})
+    if not isinstance(store, dict):
+        store = {}
+    store.setdefault("favorites", {})
+    store.setdefault("ratings", {})
+    store.setdefault("logs", [])
+    return store
+
+
+def save_standard_activity_store(store: Dict[str, Any]) -> None:
+    save_json(STANDARD_BOARD_ACTIVITY_FILE, store)
+
+
+def local_activity_user_key(request: Request, owner_id: str | None = None) -> str:
+    if owner_id:
+        return owner_id
+    token = extract_bearer_token(request.headers.get("authorization"))
+    if token and token.startswith("mock-token-local-demo"):
+        return "local-demo-user"
+    return extract_user_id_from_auth_header(request.headers.get("authorization")) or "anonymous"
+
+
+def activity_from_entries(favorite: bool, rating: int | None, logs: List[Dict[str, Any]]) -> StandardRouteActivityResponse:
+    ordered_logs = sorted(logs, key=lambda item: item.get("created_at", ""), reverse=True)
+    attempts_total = sum(int(item.get("attempts") or 0) for item in ordered_logs)
+    sends_total = sum(1 for item in ordered_logs if item.get("result") in {"flash", "send"})
+    flashes_total = sum(1 for item in ordered_logs if item.get("result") == "flash")
+    parsed_logs = [
+        StandardRouteActivityLog(
+            id=str(item.get("id")),
+            result=item.get("result"),
+            attempts=int(item.get("attempts") or 1),
+            perceived_grade=item.get("perceived_grade"),
+            notes=str(item.get("notes") or ""),
+            created_at=str(item.get("created_at") or ""),
+        )
+        for item in ordered_logs[:20]
+    ]
+    return StandardRouteActivityResponse(
+        favorite=favorite,
+        rating=rating,
+        logs=parsed_logs,
+        stats=StandardRouteActivityStats(
+            attempts_total=attempts_total,
+            sends_total=sends_total,
+            flashes_total=flashes_total,
+            last_result=ordered_logs[0].get("result") if ordered_logs else None,
+        ),
+    )
+
+
+def get_local_standard_activity(user_key: str, source_id: str) -> StandardRouteActivityResponse:
+    store = load_standard_activity_store()
+    key = local_activity_key(user_key, source_id)
+    favorite = bool(store["favorites"].get(key, {}).get("active"))
+    rating_entry = store["ratings"].get(key) or {}
+    logs = [
+        item
+        for item in store["logs"]
+        if item.get("user_key") == user_key and str(item.get("source_id")) == str(source_id)
+    ]
+    return activity_from_entries(favorite, rating_entry.get("rating"), logs)
+
+
+async def get_standard_activity(request: Request, source_id: str) -> StandardRouteActivityResponse:
+    return get_local_standard_activity(local_activity_user_key(request), source_id)
+
+
+async def append_standard_activity_event(request: Request, source_id: str, activity_type: str, content: str, rating: int | None = None, metadata: Dict[str, Any] | None = None) -> StandardRouteActivityResponse:
+    user_key = local_activity_user_key(request)
+    store = load_standard_activity_store()
+    key = local_activity_key(user_key, source_id)
+    now = utc_now()
+    metadata = metadata or {}
+    if activity_type == "favorite":
+        store["favorites"][key] = {"user_key": user_key, "source_id": source_id, "active": bool(metadata.get("active")), "updated_at": now}
+    elif activity_type == "rating":
+        store["ratings"][key] = {"user_key": user_key, "source_id": source_id, "rating": rating, "updated_at": now}
+    elif activity_type == "ascent_log":
+        store["logs"].append(
+            {
+                "id": str(uuid.uuid4()),
+                "user_key": user_key,
+                "source_id": source_id,
+                "result": metadata.get("result"),
+                "attempts": metadata.get("attempts") or 1,
+                "perceived_grade": metadata.get("perceived_grade"),
+                "notes": metadata.get("notes") or "",
+                "created_at": now,
+            }
+        )
+    save_standard_activity_store(store)
+    return get_local_standard_activity(user_key, source_id)
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "success", "message": "ZXT Engine is running.", "version": app.version}
@@ -205,24 +334,34 @@ async def get_wall_grid():
 
 @app.get("/api/holds/mapping")
 async def get_holds_mapping(request: Request):
-    if is_supabase_configured() and not is_local_demo_request(request):
+    local_mapping = load_json(HOLDS_MAPPING_FILE, {})
+    if local_mapping:
+        return local_mapping
+
+    if should_use_supabase(request):
         try:
             user = await resolve_supabase_user(request)
-            return await supabase_repo.get_holds_mapping(user["id"] if user else None)
+            if user:
+                return await supabase_repo.get_holds_mapping(user["id"])
         except SupabaseRepositoryError as exc:
             print(f"Supabase holds mapping fallback: {exc}")
-    return load_json(HOLDS_MAPPING_FILE, {})
+    return local_mapping
 
 
 @app.get("/api/holds/vectors")
 async def get_holds_vectors(request: Request):
-    if is_supabase_configured() and not is_local_demo_request(request):
+    local_vectors = load_json(HOLDS_VECTORS_FILE, {})
+    if local_vectors:
+        return local_vectors
+
+    if should_use_supabase(request):
         try:
             user = await resolve_supabase_user(request)
-            return await supabase_repo.get_holds_vectors(user["id"] if user else None)
+            if user:
+                return await supabase_repo.get_holds_vectors(user["id"])
         except SupabaseRepositoryError as exc:
             print(f"Supabase holds vectors fallback: {exc}")
-    return load_json(HOLDS_VECTORS_FILE, {})
+    return local_vectors
 
 
 def extract_svg_path_from_image(image_bytes: bytes) -> str:
@@ -281,22 +420,21 @@ async def upload_hold_image(request: Request):
         ext = os.path.splitext(getattr(file, "filename", "") or "")[1] or ".png"
         filename = f"{uuid.uuid4()}{ext}"
         svg_path = extract_svg_path_from_image(image_bytes)
-        if is_supabase_configured() and not is_local_demo_request(request):
+        if should_use_supabase(request):
             try:
                 content_type = getattr(file, "content_type", None) or "image/png"
                 user = await resolve_supabase_user(request)
-                if not user:
-                    raise HTTPException(status_code=401, detail="Supabase login required")
-                storage_path = await supabase_repo.upload_hold_image(filename, image_bytes, content_type, user["id"])
-                saved = await supabase_repo.upsert_hold_asset(
-                    hold_type,
-                    variant,
-                    storage_path,
-                    svg_path,
-                    user["id"],
-                    is_system=False,
-                )
-                return {"success": True, "image_path": saved.get("public_image_url"), "svg_path": saved.get("svg_path")}
+                if user:
+                    storage_path = await supabase_repo.upload_hold_image(filename, image_bytes, content_type, user["id"])
+                    saved = await supabase_repo.upsert_hold_asset(
+                        hold_type,
+                        variant,
+                        storage_path,
+                        svg_path,
+                        user["id"],
+                        is_system=False,
+                    )
+                    return {"success": True, "image_path": saved.get("public_image_url"), "svg_path": saved.get("svg_path")}
             except SupabaseRepositoryError as exc:
                 print(f"Supabase hold upload fallback: {exc}")
 
@@ -322,10 +460,8 @@ async def upload_hold_image(request: Request):
 
 @app.delete("/api/holds/{hold_type}/{variant}")
 async def delete_hold(hold_type: str, variant: str, request: Request):
-    if is_supabase_configured() and not is_local_demo_request(request):
-        user = await resolve_supabase_user(request)
-        if not user:
-            raise HTTPException(status_code=401, detail="Supabase login required")
+    user = await resolve_supabase_user(request) if should_use_supabase(request) else None
+    if should_use_supabase(request) and user:
         try:
             archived = await supabase_repo.archive_hold_asset(hold_type, variant, user["id"])
             if not archived:
@@ -354,14 +490,11 @@ async def delete_hold(hold_type: str, variant: str, request: Request):
 
 @app.post("/api/save-board")
 async def save_board(payload: Dict[str, Any], request: Request):
-    user = await resolve_supabase_user(request)
-    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured() and not is_local_demo_request(request):
-        if not owner_id:
-            raise HTTPException(status_code=401, detail="Supabase login required")
+    user = await resolve_supabase_user(request) if should_use_supabase(request) else None
+    if should_use_supabase(request) and user:
         try:
             normalized = normalize_board_payload(payload).model_dump(mode="json")
-            saved = await supabase_repo.create_board(normalized, owner_id)
+            saved = await supabase_repo.create_board(normalized, user["id"])
             return {"success": True, "message": "岩板已保存", **saved}
         except SupabaseRepositoryError as exc:
             print(f"Supabase board create fallback: {exc}")
@@ -376,29 +509,27 @@ async def save_board(payload: Dict[str, Any], request: Request):
 
 @app.get("/api/my-boards", response_model=List[BoardAsset])
 async def get_my_boards(request: Request):
-    user = await resolve_supabase_user(request)
-    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured() and not is_local_demo_request(request):
-        if not owner_id:
-            raise HTTPException(status_code=401, detail="Supabase login required")
+    local_boards = load_boards()
+    if local_boards:
+        return [normalize_board_payload(board).model_dump(mode="json") for board in local_boards]
+
+    user = await resolve_supabase_user(request) if should_use_supabase(request) else None
+    if should_use_supabase(request) and user:
         try:
-            return [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(owner_id)]
+            return [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(user["id"])]
         except SupabaseRepositoryError as exc:
             print(f"Supabase board list fallback: {exc}")
-    return [normalize_board_payload(board).model_dump(mode="json") for board in load_boards()]
+    return [normalize_board_payload(board).model_dump(mode="json") for board in local_boards]
 
 
 @app.put("/api/my-boards/{saved_id}")
 async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Request):
-    user = await resolve_supabase_user(request)
-    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
-    if is_supabase_configured() and not is_local_demo_request(request):
-        if not owner_id:
-            raise HTTPException(status_code=401, detail="Supabase login required")
+    user = await resolve_supabase_user(request) if should_use_supabase(request) else None
+    if should_use_supabase(request) and user:
         try:
             if not str(payload.get("route_name", "")).strip():
                 raise HTTPException(status_code=400, detail="岩板名称不能为空")
-            saved = await supabase_repo.update_board(saved_id, payload, owner_id)
+            saved = await supabase_repo.update_board(saved_id, payload, user["id"])
             return {"success": True, "message": "岩板已更新", **saved}
         except SupabaseRepositoryError as exc:
             print(f"Supabase board update fallback: {exc}")
@@ -421,10 +552,8 @@ async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Re
 
 @app.delete("/api/my-boards/{saved_id}")
 async def delete_saved_board(saved_id: str, request: Request):
-    if is_supabase_configured() and not is_local_demo_request(request):
-        user = await resolve_supabase_user(request)
-        if not user:
-            raise HTTPException(status_code=401, detail="Supabase login required")
+    user = await resolve_supabase_user(request) if should_use_supabase(request) else None
+    if should_use_supabase(request) and user:
         try:
             archived = await supabase_repo.archive_board(saved_id, user["id"])
             if not archived:
@@ -444,6 +573,8 @@ async def delete_saved_board(saved_id: str, request: Request):
 @app.get("/api/standard-board/routes", response_model=StandardBoardRouteQueryResponse)
 async def list_standard_board_routes(
     difficulty: str | None = None,
+    predicted_v_grade: str | None = None,
+    grade_warning: str | None = None,
     benchmark_only: bool = False,
     min_holds: int | None = None,
     max_holds: int | None = None,
@@ -454,6 +585,8 @@ async def list_standard_board_routes(
 ):
     return query_standard_routes(
         difficulty=difficulty,
+        predicted_v_grade=predicted_v_grade,
+        grade_warning=grade_warning,
         benchmark_only=benchmark_only,
         min_holds=min_holds,
         max_holds=max_holds,
@@ -472,6 +605,102 @@ async def get_standard_board_route(source_id: str):
     return detail_for(route)
 
 
+@app.get("/api/standard-board/routes/{source_id}/activity", response_model=StandardRouteActivityResponse)
+async def get_standard_board_route_activity(source_id: str, request: Request):
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return await get_standard_activity(request, source_id)
+
+
+@app.post("/api/standard-board/routes/{source_id}/favorite", response_model=StandardRouteActivityResponse)
+async def favorite_standard_board_route(source_id: str, request: Request):
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return await append_standard_activity_event(
+        request,
+        source_id,
+        "favorite",
+        "收藏标准板线路",
+        metadata={"active": True},
+    )
+
+
+@app.delete("/api/standard-board/routes/{source_id}/favorite", response_model=StandardRouteActivityResponse)
+async def unfavorite_standard_board_route(source_id: str, request: Request):
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return await append_standard_activity_event(
+        request,
+        source_id,
+        "favorite",
+        "取消收藏标准板线路",
+        metadata={"active": False},
+    )
+
+
+@app.post("/api/standard-board/routes/{source_id}/rating", response_model=StandardRouteActivityResponse)
+async def rate_standard_board_route(source_id: str, payload: StandardRouteRatingRequest, request: Request):
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return await append_standard_activity_event(
+        request,
+        source_id,
+        "rating",
+        f"评分 {payload.rating}",
+        rating=payload.rating,
+    )
+
+
+@app.post("/api/standard-board/routes/{source_id}/ascent-log", response_model=StandardRouteActivityResponse)
+async def log_standard_board_ascent(source_id: str, payload: StandardRouteAscentLogRequest, request: Request):
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    return await append_standard_activity_event(
+        request,
+        source_id,
+        "ascent_log",
+        payload.notes or payload.result,
+        metadata=payload.model_dump(mode="json"),
+    )
+
+
+@app.get("/api/standard-board/repairs", response_model=StandardBoardRepairQueryResponse)
+async def list_standard_board_repairs(limit: int = 24, offset: int = 0, status: str | None = None):
+    return query_standard_board_repairs(limit=limit, offset=offset, status=status)
+
+
+@app.get("/api/standard-board/repairs/{source_id}", response_model=StandardBoardRepairCandidate)
+async def get_standard_board_repair(source_id: str):
+    candidate = find_standard_board_repair(source_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="未找到该待修复线路")
+    return candidate
+
+
+@app.get("/api/standard-board/repairs/{source_id}/comparison", response_model=StandardBoardRepairComparison)
+async def compare_standard_board_repair(source_id: str):
+    comparison = repair_comparison(source_id)
+    if not comparison:
+        raise HTTPException(status_code=404, detail="未找到该待修复线路")
+    return comparison
+
+
+@app.get("/api/standard-board/repairs/{source_id}/preview", response_model=StandardBoardRouteDetail)
+async def preview_standard_board_repair(source_id: str):
+    candidate = find_standard_board_repair(source_id)
+    route = find_standard_route(source_id)
+    if not candidate or not route:
+        raise HTTPException(status_code=404, detail="未找到该待修复线路")
+    if candidate.repair_status != "repaired" or not candidate.repaired_roles:
+        raise HTTPException(status_code=400, detail="该线路暂无可预览的修复结果")
+    return detail_for(route, candidate.repaired_roles)
+
+
+@app.post("/api/standard-board/repairs/publish", response_model=StandardBoardRepairPublishResponse)
+async def publish_standard_board_repair_routes(payload: StandardBoardRepairPublishRequest):
+    return publish_standard_board_repairs(payload.source_ids)
+
+
 @app.post("/api/standard-board/generate", response_model=StandardBoardGenerateResponse)
 async def generate_standard_board_route(payload: StandardBoardGenerateRequest):
     try:
@@ -487,10 +716,11 @@ async def generate_standard_board_route(payload: StandardBoardGenerateRequest):
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
 async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks, request: Request):
     task_id = str(uuid.uuid4())
-    user = await resolve_supabase_user(request)
-    owner_id = user["id"] if user else extract_user_id_from_auth_header(request.headers.get("authorization"))
+    use_supabase = should_use_supabase(request)
+    user = await resolve_supabase_user(request) if use_supabase else None
+    owner_id = user["id"] if user else (extract_user_id_from_auth_header(request.headers.get("authorization")) if use_supabase else None)
     active_tasks[task_id] = task_envelope(task_id, "pending")
-    if is_supabase_configured() and not is_local_demo_request(request):
+    if use_supabase:
         if not owner_id:
             raise HTTPException(status_code=401, detail="Supabase login required")
         try:
@@ -504,12 +734,14 @@ async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTa
 @app.get("/api/result/{task_id}", response_model=TaskEnvelope)
 async def get_generation_result(task_id: str):
     task_info = active_tasks.get(task_id)
-    if not task_info and is_supabase_configured():
+    if not task_info and should_use_supabase():
         try:
             task_info = await supabase_repo.get_task(task_id)
         except SupabaseRepositoryError as exc:
             print(f"Supabase task result fallback: {exc}")
     if not task_info:
+        if is_local_only_mode():
+            raise HTTPException(status_code=404, detail="本地任务不存在或服务已重启")
         raise HTTPException(status_code=404, detail="任务未找到或已过期")
     return task_info
 

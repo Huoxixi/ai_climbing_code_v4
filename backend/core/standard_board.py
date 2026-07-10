@@ -7,9 +7,11 @@ overlay that highlights a subset of the fixed setup; it is not hardware control.
 from __future__ import annotations
 
 import json
+import math
 import pickle
 import random
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Literal, Optional
@@ -22,6 +24,11 @@ from core.models import (
     HoldType,
     Limb,
     RouteOverlayPoint,
+    StandardBoardRepairCandidate,
+    StandardBoardRepairComparison,
+    StandardBoardRepairPublishResponse,
+    StandardBoardRepairPublishSkipped,
+    StandardBoardRepairQueryResponse,
     StandardBoardRouteDetail,
     StandardBoardRouteFeatures,
     StandardBoardRouteQueryResponse,
@@ -38,6 +45,7 @@ DATASET_PATH = DATA_DIR / "raw_datasets" / "moonGen_scrape_2016_final"
 HOLDS_MAPPING_PATH = DATA_DIR / "holds_mapping.json"
 HOLDS_VECTORS_PATH = DATA_DIR / "holds_vectors.json"
 REVIEW_QUEUE_PATH = DATA_DIR / "standard_board_review_queue.json"
+ACCEPTED_REPAIRS_PATH = DATA_DIR / "standard_board_accepted_repairs.json"
 SETUP_SCALE = 0.78
 
 GRADE_TO_V = {
@@ -56,6 +64,17 @@ GRADE_TO_V = {
     "8A": "V9",
     "8A+": "V10",
 }
+V_GRADE_ORDER = [f"V{index}" for index in range(11)]
+DIFFICULTY_SCORE_CUTOFFS = [24, 31, 38, 45, 52, 60, 68, 76, 84, 92]
+HOLD_DIFFICULTY = {
+    HoldType.JUG: 18.0,
+    HoldType.PINCH: 52.0,
+    HoldType.SLOPER: 62.0,
+    HoldType.CRIMP: 72.0,
+    HoldType.POCKET: 82.0,
+    HoldType.FOOT: 50.0,
+}
+_DIFFICULTY_CALIBRATION: List[tuple[float, str]] = []
 
 ROLE_COLORS = {
     "start": "#22c55e",
@@ -64,6 +83,24 @@ ROLE_COLORS = {
     "mid": "#f59e0b",
     "end": "#ef4444",
 }
+
+
+def _repaired_source_id(source_id: str) -> str:
+    return f"repaired-{source_id}"
+
+
+def _original_source_id(source_id: str) -> str:
+    return str(source_id).removeprefix("repaired-")
+
+
+def _is_repaired_source_id(source_id: str) -> bool:
+    return str(source_id).startswith("repaired-")
+
+
+def _display_name(source_id: str) -> str:
+    if _is_repaired_source_id(source_id):
+        return f"Standard route {_original_source_id(source_id)} 修复版"
+    return f"Standard route {source_id}"
 
 FAILURE_MESSAGES = {
     "invalid_coords": "存在无效坐标",
@@ -95,6 +132,13 @@ class NormalizedStandardRoute:
     score_breakdown: Dict[str, float]
     marker_summary: Dict[str, Any]
     review_reasons: List[str]
+    difficulty_score: Optional[float]
+    predicted_v_grade: Optional[str]
+    grade_delta: Optional[int]
+    difficulty_confidence: Optional[float]
+    difficulty_breakdown: Dict[str, float]
+    difficulty_reasons: List[str]
+    grade_warning: str
     features: StandardBoardRouteFeatures
     valid_for_climb: bool
     validation: Dict[str, Any]
@@ -398,6 +442,301 @@ def _score_route_quality(
     }
 
 
+def _coord_distance(a: str, b: str) -> float:
+    ax = _coord_x_index(a)
+    ay = int(a[1:])
+    bx = _coord_x_index(b)
+    by = int(b[1:])
+    return math.hypot(ax - bx, (ay - by) * 1.15)
+
+
+def _hold_difficulty(coord_id: str) -> tuple[float, bool]:
+    setup_hold = _setup_map().get(coord_id)
+    if not setup_hold:
+        return 55.0, True
+    return HOLD_DIFFICULTY.get(setup_hold.hold_type, 55.0), False
+
+
+def _difficulty_hand_sequence(roles: Dict[Literal["start", "mid", "end"], List[str]], marker_summary: Dict[str, Any]) -> List[str]:
+    start_hands = [coord_id for coord_id in marker_summary.get("start_hands", []) if _coord_exists(coord_id)]
+    hand_mids = [coord_id for coord_id in roles["mid"] if _coord_exists(coord_id) and not _is_foot_hold(coord_id)]
+    hand_ends = [coord_id for coord_id in roles["end"] if _coord_exists(coord_id) and not _is_foot_hold(coord_id)]
+    hand_mids.sort(key=lambda coord_id: (int(coord_id[1:]), _coord_x_index(coord_id)))
+    hand_ends.sort(key=lambda coord_id: (int(coord_id[1:]), _coord_x_index(coord_id)))
+    return _dedupe_preserve_order(start_hands + hand_mids + hand_ends)
+
+
+def _available_foot_holds(roles: Dict[Literal["start", "mid", "end"], List[str]], marker_summary: Dict[str, Any]) -> List[str]:
+    explicit_feet = [coord_id for coord_id in marker_summary.get("start_feet", []) if _coord_exists(coord_id)]
+    route_feet = [
+        coord_id
+        for coord_id in _dedupe_preserve_order(roles["start"] + roles["mid"] + roles["end"])
+        if _coord_exists(coord_id) and _is_foot_hold(coord_id)
+    ]
+    return _dedupe_preserve_order(explicit_feet + route_feet)
+
+
+def _foot_support_score(target: str, foot_holds: List[str]) -> float:
+    if not foot_holds:
+        return 78.0
+    target_x = _coord_x_index(target)
+    target_y = int(target[1:])
+    usable = []
+    for foot_id in foot_holds:
+        foot_y = int(foot_id[1:])
+        if foot_y > target_y + 1:
+            continue
+        x_gap = abs(_coord_x_index(foot_id) - target_x)
+        y_gap = max(0, target_y - foot_y)
+        usable.append((x_gap * 2.1 + y_gap * 0.8, x_gap, y_gap))
+    if not usable:
+        return 72.0
+    support_cost, x_gap, y_gap = min(usable)
+    return _clamp_score(18.0 + support_cost * 8.0 + max(0, x_gap - 3) * 6.0 + max(0, y_gap - 6) * 4.0, 100.0)
+
+
+def _difficulty_grade_from_score(score: float) -> str:
+    for index, cutoff in enumerate(DIFFICULTY_SCORE_CUTOFFS):
+        if score < cutoff:
+            return V_GRADE_ORDER[index]
+    return V_GRADE_ORDER[-1]
+
+
+def _calibrated_grade_from_score(score: Optional[float]) -> Optional[str]:
+    if score is None:
+        return None
+    for upper_score, grade in _DIFFICULTY_CALIBRATION:
+        if score <= upper_score:
+            return grade
+    if _DIFFICULTY_CALIBRATION:
+        return _DIFFICULTY_CALIBRATION[-1][1]
+    return _difficulty_grade_from_score(score)
+
+
+def _score_near_calibration_boundary(score: Optional[float]) -> bool:
+    if score is None or not _DIFFICULTY_CALIBRATION:
+        return False
+    return any(abs(score - upper_score) <= 0.75 for upper_score, _grade in _DIFFICULTY_CALIBRATION[:-1])
+
+
+def _relabel_difficulty_with_grade(difficulty: Dict[str, Any], v_grade: str, predicted_v_grade: Optional[str]) -> Dict[str, Any]:
+    next_difficulty = dict(difficulty)
+    if not predicted_v_grade:
+        next_difficulty.update({"predicted_v_grade": None, "grade_delta": None, "grade_warning": "uncertain"})
+        return next_difficulty
+
+    grade_delta = _difficulty_number(predicted_v_grade) - _difficulty_number(v_grade)
+    confidence = float(next_difficulty.get("difficulty_confidence") or 0.5)
+    confidence = min(confidence * 0.78, 0.82)
+    if _score_near_calibration_boundary(next_difficulty.get("difficulty_score")):
+        confidence -= 0.12
+    if abs(grade_delta) >= 3:
+        confidence -= 0.08
+    confidence = round(max(0.25, min(0.82, confidence)), 2)
+
+    next_difficulty.update(
+        {
+            "predicted_v_grade": predicted_v_grade,
+            "grade_delta": grade_delta,
+            "difficulty_confidence": confidence,
+            "grade_warning": _difficulty_warning(grade_delta, confidence),
+        }
+    )
+    return next_difficulty
+
+
+def _build_difficulty_calibration(routes: List["NormalizedStandardRoute"]) -> None:
+    global _DIFFICULTY_CALIBRATION
+    valid_routes = [route for route in routes if route.valid_for_climb and route.difficulty_score is not None]
+    if not valid_routes:
+        _DIFFICULTY_CALIBRATION = []
+        return
+
+    grade_counts = Counter(route.v_grade for route in valid_routes)
+    ordered_grades = [grade for grade in V_GRADE_ORDER if grade_counts.get(grade, 0) > 0]
+    sorted_scores = sorted(float(route.difficulty_score or 0.0) for route in valid_routes)
+    thresholds: List[tuple[float, str]] = []
+    cumulative = 0
+    total = len(sorted_scores)
+    for grade in ordered_grades:
+        cumulative += grade_counts[grade]
+        cutoff_index = min(total - 1, max(0, cumulative - 1))
+        thresholds.append((round(sorted_scores[cutoff_index], 4), grade))
+    _DIFFICULTY_CALIBRATION = thresholds
+
+
+def _apply_difficulty_calibration(routes: List["NormalizedStandardRoute"]) -> List["NormalizedStandardRoute"]:
+    _build_difficulty_calibration(routes)
+    calibrated_routes: List[NormalizedStandardRoute] = []
+    for route in routes:
+        if not route.valid_for_climb or route.difficulty_score is None:
+            calibrated_routes.append(route)
+            continue
+        predicted_grade = _calibrated_grade_from_score(route.difficulty_score)
+        difficulty = _relabel_difficulty_with_grade(
+            {
+                "difficulty_score": route.difficulty_score,
+                "predicted_v_grade": route.predicted_v_grade,
+                "grade_delta": route.grade_delta,
+                "difficulty_confidence": route.difficulty_confidence,
+                "difficulty_breakdown": route.difficulty_breakdown,
+                "difficulty_reasons": route.difficulty_reasons,
+                "grade_warning": route.grade_warning,
+            },
+            route.v_grade,
+            predicted_grade,
+        )
+        calibrated_routes.append(
+            replace(
+                route,
+                predicted_v_grade=difficulty["predicted_v_grade"],
+                grade_delta=difficulty["grade_delta"],
+                difficulty_confidence=difficulty["difficulty_confidence"],
+                grade_warning=difficulty["grade_warning"],
+            )
+        )
+    return calibrated_routes
+
+
+def _difficulty_warning(delta: int | None, confidence: float) -> str:
+    if confidence < 0.45:
+        return "uncertain"
+    if delta is None:
+        return "uncertain"
+    distance = abs(delta)
+    if distance >= 3:
+        return "hard"
+    if distance >= 2:
+        return "soft"
+    return "none"
+
+
+def evaluate_route_difficulty(
+    v_grade: str,
+    repeats: int,
+    is_benchmark: bool,
+    roles: Dict[Literal["start", "mid", "end"], List[str]],
+    marker_summary: Dict[str, Any],
+    validation: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not validation.get("valid_for_climb"):
+        return {
+            "difficulty_score": None,
+            "predicted_v_grade": None,
+            "grade_delta": None,
+            "difficulty_confidence": None,
+            "difficulty_breakdown": {},
+            "difficulty_reasons": [],
+            "grade_warning": "uncertain",
+        }
+
+    hand_sequence = _difficulty_hand_sequence(roles, marker_summary)
+    foot_holds = _available_foot_holds(roles, marker_summary)
+    unknown_holds = 0
+    move_scores: List[float] = []
+    distance_scores: List[float] = []
+    hold_scores: List[float] = []
+    foot_scores: List[float] = []
+    body_scores: List[float] = []
+    complexity_scores: List[float] = []
+    direction_changes = 0
+    previous_dx = 0
+
+    for previous, current in zip(hand_sequence, hand_sequence[1:]):
+        dx = _coord_x_index(current) - _coord_x_index(previous)
+        dy = int(current[1:]) - int(previous[1:])
+        distance = _coord_distance(previous, current)
+        distance_score = _clamp_score(distance * 11.5 + max(0, abs(dx) - 4) * 5.0 + max(0, dy - 4) * 5.0, 100.0)
+        hold_score, is_unknown = _hold_difficulty(current)
+        unknown_holds += 1 if is_unknown else 0
+        foot_score = _foot_support_score(current, foot_holds)
+        body_score = _clamp_score(abs(dx) * 7.0 + max(0, dy - 3) * 7.0 + max(0, distance - 5.5) * 9.0 + foot_score * 0.22, 100.0)
+        if previous_dx and dx and (previous_dx > 0) != (dx > 0):
+            direction_changes += 1
+        previous_dx = dx if dx else previous_dx
+        complexity_score = _clamp_score(18.0 + direction_changes * 8.0 + max(0, abs(dx) - 3) * 4.0 + max(0, abs(dy) - 3) * 3.0, 100.0)
+        move_score = distance_score * 0.32 + hold_score * 0.24 + foot_score * 0.18 + body_score * 0.18 + complexity_score * 0.08
+        distance_scores.append(distance_score)
+        hold_scores.append(hold_score)
+        foot_scores.append(foot_score)
+        body_scores.append(body_score)
+        complexity_scores.append(complexity_score)
+        move_scores.append(move_score)
+
+    if not move_scores:
+        confidence = 0.25
+        return {
+            "difficulty_score": 0.0,
+            "predicted_v_grade": "V0",
+            "grade_delta": -_difficulty_number(v_grade),
+            "difficulty_confidence": confidence,
+            "difficulty_breakdown": {},
+            "difficulty_reasons": ["可推断动作过少，难度可信度较低"],
+            "grade_warning": "uncertain",
+        }
+
+    sorted_moves = sorted(move_scores, reverse=True)
+    crux = sum(sorted_moves[:2]) / min(2, len(sorted_moves))
+    hard_moves = [score for score in move_scores if score >= 55.0]
+    sustained = (sum(sorted_moves[: max(1, math.ceil(len(sorted_moves) * 0.5))]) / max(1, math.ceil(len(sorted_moves) * 0.5)))
+    average = sum(move_scores) / len(move_scores)
+    start_pressure = move_scores[0]
+    finish_pressure = move_scores[-1]
+    pressure = max(start_pressure, finish_pressure)
+    data_adjustment = min(5.0, (1.5 if is_benchmark else 0.0) + min(2.0, repeats / 80.0) + min(1.5, _difficulty_number(v_grade) * 0.15))
+    difficulty_score = _clamp_score(crux * 0.45 + sustained * 0.25 + average * 0.15 + pressure * 0.10 + data_adjustment, 100.0)
+    predicted_v_grade = _difficulty_grade_from_score(difficulty_score)
+    grade_delta = _difficulty_number(predicted_v_grade) - _difficulty_number(v_grade)
+
+    unknown_ratio = unknown_holds / max(1, len(hand_sequence))
+    confidence = 0.92 - unknown_ratio * 0.35
+    if len(move_scores) < 4:
+        confidence -= 0.12
+    if abs(grade_delta) >= 3:
+        confidence -= 0.05
+    confidence = round(max(0.2, min(0.98, confidence)), 2)
+
+    reasons: List[str] = []
+    if crux >= 72:
+        reasons.append("存在明显 crux 动作")
+    if max(distance_scores) >= 72:
+        reasons.append("最大动作跨度偏大")
+    if sum(1 for score in hold_scores if score >= 70) >= 2:
+        reasons.append("连续小点或指力型岩点占比高")
+    if max(foot_scores) >= 70:
+        reasons.append("关键动作脚点支持弱")
+    if max(body_scores) >= 70:
+        reasons.append("横移或张力要求较高")
+    if start_pressure >= 68:
+        reasons.append("起步压力较高")
+    if finish_pressure >= 68:
+        reasons.append("终点前动作压力较高")
+    if len(hard_moves) >= 3:
+        reasons.append("难动作连续性较强")
+    if not reasons:
+        reasons.append("动作强度与结构分布较均衡")
+    if unknown_ratio > 0:
+        reasons.append("部分岩点类型缺失，难度可信度降低")
+
+    return {
+        "difficulty_score": difficulty_score,
+        "predicted_v_grade": predicted_v_grade,
+        "grade_delta": grade_delta,
+        "difficulty_confidence": confidence,
+        "difficulty_breakdown": {
+            "move_distance": _clamp_score(sum(distance_scores) / len(distance_scores) * 0.20, 20.0),
+            "hold_demand": _clamp_score(sum(hold_scores) / len(hold_scores) * 0.20, 20.0),
+            "foot_demand": _clamp_score(sum(foot_scores) / len(foot_scores) * 0.15, 15.0),
+            "body_tension": _clamp_score(sum(body_scores) / len(body_scores) * 0.15, 15.0),
+            "sequence_complexity": _clamp_score(sum(complexity_scores) / len(complexity_scores) * 0.10, 10.0),
+            "start_finish_pressure": _clamp_score(pressure * 0.15, 15.0),
+            "data_adjustment": round(data_adjustment, 2),
+        },
+        "difficulty_reasons": reasons[:6],
+        "grade_warning": _difficulty_warning(grade_delta, confidence),
+    }
+
+
 def validate_standard_roles(roles: Dict[Literal["start", "mid", "end"], List[str]]) -> Dict[str, Any]:
     marker_summary = _marker_snapshot(roles)
     effective_roles = marker_summary["effective_roles"]
@@ -522,6 +861,7 @@ def _normalize_route(source_id: str, raw_route: Dict[str, Any]) -> Optional[Norm
     score_breakdown = _score_route_quality(v_grade, repeats, is_benchmark, features, validation) if valid_for_climb else {}
     quality_score = round(sum(score_breakdown.values()), 2) if valid_for_climb else None
     quality_tier = _quality_tier(quality_score, valid_for_climb)
+    difficulty = evaluate_route_difficulty(v_grade, repeats, is_benchmark, effective_roles, validation["marker_summary"], validation)
     return NormalizedStandardRoute(
         source_id=str(source_id),
         source_url=raw_route.get("url"),
@@ -536,6 +876,13 @@ def _normalize_route(source_id: str, raw_route: Dict[str, Any]) -> Optional[Norm
         score_breakdown=score_breakdown,
         marker_summary=validation["marker_summary"],
         review_reasons=validation.get("review_reasons", []),
+        difficulty_score=difficulty["difficulty_score"],
+        predicted_v_grade=difficulty["predicted_v_grade"],
+        grade_delta=difficulty["grade_delta"],
+        difficulty_confidence=difficulty["difficulty_confidence"],
+        difficulty_breakdown=difficulty["difficulty_breakdown"],
+        difficulty_reasons=difficulty["difficulty_reasons"],
+        grade_warning=difficulty["grade_warning"],
         features=features,
         valid_for_climb=valid_for_climb,
         validation=validation,
@@ -558,15 +905,103 @@ def load_standard_routes() -> List[NormalizedStandardRoute]:
         for route in [_normalize_route(str(source_id), raw_route)]
         if route is not None
     ]
+    routes = _apply_difficulty_calibration(routes)
     _write_review_queue(routes)
     routes.sort(key=lambda route: route.score, reverse=True)
     return routes
 
 
+def _route_with_roles(
+    route: NormalizedStandardRoute,
+    roles: Dict[Literal["start", "mid", "end"], List[str]],
+    source_id: Optional[str] = None,
+    repeats: Optional[int] = None,
+    is_benchmark: Optional[bool] = None,
+) -> NormalizedStandardRoute:
+    validation = validate_standard_roles(roles)
+    resolved_roles = validation["effective_roles"]
+    marker_summary = validation["marker_summary"]
+    features = _feature_snapshot(resolved_roles)
+    valid_for_climb = bool(validation.get("valid_for_climb"))
+    route_repeats = route.repeats if repeats is None else repeats
+    route_is_benchmark = route.is_benchmark if is_benchmark is None else is_benchmark
+    score_breakdown = _score_route_quality(route.v_grade, route_repeats, route_is_benchmark, features, validation) if valid_for_climb else {}
+    quality_score = round(sum(score_breakdown.values()), 2) if valid_for_climb else None
+    difficulty = evaluate_route_difficulty(route.v_grade, route_repeats, route_is_benchmark, resolved_roles, marker_summary, validation)
+    difficulty = _relabel_difficulty_with_grade(difficulty, route.v_grade, _calibrated_grade_from_score(difficulty.get("difficulty_score")))
+    return NormalizedStandardRoute(
+        source_id=source_id or route.source_id,
+        source_url=route.source_url,
+        grade=route.grade,
+        v_grade=route.v_grade,
+        is_benchmark=route_is_benchmark,
+        repeats=route_repeats,
+        roles=resolved_roles,
+        score=quality_score or 0.0,
+        quality_score=quality_score,
+        quality_tier=_quality_tier(quality_score, valid_for_climb),
+        score_breakdown=score_breakdown,
+        marker_summary=marker_summary,
+        review_reasons=validation.get("review_reasons", []),
+        difficulty_score=difficulty["difficulty_score"],
+        predicted_v_grade=difficulty["predicted_v_grade"],
+        grade_delta=difficulty["grade_delta"],
+        difficulty_confidence=difficulty["difficulty_confidence"],
+        difficulty_breakdown=difficulty["difficulty_breakdown"],
+        difficulty_reasons=difficulty["difficulty_reasons"],
+        grade_warning=difficulty["grade_warning"],
+        features=features,
+        valid_for_climb=valid_for_climb,
+        validation=validation,
+    )
+
+
+def _load_accepted_repair_records() -> List[Dict[str, Any]]:
+    if not ACCEPTED_REPAIRS_PATH.exists():
+        return []
+    try:
+        with ACCEPTED_REPAIRS_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return []
+    if isinstance(payload, dict):
+        records = payload.get("routes", [])
+    else:
+        records = payload
+    return records if isinstance(records, list) else []
+
+
+def _write_accepted_repair_records(records: List[Dict[str, Any]]) -> None:
+    with ACCEPTED_REPAIRS_PATH.open("w", encoding="utf-8") as file:
+        json.dump({"routes": records}, file, ensure_ascii=False, indent=2)
+
+
+def _accepted_repair_routes(base_routes: Optional[List[NormalizedStandardRoute]] = None) -> List[NormalizedStandardRoute]:
+    routes = base_routes or list(load_standard_routes())
+    base_by_id = {route.source_id: route for route in routes}
+    accepted: List[NormalizedStandardRoute] = []
+    for record in _load_accepted_repair_records():
+        source_id = str(record.get("source_id") or "")
+        base_route = base_by_id.get(source_id)
+        repaired_roles = record.get("repaired_roles")
+        if not source_id or not base_route or not isinstance(repaired_roles, dict):
+            continue
+        accepted_route = _route_with_roles(
+            base_route,
+            repaired_roles,
+            source_id=_repaired_source_id(source_id),
+            repeats=0,
+            is_benchmark=False,
+        )
+        if accepted_route.valid_for_climb:
+            accepted.append(accepted_route)
+    return accepted
+
+
 def summary_for(route: NormalizedStandardRoute) -> StandardBoardRouteSummary:
     return StandardBoardRouteSummary(
         source_id=route.source_id,
-        display_name=f"Standard route {route.source_id}",
+        display_name=_display_name(route.source_id),
         grade=route.grade,
         v_grade=route.v_grade,
         is_benchmark=route.is_benchmark,
@@ -577,6 +1012,13 @@ def summary_for(route: NormalizedStandardRoute) -> StandardBoardRouteSummary:
         score_breakdown=route.score_breakdown,
         marker_summary=route.marker_summary,
         review_reasons=route.review_reasons,
+        difficulty_score=round(route.difficulty_score, 2) if route.difficulty_score is not None else None,
+        predicted_v_grade=route.predicted_v_grade,
+        grade_delta=route.grade_delta,
+        difficulty_confidence=route.difficulty_confidence,
+        difficulty_breakdown=route.difficulty_breakdown,
+        difficulty_reasons=route.difficulty_reasons,
+        grade_warning=route.grade_warning,
         features=route.features,
         valid_for_climb=route.valid_for_climb,
     )
@@ -584,6 +1026,8 @@ def summary_for(route: NormalizedStandardRoute) -> StandardBoardRouteSummary:
 
 def query_standard_routes(
     difficulty: Optional[str] = None,
+    predicted_v_grade: Optional[str] = None,
+    grade_warning: Optional[str] = None,
     benchmark_only: bool = False,
     min_holds: Optional[int] = None,
     max_holds: Optional[int] = None,
@@ -593,10 +1037,15 @@ def query_standard_routes(
     valid_only: bool = True,
 ) -> StandardBoardRouteQueryResponse:
     routes = list(load_standard_routes())
+    routes.extend(_accepted_repair_routes(routes))
     if valid_only:
         routes = [route for route in routes if route.valid_for_climb]
     if difficulty:
         routes = [route for route in routes if route.v_grade == difficulty]
+    if predicted_v_grade:
+        routes = [route for route in routes if route.predicted_v_grade == predicted_v_grade]
+    if grade_warning:
+        routes = [route for route in routes if route.grade_warning == grade_warning]
     if benchmark_only:
         routes = [route for route in routes if route.is_benchmark]
     if min_holds is not None:
@@ -610,6 +1059,12 @@ def query_standard_routes(
         routes.sort(key=lambda route: (route.features.x_span, route.features.y_span, route.score), reverse=True)
     elif sort == "holds_asc":
         routes.sort(key=lambda route: (route.features.hold_count, -route.score))
+    elif sort == "difficulty_score_desc":
+        routes.sort(key=lambda route: (route.difficulty_score or 0.0, route.score), reverse=True)
+    elif sort == "difficulty_score_asc":
+        routes.sort(key=lambda route: (route.difficulty_score or 0.0, -route.score))
+    elif sort == "grade_mismatch_desc":
+        routes.sort(key=lambda route: (abs(route.grade_delta or 0), route.difficulty_score or 0.0, route.score), reverse=True)
     else:
         routes.sort(key=lambda route: route.score, reverse=True)
 
@@ -625,7 +1080,13 @@ def query_standard_routes(
 
 
 def find_standard_route(source_id: str) -> Optional[NormalizedStandardRoute]:
-    return next((route for route in load_standard_routes() if route.source_id == source_id), None)
+    routes = list(load_standard_routes())
+    found = next((route for route in routes if route.source_id == source_id), None)
+    if found:
+        return found
+    if _is_repaired_source_id(source_id):
+        return next((route for route in _accepted_repair_routes(routes) if route.source_id == source_id), None)
+    return None
 
 
 def _board_spec() -> BoardSpec:
@@ -759,9 +1220,11 @@ def detail_for(route: NormalizedStandardRoute, roles: Optional[Dict[Literal["sta
     score_breakdown = _score_route_quality(route.v_grade, route.repeats, route.is_benchmark, features, validation) if valid_for_climb else {}
     quality_score = round(sum(score_breakdown.values()), 2) if valid_for_climb else None
     quality_tier = _quality_tier(quality_score, valid_for_climb)
+    difficulty = evaluate_route_difficulty(route.v_grade, route.repeats, route.is_benchmark, resolved_roles, marker_summary, validation)
+    difficulty = _relabel_difficulty_with_grade(difficulty, route.v_grade, _calibrated_grade_from_score(difficulty.get("difficulty_score")))
     holds = _holds_for(resolved_roles)
     board_asset = BoardAsset(
-        route_name=f"Standard route {route.source_id}",
+        route_name=_display_name(route.source_id),
         setter_commentary="Standard-board dataset route. The fixed board setup is separate from this route overlay.",
         source_type="imported",
         visibility="private",
@@ -786,6 +1249,13 @@ def detail_for(route: NormalizedStandardRoute, roles: Optional[Dict[Literal["sta
             score_breakdown=score_breakdown,
             marker_summary=marker_summary,
             review_reasons=validation.get("review_reasons", []),
+            difficulty_score=difficulty["difficulty_score"],
+            predicted_v_grade=difficulty["predicted_v_grade"],
+            grade_delta=difficulty["grade_delta"],
+            difficulty_confidence=difficulty["difficulty_confidence"],
+            difficulty_breakdown=difficulty["difficulty_breakdown"],
+            difficulty_reasons=difficulty["difficulty_reasons"],
+            grade_warning=difficulty["grade_warning"],
             features=features,
             valid_for_climb=valid_for_climb,
             validation=validation,
@@ -879,3 +1349,214 @@ def generate_standard_route(target_difficulty: str = "V3", benchmark_only: bool 
             }
 
     raise ValueError(f"No valid standard-board routes passed validation for difficulty {target_difficulty}")
+
+
+REPAIRABLE_FAILURES = {"start_hand_count_lt_2", "start_marker_count_lt_3", "no_start_foothold"}
+
+
+def _load_review_queue() -> List[Dict[str, Any]]:
+    if not REVIEW_QUEUE_PATH.exists():
+        load_standard_routes()
+    try:
+        with REVIEW_QUEUE_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return []
+    routes = payload.get("routes", [])
+    return routes if isinstance(routes, list) else []
+
+
+def _route_from_queue_entry(entry: Dict[str, Any]) -> Dict[Literal["start", "mid", "end"], List[str]]:
+    roles = entry.get("roles") or {}
+    return {
+        "start": _dedupe_preserve_order(str(coord_id) for coord_id in roles.get("start", [])),
+        "mid": _dedupe_preserve_order(str(coord_id) for coord_id in roles.get("mid", [])),
+        "end": _dedupe_preserve_order(str(coord_id) for coord_id in roles.get("end", [])),
+    }
+
+
+def _repairable_failure_set(entry: Dict[str, Any]) -> set[str]:
+    failures = set()
+    for code in entry.get("failures", []):
+        failures.add(str(code).split(":", 1)[0])
+    return failures
+
+
+def _candidate_start_hands_for_repair(roles: Dict[Literal["start", "mid", "end"], List[str]], needed: int) -> List[str]:
+    marker_summary = _marker_snapshot(roles)
+    existing_hands = marker_summary.get("start_hands", [])
+    reference_coords = existing_hands or roles["start"] or roles["mid"] or roles["end"]
+    reference_x = (
+        sum(_coord_x_index(coord_id) for coord_id in reference_coords if _coord_exists(coord_id)) / len(reference_coords)
+        if reference_coords
+        else (BOARD_COLUMNS - 1) / 2
+    )
+    candidates = []
+    occupied = set(roles["start"] + roles["end"])
+    for coord_id in roles["mid"]:
+        if coord_id in occupied or not _coord_exists(coord_id) or _is_foot_hold(coord_id):
+            continue
+        _, y_index = _coord_parts(coord_id)
+        if y_index > 5:
+            continue
+        x_distance = abs(_coord_x_index(coord_id) - reference_x)
+        candidates.append((y_index, x_distance, coord_id))
+
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return [coord_id for *_rest, coord_id in candidates[:needed]]
+
+
+def _repair_queue_entry(entry: Dict[str, Any]) -> StandardBoardRepairCandidate:
+    source_id = str(entry.get("source_id") or "")
+    original_roles = _route_from_queue_entry(entry)
+    failures = _repairable_failure_set(entry)
+    if not failures or not failures.issubset(REPAIRABLE_FAILURES):
+        return StandardBoardRepairCandidate(
+            source_id=source_id,
+            repair_status="unrepairable",
+            original_roles=original_roles,
+            validation={"failures": list(failures)},
+            review_reasons=entry.get("review_reasons", []),
+        )
+
+    marker_summary = _marker_snapshot(original_roles)
+    needed_hands = max(0, 2 - len(marker_summary.get("start_hands", [])))
+    added_hands = _candidate_start_hands_for_repair(original_roles, needed_hands)
+    if len(added_hands) < needed_hands:
+        return StandardBoardRepairCandidate(
+            source_id=source_id,
+            repair_status="unrepairable",
+            original_roles=original_roles,
+            validation={"failures": ["no_low_hand_candidate"]},
+            review_reasons=["原路线没有足够低位非脚点可补为手起点"],
+        )
+
+    repaired_roles = {
+        "start": _dedupe_preserve_order(original_roles["start"] + added_hands),
+        "mid": [coord_id for coord_id in original_roles["mid"] if coord_id not in set(added_hands)],
+        "end": list(original_roles["end"]),
+    }
+    validation = validate_standard_roles(repaired_roles)
+    if not validation.get("valid_for_climb"):
+        return StandardBoardRepairCandidate(
+            source_id=source_id,
+            repair_status="repairable",
+            original_roles=original_roles,
+            repaired_roles=validation.get("effective_roles", repaired_roles),
+            added_start_hands=added_hands,
+            derived_start_feet=validation.get("marker_summary", {}).get("derived_start_feet", []),
+            validation=validation,
+            review_reasons=validation.get("review_reasons", []),
+        )
+
+    features = _feature_snapshot(validation["effective_roles"])
+    v_grade = str(entry.get("v_grade") or "V3")
+    score_breakdown = _score_route_quality(v_grade, 0, False, features, validation)
+    quality_score = round(sum(score_breakdown.values()), 2)
+    difficulty = evaluate_route_difficulty(v_grade, 0, False, validation["effective_roles"], validation["marker_summary"], validation)
+    difficulty = _relabel_difficulty_with_grade(difficulty, v_grade, _calibrated_grade_from_score(difficulty.get("difficulty_score")))
+    return StandardBoardRepairCandidate(
+        source_id=source_id,
+        repair_status="repaired",
+        original_roles=original_roles,
+        repaired_roles=validation["effective_roles"],
+        added_start_hands=added_hands,
+        derived_start_feet=validation.get("marker_summary", {}).get("derived_start_feet", []),
+        validation=validation,
+        quality_score=quality_score,
+        difficulty_score=difficulty["difficulty_score"],
+        predicted_v_grade=difficulty["predicted_v_grade"],
+        grade_delta=difficulty["grade_delta"],
+        difficulty_confidence=difficulty["difficulty_confidence"],
+        difficulty_breakdown=difficulty["difficulty_breakdown"],
+        difficulty_reasons=difficulty["difficulty_reasons"],
+        grade_warning=difficulty["grade_warning"],
+        review_reasons=[],
+    )
+
+
+def query_standard_board_repairs(limit: int = 24, offset: int = 0, status: Optional[str] = None) -> StandardBoardRepairQueryResponse:
+    accepted_ids = {str(record.get("source_id")) for record in _load_accepted_repair_records() if record.get("source_id")}
+    candidates = [_repair_queue_entry(entry) for entry in _load_review_queue()]
+    candidates = [candidate for candidate in candidates if candidate.source_id not in accepted_ids]
+    if status:
+        candidates = [candidate for candidate in candidates if candidate.repair_status == status]
+    else:
+        candidates = [candidate for candidate in candidates if candidate.repair_status != "unrepairable"]
+    bounded_limit = max(1, min(limit, 100))
+    bounded_offset = max(0, offset)
+    page = candidates[bounded_offset : bounded_offset + bounded_limit]
+    return StandardBoardRepairQueryResponse(
+        total=len(candidates),
+        limit=bounded_limit,
+        offset=bounded_offset,
+        routes=page,
+    )
+
+
+def find_standard_board_repair(source_id: str) -> Optional[StandardBoardRepairCandidate]:
+    source_id = _original_source_id(source_id)
+    for entry in _load_review_queue():
+        if str(entry.get("source_id")) == str(source_id):
+            return _repair_queue_entry(entry)
+    return None
+
+
+def repair_comparison(source_id: str) -> Optional[StandardBoardRepairComparison]:
+    original_source_id = _original_source_id(source_id)
+    candidate = find_standard_board_repair(original_source_id)
+    route = next((item for item in load_standard_routes() if item.source_id == original_source_id), None)
+    if not candidate or not route:
+        return None
+    repaired = None
+    if candidate.repair_status == "repaired" and candidate.repaired_roles:
+        repaired = detail_for(route, candidate.repaired_roles)
+    return StandardBoardRepairComparison(
+        candidate=candidate,
+        original=detail_for(route, candidate.original_roles),
+        repaired=repaired,
+    )
+
+
+def publish_standard_board_repairs(source_ids: List[str]) -> StandardBoardRepairPublishResponse:
+    records = _load_accepted_repair_records()
+    records_by_id = {str(record.get("source_id")): record for record in records if record.get("source_id")}
+    published: List[StandardBoardRouteSummary] = []
+    skipped: List[StandardBoardRepairPublishSkipped] = []
+    base_routes = list(load_standard_routes())
+    base_by_id = {route.source_id: route for route in base_routes}
+
+    for raw_source_id in _dedupe_preserve_order(_original_source_id(source_id) for source_id in source_ids):
+        source_id = str(raw_source_id)
+        candidate = find_standard_board_repair(source_id)
+        base_route = base_by_id.get(source_id)
+        if not candidate or not base_route:
+            skipped.append(StandardBoardRepairPublishSkipped(source_id=source_id, reason="未找到该待修复线路"))
+            continue
+        if candidate.repair_status != "repaired" or not candidate.repaired_roles:
+            skipped.append(StandardBoardRepairPublishSkipped(source_id=source_id, reason="只有已修复候选可以放入线路库"))
+            continue
+
+        accepted_route = _route_with_roles(
+            base_route,
+            candidate.repaired_roles,
+            source_id=_repaired_source_id(source_id),
+            repeats=0,
+            is_benchmark=False,
+        )
+        if not accepted_route.valid_for_climb:
+            skipped.append(StandardBoardRepairPublishSkipped(source_id=source_id, reason="修复结果未通过线路库校验"))
+            continue
+
+        records_by_id[source_id] = {
+            "source_id": source_id,
+            "repaired_source_id": _repaired_source_id(source_id),
+            "repaired_roles": candidate.repaired_roles,
+            "added_start_hands": candidate.added_start_hands,
+            "derived_start_feet": candidate.derived_start_feet,
+        }
+        published.append(summary_for(accepted_route))
+
+    if published:
+        _write_accepted_repair_records(list(records_by_id.values()))
+    return StandardBoardRepairPublishResponse(published=published, skipped=skipped)

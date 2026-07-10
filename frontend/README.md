@@ -7,5 +7,5 @@ Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://
 
 
 
-cd D:\学校课程\ai攀岩定线问题\ai_climbing_code\frontend
-npm.cmd run dev -- --host 127.0.0.1 --port 5173
+cd "D:\学校课程\ai攀岩定线问题\ai_climbing_code\frontend"
+npm.cmd run dev
