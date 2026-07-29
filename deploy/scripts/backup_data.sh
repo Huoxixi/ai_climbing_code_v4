@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+BACKUP_ENV_FILE="${BACKUP_ENV_FILE:-/etc/ai-climbing/backup.env}"
+if [[ -r "${BACKUP_ENV_FILE}" ]]; then
+  # The production file is root-owned and mode 0600.
+  set -a
+  # shellcheck disable=SC1090
+  source "${BACKUP_ENV_FILE}"
+  set +a
+fi
+
 DATA_DIR="${DATA_DIR:-/var/lib/ai-climbing/data}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/ai-climbing}"
 SERVICE_NAME="${SERVICE_NAME:-ai-climbing.service}"
