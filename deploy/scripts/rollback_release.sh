@@ -21,7 +21,29 @@ if [[ ! -d "${target}" || ! -x "${target}/backend/.venv/bin/python" ]]; then
   exit 1
 fi
 
-previous="$(readlink -f "${CURRENT_LINK}" || true)"
+previous=""
+if [[ -L "${CURRENT_LINK}" ]]; then
+  previous="$(readlink -f -- "${CURRENT_LINK}")" || {
+    echo "Current release link is invalid; refusing rollback." >&2
+    exit 1
+  }
+  case "${previous}" in
+    "${RELEASE_ROOT}"/*)
+      [[ -d "${previous}" && -f "${previous}/RELEASE_SHA" ]] || {
+        echo "Current release is incomplete: ${previous}" >&2
+        exit 1
+      }
+      ;;
+    *)
+      echo "Current release points outside ${RELEASE_ROOT}: ${previous}" >&2
+      exit 1
+      ;;
+  esac
+elif [[ -e "${CURRENT_LINK}" ]]; then
+  echo "Current release path exists but is not a symbolic link." >&2
+  exit 1
+fi
+
 temporary_link="/opt/ai-climbing/.current.rollback.$$"
 ln -s "${target}" "${temporary_link}"
 mv -Tf "${temporary_link}" "${CURRENT_LINK}"

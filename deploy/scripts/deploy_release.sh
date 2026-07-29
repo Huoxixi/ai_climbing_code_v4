@@ -136,8 +136,31 @@ if systemctl is-active --quiet ai-climbing.service; then
   /usr/local/lib/ai-climbing/backup_data.sh pre-deploy
 fi
 
+previous=""
+if [[ -L "${CURRENT_LINK}" ]]; then
+  previous="$(readlink -f -- "${CURRENT_LINK}")" || {
+    echo "Current release link is invalid; refusing to switch versions." >&2
+    exit 1
+  }
+  case "${previous}" in
+    "${RELEASE_ROOT}"/*)
+      [[ -d "${previous}" && -f "${previous}/RELEASE_SHA" ]] || {
+        echo "Current release is incomplete: ${previous}" >&2
+        exit 1
+      }
+      ;;
+    *)
+      echo "Current release points outside ${RELEASE_ROOT}: ${previous}" >&2
+      exit 1
+      ;;
+  esac
+elif [[ -e "${CURRENT_LINK}" ]]; then
+  echo "Current release path exists but is not a symbolic link." >&2
+  exit 1
+fi
+
+nginx -t
 mv "${building_release}" "${final_release}"
-previous="$(readlink -f "${CURRENT_LINK}" || true)"
 temporary_link="/opt/ai-climbing/.current.release.$$"
 ln -s "${final_release}" "${temporary_link}"
 mv -Tf "${temporary_link}" "${CURRENT_LINK}"
@@ -156,11 +179,11 @@ if ! systemctl restart ai-climbing.service ||
     systemctl stop ai-climbing.service || true
     rm -f -- "${CURRENT_LINK}" /etc/ai-climbing/release.env
   fi
+  rm -rf -- "${final_release}"
   echo "New release failed health verification and code was rolled back." >&2
   exit 1
 fi
 
-nginx -t
 systemctl reload nginx
 systemctl enable --now ai-climbing.service ai-climbing-backup.timer ai-climbing-health.timer
 echo "Release ${RELEASE_TAG} (${release_sha}) is active. Begin the 30-minute observation window."
