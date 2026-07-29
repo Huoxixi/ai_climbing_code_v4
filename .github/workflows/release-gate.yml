@@ -62,6 +62,13 @@ jobs:
       - name: Verify production server configuration
         shell: bash
         run: |
+          test -x deploy/scripts/server_preflight.sh
+          test -x deploy/scripts/install_server_assets.sh
+          test -x deploy/scripts/deploy_release.sh
+          test -x deploy/scripts/rollback_release.sh
+          test -x deploy/scripts/backup_data.sh
+          test -x deploy/scripts/restore_data.sh
+          test -x deploy/scripts/create_tunnel_user.sh
           bash -n deploy/scripts/*.sh
           sudo apt-get update
           sudo apt-get install --yes nginx openssh-server
