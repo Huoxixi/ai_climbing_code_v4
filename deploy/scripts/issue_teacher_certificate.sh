@@ -54,11 +54,21 @@ certbot certonly \
   --non-interactive \
   --agree-tos \
   --register-unsafely-without-email \
+  --deploy-hook "systemctl reload nginx" \
   --keep-until-expiring
 
 PROJECT_ROOT="${PROJECT_ROOT}" \
   bash "${PROJECT_ROOT}/deploy/scripts/provision_teacher_gateway.sh" public
-restore_internal=false
 
+if systemctl list-unit-files --type=timer certbot.timer --no-legend |
+  grep -q '^certbot[.]timer'; then
+  systemctl enable --now certbot.timer
+fi
+certbot renew \
+  --cert-name "${DOMAIN}" \
+  --dry-run \
+  --deploy-hook "systemctl reload nginx"
+
+restore_internal=false
 certbot certificates --domain "${DOMAIN}"
 echo "Certificate issued and the public teacher gateway is active."

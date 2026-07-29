@@ -54,4 +54,6 @@ bash /root/ai_climbing_code/deploy/scripts/issue_teacher_certificate.sh
 
 第一条命令会等待从标准输入读取备案号，输入完成后按 `Ctrl+D`。签发失败时脚本会自动恢复内部 HTTPS 入口。
 
+签发脚本会启用 Certbot 定时续期，并执行一次续期演练。续期或演练失败时不得交付链接；演练成功后，证书更新会自动重新加载 Nginx。
+
 公网验收通过后才能把链接和独立账号交给老师。
