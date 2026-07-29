@@ -17,6 +17,7 @@ https://climb.panyandingxian.cn
 3. 已生成上线前完整数据备份，并完成对象存储回读校验。
 4. 已签发 `climb.panyandingxian.cn` 的有效 HTTPS 证书。
 5. 云安全组仅新增 TCP 80、443；应用和开发端口继续关闭。
+6. `/etc/ai-climbing/icp-number` 已由负责人写入获批备案号。
 
 备案未完成时，只能启用服务器本机 `127.0.0.1:8443` 的内部验收入口，不得通过域名公开服务。
 
@@ -44,10 +45,13 @@ bash /root/ai_climbing_code/deploy/scripts/provision_teacher_gateway.sh internal
 
 ## 备案完成后的公网切换
 
-取得备案号、配置 DNS 并签发证书后执行：
+取得备案号、配置 DNS、在安全组中开放 TCP 80/443 后，先把备案号写入服务器门禁文件，再签发证书并自动切换：
 
 ```bash
-bash /root/ai_climbing_code/deploy/scripts/provision_teacher_gateway.sh public
+install -o root -g root -m 0644 /dev/stdin /etc/ai-climbing/icp-number
+bash /root/ai_climbing_code/deploy/scripts/issue_teacher_certificate.sh
 ```
+
+第一条命令会等待从标准输入读取备案号，输入完成后按 `Ctrl+D`。签发失败时脚本会自动恢复内部 HTTPS 入口。
 
 公网验收通过后才能把链接和独立账号交给老师。

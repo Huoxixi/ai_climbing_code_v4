@@ -43,6 +43,41 @@ health_availability() {
   ' "${HEALTH_LOG}"
 }
 
+teacher_gateway_ok() {
+  local status
+  if [[ -e /etc/ai-climbing/public-https-enabled ]]; then
+    status="$(
+      curl --insecure --silent --show-error \
+        --output /dev/null \
+        --write-out '%{http_code}' \
+        --resolve climb.panyandingxian.cn:443:127.0.0.1 \
+        https://climb.panyandingxian.cn/
+    )"
+  else
+    ss -lnt |
+      grep -Eq '[[:space:]]127[.]0[.]0[.]1:8443[[:space:]]' ||
+      return 1
+    status="$(
+      curl --insecure --silent --show-error \
+        --output /dev/null \
+        --write-out '%{http_code}' \
+        --header 'Host: climb.panyandingxian.cn' \
+        https://127.0.0.1:8443/
+    )"
+  fi
+  [[ "${status}" == "401" ]]
+}
+
+teacher_certificate_ok() {
+  if [[ ! -e /etc/ai-climbing/public-https-enabled ]]; then
+    return 0
+  fi
+  openssl x509 \
+    -checkend 1209600 \
+    -noout \
+    -in /etc/letsencrypt/live/climb.panyandingxian.cn/fullchain.pem
+}
+
 check "后端服务正在运行" systemctl is-active --quiet ai-climbing.service
 check "本地健康接口正常" health_ok
 check "最近30小时存在成功备份" backup_recent
@@ -53,6 +88,8 @@ check "操作入口仅监听本机8080端口" bash -c \
 check "只读入口仅监听本机8081端口" bash -c \
   "ss -lnt | grep -Eq '[[:space:]]127[.]0[.]0[.]1:8081[[:space:]]'"
 check "累计健康记录可用率不低于98%" health_availability
+check "教师HTTPS入口要求身份认证" teacher_gateway_ok
+check "教师HTTPS证书至少还有14天有效期" teacher_certificate_ok
 
 echo "人工补充检查：公网网页端口、安全组、对象存储版本/保留策略、AI余额、参与人员名单、未解决问题。"
 exit "${failed}"

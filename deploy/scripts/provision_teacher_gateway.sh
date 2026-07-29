@@ -8,6 +8,7 @@ NGINX_AVAILABLE="/etc/nginx/sites-available/ai-climbing-teacher-gateway.conf"
 NGINX_ENABLED="/etc/nginx/sites-enabled/ai-climbing-teacher-gateway.conf"
 LIMITS_TARGET="/etc/nginx/conf.d/ai-climbing-teacher-limits.conf"
 TLS_DIR="/etc/ai-climbing/tls"
+PUBLIC_HTTPS_FLAG="/etc/ai-climbing/public-https-enabled"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run this script as root." >&2
@@ -63,15 +64,41 @@ install -o root -g root -m 0644 \
   "${PROJECT_ROOT}/deploy/nginx/ai_climbing_teacher_limits.conf" \
   "${LIMITS_TARGET}"
 
+previous_config=""
 if [[ -e "${NGINX_AVAILABLE}" ]]; then
-  cp --preserve=mode,ownership,timestamps \
-    "${NGINX_AVAILABLE}" \
-    "${NGINX_AVAILABLE}.previous"
+  previous_config="$(mktemp)"
+  cp --preserve=mode,ownership,timestamps "${NGINX_AVAILABLE}" "${previous_config}"
 fi
 install -o root -g root -m 0644 "${SOURCE_CONFIG}" "${NGINX_AVAILABLE}"
 ln -sfn "${NGINX_AVAILABLE}" "${NGINX_ENABLED}"
 
-nginx -t
-systemctl reload nginx
+restore_previous_config() {
+  if [[ -n "${previous_config}" ]]; then
+    cp --preserve=mode,ownership,timestamps "${previous_config}" "${NGINX_AVAILABLE}"
+    ln -sfn "${NGINX_AVAILABLE}" "${NGINX_ENABLED}"
+  else
+    rm -f "${NGINX_ENABLED}" "${NGINX_AVAILABLE}"
+  fi
+  nginx -t
+  systemctl reload nginx
+}
+
+if ! nginx -t || ! systemctl reload nginx; then
+  echo "Teacher gateway activation failed; restoring the previous Nginx config." >&2
+  restore_previous_config
+  if [[ -n "${previous_config}" ]]; then
+    rm -f "${previous_config}"
+  fi
+  exit 1
+fi
+if [[ -n "${previous_config}" ]]; then
+  rm -f "${previous_config}"
+fi
+
+if [[ "${MODE}" == "public" ]]; then
+  install -o root -g root -m 0644 /dev/null "${PUBLIC_HTTPS_FLAG}"
+else
+  rm -f "${PUBLIC_HTTPS_FLAG}"
+fi
 
 echo "Teacher gateway enabled in ${MODE} mode."

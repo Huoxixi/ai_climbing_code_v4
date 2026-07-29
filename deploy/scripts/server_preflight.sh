@@ -36,17 +36,24 @@ for command_name in git rsync nginx sshd python3.12 node npm rclone curl tar sha
 done
 
 if command -v nginx >/dev/null; then
+  if [[ -e /etc/ai-climbing/public-https-enabled ]]; then
+    allowed_nginx_listener='^listen[[:space:]]+(127[.]0[.]0[.]1:(8080|8081|8443)|80|443|\[::\]:(80|443))([[:space:]]+[^;]+)?;$'
+    expected_nginx_message="loopback application ports plus public HTTP/HTTPS"
+  else
+    allowed_nginx_listener='^listen[[:space:]]+127[.]0[.]0[.]1:(8080|8081|8443)([[:space:]]+[^;]+)?;$'
+    expected_nginx_message="loopback ports 8080/8081/8443 only"
+  fi
   public_nginx_listeners="$(
     nginx -T 2>&1 |
       sed -nE 's/^[[:space:]]*(listen[[:space:]]+[^;]+;).*$/\1/p' |
-      grep -Ev '^listen[[:space:]]+127\.0\.0\.1:808[01]([[:space:]]|;)' || true
+      grep -Ev "${allowed_nginx_listener}" || true
   )"
   if [[ -n "${public_nginx_listeners}" ]]; then
-    echo "[FAIL] Nginx has listeners other than 127.0.0.1:8080/8081:"
+    echo "[FAIL] Nginx has listeners outside the approved gateway policy:"
     printf '%s\n' "${public_nginx_listeners}"
     failed=1
   else
-    echo "[PASS] Nginx is limited to 127.0.0.1:8080/8081"
+    echo "[PASS] Nginx is limited to ${expected_nginx_message}"
   fi
 fi
 
