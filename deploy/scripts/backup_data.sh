@@ -100,7 +100,18 @@ mv -f "${temporary_archive}" "${archive_path}"
 if [[ "${service_was_active}" == true ]]; then
   systemctl start "${SERVICE_NAME}"
   service_stopped=false
-  curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8000/api/health >/dev/null
+  service_ready=false
+  for _ in {1..45}; do
+    if curl --fail --silent --max-time 3 http://127.0.0.1:8000/api/health >/dev/null; then
+      service_ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "${service_ready}" != true ]]; then
+    echo "${SERVICE_NAME} did not become healthy after the backup." >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "${RCLONE_REMOTE}" ]]; then
