@@ -93,6 +93,9 @@ ln -s "${temporary_root}/test-data" "${building_release}/backend/data"
 printf '%s\n' "${release_sha}" > "${building_release}/RELEASE_SHA"
 chown -R root:ai-climbing "${building_release}"
 chmod -R o-rwx,g+rX "${building_release}"
+chmod o+x "${building_release}" "${building_release}/frontend"
+find "${building_release}/frontend/dist" -type d -exec chmod 0755 {} +
+find "${building_release}/frontend/dist" -type f -exec chmod 0644 {} +
 
 cd "${building_release}/backend"
 LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
@@ -179,12 +182,35 @@ if systemctl restart ai-climbing.service; then
   done
 fi
 
+if [[ "${activation_ok}" == true ]]; then
+  if nginx -t && systemctl reload nginx; then
+    operator_status="$(
+      curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
+        http://127.0.0.1:8080/ || true
+    )"
+    viewer_status="$(
+      curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
+        http://127.0.0.1:8081/ || true
+    )"
+    viewer_write_status="$(
+      curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
+        --request POST http://127.0.0.1:8081/api/save-board || true
+    )"
+  else
+    activation_ok=false
+  fi
+  if [[ "${operator_status:-}" != 200 || "${viewer_status:-}" != 200 || "${viewer_write_status:-}" != 403 ]]; then
+    activation_ok=false
+  fi
+fi
+
 if [[ "${activation_ok}" != true ]]; then
   if [[ -n "${previous}" && -d "${previous}" ]]; then
     ln -s "${previous}" "${temporary_link}"
     mv -Tf "${temporary_link}" "${CURRENT_LINK}"
     printf 'RELEASE_SHA=%s\n' "$(cat "${previous}/RELEASE_SHA")" > /etc/ai-climbing/release.env
     systemctl restart ai-climbing.service || true
+    systemctl reload nginx || true
   else
     systemctl stop ai-climbing.service || true
     rm -f -- "${CURRENT_LINK}" /etc/ai-climbing/release.env
@@ -194,6 +220,5 @@ if [[ "${activation_ok}" != true ]]; then
   exit 1
 fi
 
-systemctl reload nginx
 systemctl enable --now ai-climbing.service ai-climbing-backup.timer ai-climbing-health.timer
 echo "Release ${RELEASE_TAG} (${release_sha}) is active. Begin the 30-minute observation window."
