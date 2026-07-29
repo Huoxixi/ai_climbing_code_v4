@@ -9,6 +9,10 @@
       <el-input v-model="board.route_name" placeholder="输入岩板或线路名称" @input="$emit('dirty')" />
       <label>定线说明</label>
       <el-input v-model="board.setter_commentary" type="textarea" :rows="3" placeholder="记录定线目标、风格或注意事项" @input="$emit('dirty')" />
+      <label>动作标签</label>
+      <el-checkbox-group :model-value="selectedStyleTags" class="route-tag-editor" @change="updateTags">
+        <el-checkbox v-for="tag in manualTagOptions" :key="tag.id" :value="tag.id">{{ tag.label }}</el-checkbox>
+      </el-checkbox-group>
       <div class="compact-stats">
         <span>{{ board.placed_holds?.length || 0 }} 岩点</span>
         <span>{{ board.beta_sequence?.length || 0 }} Beta</span>
@@ -66,7 +70,12 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { MANUAL_BOARD_TAG_IDS, ROUTE_TAG_LABELS } from '../constants/routeTags'
+
+const emit = defineEmits(['update-hold', 'delete-hold', 'add-beta', 'delete-beta', 'dirty'])
+
+const props = defineProps({
   board: { type: Object, required: true },
   selectedHold: { type: Object, default: null },
   routeSteps: { type: Array, default: () => [] },
@@ -74,10 +83,17 @@ defineProps({
   holdTypes: { type: Array, required: true },
 })
 
-const emit = defineEmits(['update-hold', 'delete-hold', 'add-beta', 'delete-beta', 'dirty'])
+const manualTagOptions = MANUAL_BOARD_TAG_IDS.map((id) => ({ id, label: ROUTE_TAG_LABELS[id] }))
+const selectedStyleTags = computed(() => (props.board.tags || []).filter((tag) => MANUAL_BOARD_TAG_IDS.includes(tag)))
 
 function update(patch) {
   emit('update-hold', patch)
+}
+
+function updateTags(selectedTags) {
+  const retainedTags = (props.board.tags || []).filter((tag) => !MANUAL_BOARD_TAG_IDS.includes(tag))
+  props.board.tags = [...new Set([...retainedTags, ...selectedTags])]
+  emit('dirty')
 }
 
 function limbName(limb) {

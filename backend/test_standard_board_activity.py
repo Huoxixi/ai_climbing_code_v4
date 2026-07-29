@@ -37,7 +37,7 @@ class StandardBoardActivityApiTest(unittest.TestCase):
         log = self.client.post(
             f"/api/standard-board/routes/{self.source_id}/ascent-log",
             headers=self.headers,
-            json={"result": "send", "attempts": 4, "perceived_grade": "V4", "notes": "稳定完成"},
+            json={"result": "send", "attempts": 4, "perceived_grade": "6B+", "notes": "稳定完成"},
         )
         self.assertEqual(log.status_code, 200)
         body = log.json()

@@ -23,10 +23,10 @@ class StandardBoardDataTest(unittest.TestCase):
         self.assertIsNone(_coord_to_label([0, 0]))
 
     def test_query_filters_by_difficulty_and_benchmark(self):
-        response = query_standard_routes(difficulty="V3", benchmark_only=True, limit=10)
+        response = query_standard_routes(difficulty="7A", benchmark_only=True, limit=10)
         self.assertGreater(response.total, 0)
         self.assertLessEqual(len(response.routes), 10)
-        self.assertTrue(all(route.v_grade == "V3" for route in response.routes))
+        self.assertTrue(all(route.grade == "7A" for route in response.routes))
         self.assertTrue(all(route.is_benchmark for route in response.routes))
         self.assertTrue(all(route.valid_for_climb for route in response.routes))
 
@@ -40,7 +40,7 @@ class StandardBoardDataTest(unittest.TestCase):
         self.assertIn("K18", coord_ids)
         self.assertEqual(len(variants), 8)
         self.assertTrue(all(hold.imageUrl for hold in setup))
-        self.assertTrue(all(hold.imageUrl.startswith("/images/") for hold in setup))
+        self.assertTrue(all(hold.imageUrl.startswith("/images/processed/") for hold in setup))
         self.assertTrue(all(hold.scale == 0.78 for hold in setup))
         self.assertTrue(all(0 <= hold.rotation < 360 for hold in setup))
         self.assertTrue(any(hold.rotation % 90 != 0 for hold in setup))
@@ -61,7 +61,7 @@ class StandardBoardDataTest(unittest.TestCase):
             self.assertLessEqual(route.features.hold_count, 12)
 
     def test_route_detail_builds_board_asset_and_virtual_leds(self):
-        response = query_standard_routes(difficulty="V3", limit=1)
+        response = query_standard_routes(difficulty="7A", limit=1)
         route = find_standard_route(response.routes[0].source_id)
         detail = detail_for(route)
         self.assertEqual(len(detail.board_setup), 198)
@@ -76,12 +76,12 @@ class StandardBoardDataTest(unittest.TestCase):
         self.assertIn("end", roles)
 
     def test_score_is_stable_for_same_route(self):
-        response = query_standard_routes(difficulty="V2", limit=1)
+        response = query_standard_routes(difficulty="6B+", limit=1)
         route = find_standard_route(response.routes[0].source_id)
         self.assertEqual(detail_for(route).score, detail_for(route).score)
 
     def test_generation_passes_validation_and_reuse_threshold(self):
-        generated = generate_standard_route(target_difficulty="V3", variation=True)
+        generated = generate_standard_route(target_difficulty="7A", variation=True)
         self.assertTrue(generated["validation"]["valid_for_climb"])
         self.assertGreaterEqual(generated["reuse_rate"], 0.7)
         self.assertEqual(generated["reuse_quality"], "optimal")

@@ -1,0 +1,10 @@
+[Unit]
+Description=Consistent AI Climbing data backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=-/etc/ai-climbing/backup.env
+ExecStart=/usr/local/lib/ai-climbing/backup_data.sh

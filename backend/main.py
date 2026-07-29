@@ -6,8 +6,11 @@ import asyncio
 import json
 import logging
 import os
+import re
+import threading
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List
 
 import cv2
@@ -19,11 +22,23 @@ from fastapi.staticfiles import StaticFiles
 
 from agent.controller import generate_route_with_reflection
 from agent.experiments import run_ai_experiment
+from core.board_readiness import apply_board_readiness
+from core.hold_image_processing import (
+    PROCESSING_VERSION,
+    SUPPORTED_IMAGE_SUFFIXES,
+    HoldImageProcessingError,
+    process_hold_image_bytes,
+    processed_filename_for,
+    resolve_local_holds_mapping,
+    write_bytes_atomic,
+)
 from core.models import (
     AIExperimentRequest,
     BoardAsset,
+    ClimberProfile,
     FinalRoute,
     GenerationInitiated,
+    HoldPhysicsProfile,
     RouteRequest,
     RouteResponse,
     StandardBoardRepairCandidate,
@@ -40,7 +55,21 @@ from core.models import (
     StandardRouteActivityStats,
     StandardRouteAscentLogRequest,
     StandardRouteRatingRequest,
+    SimulationBatchRequest,
+    SimulationBatchResult,
+    SimulationFeedback,
+    SimulationFeedbackRecord,
+    SimulationRepairCandidate,
+    SimulationReport,
+    SimulationRequest,
     TaskEnvelope,
+)
+from core.moonboard_grading import (
+    DEFAULT_FONT_GRADE,
+    UNGRADED,
+    assess_equivalent_grade,
+    hold_transfer_demand,
+    normalize_font_grade,
 )
 from core.standard_board import (
     detail_for,
@@ -53,6 +82,16 @@ from core.standard_board import (
     repair_comparison,
 )
 from core.state import active_tasks
+from core.simulation import (
+    generate_repair_candidates,
+    get_climber_profiles,
+    get_hold_profiles,
+    get_latest_report,
+    record_feedback,
+    simulate_batch,
+    simulate_route,
+    update_hold_profile,
+)
 from core.supabase_repo import (
     SupabaseRepository,
     SupabaseRepositoryError,
@@ -64,6 +103,24 @@ from core.supabase_repo import (
 
 load_dotenv()
 
+TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+RELEASE_SHA = os.getenv("RELEASE_SHA", "development").strip() or "development"
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in TRUE_ENV_VALUES
+
+
+SIMULATION_ENABLED = env_flag("ENABLE_SIMULATION", default=APP_ENV != "production")
+
+
+def docs_url_for_environment(app_env: str, path: str) -> str | None:
+    return None if app_env == "production" else path
+
 
 class EndpointFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
@@ -72,11 +129,22 @@ class EndpointFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-app = FastAPI(title="ZXT AI Climbing Route Engine", version="7.0")
+app = FastAPI(
+    title="攀岩定线辅助系统本地服务",
+    version="7.0",
+    docs_url=docs_url_for_environment(APP_ENV, "/docs"),
+    redoc_url=docs_url_for_environment(APP_ENV, "/redoc"),
+    openapi_url=docs_url_for_environment(APP_ENV, "/openapi.json"),
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,16 +155,19 @@ HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
 PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")
 HOLDS_VECTORS_FILE = os.path.join(DATA_DIR, "holds_vectors.json")
+HOLDS_METADATA_FILE = os.path.join(DATA_DIR, "hold_assets_meta.json")
 SAVED_BOARDS_FILE = os.path.join(DATA_DIR, "saved_boards.json")
 EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 STANDARD_BOARD_ACTIVITY_FILE = os.path.join(DATA_DIR, "standard_board_activity.json")
 
 os.makedirs(PROCESSED_HOLDS_IMAGES_DIR, exist_ok=True)
+app.mount("/images/processed", StaticFiles(directory=PROCESSED_HOLDS_IMAGES_DIR), name="processed-images")
 app.mount("/images", StaticFiles(directory=HOLDS_IMAGES_DIR), name="images")
-app.mount("/processed-images", StaticFiles(directory=PROCESSED_HOLDS_IMAGES_DIR), name="processed-images")
 
 tasks: Dict[str, asyncio.Task] = {}
 supabase_repo = SupabaseRepository()
+_json_locks: Dict[str, threading.RLock] = {}
+_json_locks_guard = threading.Lock()
 
 
 def is_local_demo_request(request: Request) -> bool:
@@ -136,16 +207,32 @@ def load_json(file_path: str, default: Any) -> Any:
     if not os.path.exists(file_path):
         return default
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
-            return json.load(file)
+        with json_file_lock(file_path):
+            with open(file_path, "r", encoding="utf-8") as file:
+                return json.load(file)
     except json.JSONDecodeError:
         return default
 
 
 def save_json(file_path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=2, ensure_ascii=False)
+    temp_path = f"{file_path}.{uuid.uuid4().hex}.tmp"
+    with json_file_lock(file_path):
+        try:
+            with open(temp_path, "w", encoding="utf-8") as file:
+                json.dump(data, file, indent=2, ensure_ascii=False)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_path, file_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
+def json_file_lock(file_path: str) -> threading.RLock:
+    normalized = os.path.abspath(file_path)
+    with _json_locks_guard:
+        return _json_locks.setdefault(normalized, threading.RLock())
 
 
 def task_envelope(task_id: str, status: str, result: Any = None, error: str | None = None) -> Dict[str, Any]:
@@ -175,7 +262,10 @@ async def run_and_store_generation(task_id: str, payload: Dict[str, Any], owner_
         tasks[task_id] = current_task
     try:
         if "mode" in payload or "board" in payload:
-            result = await run_ai_experiment(AIExperimentRequest(**payload))
+            experiment_request = AIExperimentRequest(**payload)
+            # Route search and validation are CPU-heavy. Keep them off the API
+            # event loop so the 202 response and result polling stay responsive.
+            result = await asyncio.to_thread(lambda: asyncio.run(run_ai_experiment(experiment_request)))
         else:
             result = await generate_route_with_reflection(RouteRequest(**payload), task_id)
         serialized = serialize_result(result)
@@ -193,6 +283,25 @@ async def run_and_store_generation(task_id: str, payload: Dict[str, Any], owner_
         tasks.pop(task_id, None)
 
 
+async def run_and_store_simulation(task_id: str, operation, *args) -> None:
+    active_tasks[task_id] = task_envelope(task_id, "running")
+    current_task = asyncio.current_task()
+    if current_task:
+        tasks[task_id] = current_task
+    try:
+        result = await asyncio.to_thread(operation, *args)
+        active_tasks[task_id] = task_envelope(task_id, "completed", serialize_result(result))
+    except asyncio.CancelledError:
+        active_tasks[task_id] = task_envelope(task_id, "cancelled", error="仿真任务已取消")
+    except Exception as exc:
+        import traceback
+
+        print(f"Simulation task {task_id} failed: {exc}\n{traceback.format_exc()}")
+        active_tasks[task_id] = task_envelope(task_id, "failed", error=str(exc))
+    finally:
+        tasks.pop(task_id, None)
+
+
 def load_boards() -> List[Dict[str, Any]]:
     raw_boards = load_json(SAVED_BOARDS_FILE, [])
     if not isinstance(raw_boards, list):
@@ -201,7 +310,82 @@ def load_boards() -> List[Dict[str, Any]]:
 
 
 def dump_board(board: BoardAsset) -> Dict[str, Any]:
-    return board.model_dump(mode="json")
+    data = board.model_dump(mode="json")
+    if board.legacy_difficulty:
+        data["legacy_difficulty"] = board.legacy_difficulty
+    return data
+
+
+def _grade_roles(data: Dict[str, Any]) -> Dict[str, List[str]]:
+    holds = [item for item in data.get("placed_holds", []) if isinstance(item, dict) and item.get("id")]
+    start = [str(item["id"]) for item in holds if item.get("is_start")]
+    top_ids = [
+        str(step.get("hold_id"))
+        for step in data.get("beta_sequence", [])
+        if isinstance(step, dict) and step.get("is_top") and step.get("hold_id")
+    ]
+    if not top_ids:
+        hand_holds = [item for item in holds if str(item.get("hold_type") or item.get("type")) != "Foot"]
+        if hand_holds:
+            top_ids = [str(max(hand_holds, key=lambda item: int(item.get("y") or 0))["id"])]
+    occupied = set(start) | set(top_ids)
+    return {
+        "start": start,
+        "mid": [str(item["id"]) for item in holds if str(item["id"]) not in occupied],
+        "end": list(dict.fromkeys(top_ids)),
+    }
+
+
+def _apply_font_grade(data: Dict[str, Any]) -> Dict[str, Any]:
+    existing = str(data.get("difficulty") or "")
+    legacy = existing if re.fullmatch(r"V(?:[0-9]|1[0-2])", existing.upper()) else data.get("legacy_difficulty")
+    if legacy and not data.get("legacy_difficulty"):
+        data["legacy_difficulty"] = legacy
+
+    if data.get("archived_at"):
+        data["difficulty"] = normalize_font_grade(existing) or UNGRADED
+        data["grade_system"] = "font"
+        data["grade_origin"] = "ungraded" if data["difficulty"] == UNGRADED else data.get("grade_origin", "transferred")
+        return data
+
+    source_grade_match = re.search(r"原始难度[：:]\s*(6B\+?|6C\+?|7A\+?|7B\+?|7C\+?|8A\+?|8B\+?)", str(data.get("setter_commentary") or ""), re.I)
+    if data.get("source_type") == "imported" and source_grade_match:
+        source_grade = source_grade_match.group(1).upper()
+        data.update(
+            {
+                "difficulty": source_grade,
+                "predicted_grade": data.get("predicted_grade"),
+                "grade_system": "font",
+                "grade_origin": "moonboard_source",
+                "difficulty_confidence": data.get("difficulty_confidence", 1.0),
+                "confidence_tier": data.get("confidence_tier", "high"),
+                "calibration_status": "ready",
+            }
+        )
+        return data
+
+    if data.get("grade_origin") == "human_confirmed" and normalize_font_grade(existing):
+        return data
+
+    profiles = {profile.variant_id: profile for profile in get_hold_profiles()}
+    holds = [item for item in data.get("placed_holds", []) if isinstance(item, dict)]
+    assessment = assess_equivalent_grade(
+        _grade_roles(data),
+        board_spec=data.get("board_spec"),
+        hold_demands=[
+            hold_transfer_demand(
+                item.get("hold_type") or item.get("type"),
+                item.get("rotation"),
+                profiles.get(str(item.get("variant") or "")),
+            )
+            for item in holds
+        ],
+        hold_confidences=[float(getattr(profiles.get(str(item.get("variant") or "")), "confidence", 0.65)) for item in holds],
+        beta_complete=bool(data.get("beta_sequence")),
+    )
+    data.update(assessment)
+    data["difficulty"] = normalize_font_grade(assessment.get("predicted_grade")) or UNGRADED
+    return data
 
 
 def normalize_board_payload(payload: Dict[str, Any], saved_id: str | None = None) -> BoardAsset:
@@ -216,10 +400,42 @@ def normalize_board_payload(payload: Dict[str, Any], saved_id: str | None = None
     data.setdefault("source_type", "manual")
     data.setdefault("visibility", "private")
     data.setdefault("tags", [])
-    data.setdefault("difficulty", "V3")
+    data.setdefault("difficulty", UNGRADED)
     data.setdefault("created_at", now)
     data["updated_at"] = data.get("updated_at") or now
-    return BoardAsset(**data)
+    data = _apply_font_grade(data)
+    return apply_board_readiness(BoardAsset(**data))
+
+
+def hold_asset_key(hold_type: str, variant: str) -> str:
+    return f"{hold_type}:{variant}"
+
+
+def load_hold_assets(include_archived: bool = False) -> List[Dict[str, Any]]:
+    mapping = load_json(HOLDS_MAPPING_FILE, {})
+    vectors = load_json(HOLDS_VECTORS_FILE, {})
+    metadata = load_json(HOLDS_METADATA_FILE, {})
+    assets: List[Dict[str, Any]] = []
+    for hold_type in sorted(set(mapping) | set(vectors)):
+        variants = sorted(set(mapping.get(hold_type, {})) | set(vectors.get(hold_type, {})))
+        for variant in variants:
+            if variant == "default":
+                continue
+            meta = metadata.get(hold_asset_key(hold_type, variant), {})
+            archived_at = meta.get("archived_at")
+            if archived_at and not include_archived:
+                continue
+            assets.append(
+                {
+                    "key": hold_asset_key(hold_type, variant),
+                    "hold_type": hold_type,
+                    "variant": variant,
+                    "imageUrl": mapping.get(hold_type, {}).get(variant) or mapping.get(hold_type, {}).get("default"),
+                    "svgPath": vectors.get(hold_type, {}).get(variant) or vectors.get(hold_type, {}).get("default"),
+                    "archived_at": archived_at,
+                }
+            )
+    return assets
 
 
 def local_activity_key(user_key: str, source_id: str) -> str:
@@ -262,6 +478,7 @@ def activity_from_entries(favorite: bool, rating: int | None, logs: List[Dict[st
             perceived_grade=item.get("perceived_grade"),
             notes=str(item.get("notes") or ""),
             created_at=str(item.get("created_at") or ""),
+            review_status=item.get("review_status") or "pending",
         )
         for item in ordered_logs[:20]
     ]
@@ -316,6 +533,7 @@ async def append_standard_activity_event(request: Request, source_id: str, activ
                 "perceived_grade": metadata.get("perceived_grade"),
                 "notes": metadata.get("notes") or "",
                 "created_at": now,
+                "review_status": "pending",
             }
         )
     save_standard_activity_store(store)
@@ -324,7 +542,16 @@ async def append_standard_activity_event(request: Request, source_id: str, activ
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "success", "message": "ZXT Engine is running.", "version": app.version}
+    data_readable = os.path.isdir(DATA_DIR) and os.access(DATA_DIR, os.R_OK)
+    return {
+        "status": "success" if data_readable else "degraded",
+        "message": "本地服务运行正常。" if data_readable else "运行数据暂不可读取。",
+        "version": app.version,
+        "release_sha": RELEASE_SHA[:40],
+        "local_only": is_local_only_mode(),
+        "data_readable": data_readable,
+        "simulation_enabled": SIMULATION_ENABLED,
+    }
 
 
 @app.get("/api/wall")
@@ -336,7 +563,11 @@ async def get_wall_grid():
 async def get_holds_mapping(request: Request):
     local_mapping = load_json(HOLDS_MAPPING_FILE, {})
     if local_mapping:
-        return local_mapping
+        return resolve_local_holds_mapping(
+            local_mapping,
+            Path(HOLDS_IMAGES_DIR),
+            Path(PROCESSED_HOLDS_IMAGES_DIR),
+        )
 
     if should_use_supabase(request):
         try:
@@ -362,6 +593,11 @@ async def get_holds_vectors(request: Request):
         except SupabaseRepositoryError as exc:
             print(f"Supabase holds vectors fallback: {exc}")
     return local_vectors
+
+
+@app.get("/api/holds/assets")
+async def get_hold_assets(include_archived: bool = False):
+    return load_hold_assets(include_archived=include_archived)
 
 
 def extract_svg_path_from_image(image_bytes: bytes) -> str:
@@ -413,11 +649,14 @@ async def upload_hold_image(request: Request):
         raise HTTPException(status_code=400, detail="请提供 hold_type、variant 和图片文件")
 
     image_bytes = await file.read()
+    close_file = getattr(file, "close", None)
+    if close_file:
+        await close_file()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="上传图片为空")
 
     try:
-        ext = os.path.splitext(getattr(file, "filename", "") or "")[1] or ".png"
+        ext = os.path.splitext(getattr(file, "filename", "") or "")[1].lower() or ".png"
         filename = f"{uuid.uuid4()}{ext}"
         svg_path = extract_svg_path_from_image(image_bytes)
         if should_use_supabase(request):
@@ -438,20 +677,48 @@ async def upload_hold_image(request: Request):
             except SupabaseRepositoryError as exc:
                 print(f"Supabase hold upload fallback: {exc}")
 
-        save_path = os.path.join(HOLDS_IMAGES_DIR, filename)
-        os.makedirs(HOLDS_IMAGES_DIR, exist_ok=True)
-        with open(save_path, "wb") as buffer:
-            buffer.write(image_bytes)
+        if ext not in SUPPORTED_IMAGE_SUFFIXES:
+            raise HTTPException(status_code=400, detail="仅支持 PNG、JPEG 或 WebP 图片")
+        try:
+            processed_bytes = process_hold_image_bytes(image_bytes)
+        except HoldImageProcessingError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        save_path = Path(HOLDS_IMAGES_DIR) / filename
+        processed_path = Path(PROCESSED_HOLDS_IMAGES_DIR) / processed_filename_for(filename)
+        write_bytes_atomic(save_path, image_bytes)
+        try:
+            write_bytes_atomic(processed_path, processed_bytes)
+        except Exception:
+            save_path.unlink(missing_ok=True)
+            raise
 
         mapping = load_json(HOLDS_MAPPING_FILE, {})
-        mapping.setdefault(hold_type, {})[variant] = f"/images/{filename}"
-        save_json(HOLDS_MAPPING_FILE, mapping)
-
+        mapping.setdefault(hold_type, {})[variant] = f"/images/processed/{processed_path.name}"
         vectors = load_json(HOLDS_VECTORS_FILE, {})
         vectors.setdefault(hold_type, {})[variant] = svg_path
-        save_json(HOLDS_VECTORS_FILE, vectors)
+        try:
+            save_json(HOLDS_MAPPING_FILE, mapping)
+            save_json(HOLDS_VECTORS_FILE, vectors)
+            metadata = load_json(HOLDS_METADATA_FILE, {})
+            metadata[hold_asset_key(hold_type, variant)] = {
+                **metadata.get(hold_asset_key(hold_type, variant), {}),
+                "archived_at": None,
+                "updated_at": utc_now(),
+            }
+            save_json(HOLDS_METADATA_FILE, metadata)
+        except Exception:
+            save_path.unlink(missing_ok=True)
+            processed_path.unlink(missing_ok=True)
+            raise
 
-        return {"success": True, "image_path": mapping[hold_type][variant], "svg_path": vectors[hold_type][variant]}
+        return {
+            "success": True,
+            "image_path": f"/images/processed/{processed_path.name}",
+            "svg_path": vectors[hold_type][variant],
+            "background_removed": True,
+            "processing_version": PROCESSING_VERSION,
+        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -472,20 +739,26 @@ async def delete_hold(hold_type: str, variant: str, request: Request):
 
     mapping = load_json(HOLDS_MAPPING_FILE, {})
     vectors = load_json(HOLDS_VECTORS_FILE, {})
+    if variant not in mapping.get(hold_type, {}) and variant not in vectors.get(hold_type, {}):
+        raise HTTPException(status_code=404, detail="未找到该岩点")
+    metadata = load_json(HOLDS_METADATA_FILE, {})
+    key = hold_asset_key(hold_type, variant)
+    metadata[key] = {**metadata.get(key, {}), "archived_at": utc_now(), "updated_at": utc_now()}
+    save_json(HOLDS_METADATA_FILE, metadata)
+    return {"success": True, "message": "岩点已归档"}
 
-    if hold_type in mapping and variant in mapping[hold_type]:
-        mapping[hold_type].pop(variant)
-        if not mapping[hold_type]:
-            del mapping[hold_type]
-        save_json(HOLDS_MAPPING_FILE, mapping)
 
-    if hold_type in vectors and variant in vectors[hold_type]:
-        vectors[hold_type].pop(variant)
-        if not vectors[hold_type]:
-            del vectors[hold_type]
-        save_json(HOLDS_VECTORS_FILE, vectors)
-
-    return {"success": True, "message": "岩点已删除"}
+@app.post("/api/holds/{hold_type}/{variant}/restore")
+async def restore_hold(hold_type: str, variant: str):
+    mapping = load_json(HOLDS_MAPPING_FILE, {})
+    vectors = load_json(HOLDS_VECTORS_FILE, {})
+    if variant not in mapping.get(hold_type, {}) and variant not in vectors.get(hold_type, {}):
+        raise HTTPException(status_code=404, detail="未找到该岩点")
+    metadata = load_json(HOLDS_METADATA_FILE, {})
+    key = hold_asset_key(hold_type, variant)
+    metadata[key] = {**metadata.get(key, {}), "archived_at": None, "updated_at": utc_now()}
+    save_json(HOLDS_METADATA_FILE, metadata)
+    return {"success": True, "message": "岩点已恢复"}
 
 
 @app.post("/api/save-board")
@@ -508,15 +781,17 @@ async def save_board(payload: Dict[str, Any], request: Request):
 
 
 @app.get("/api/my-boards", response_model=List[BoardAsset])
-async def get_my_boards(request: Request):
+async def get_my_boards(request: Request, include_archived: bool = False):
     local_boards = load_boards()
     if local_boards:
-        return [normalize_board_payload(board).model_dump(mode="json") for board in local_boards]
+        normalized = [normalize_board_payload(board).model_dump(mode="json") for board in local_boards]
+        return normalized if include_archived else [board for board in normalized if not board.get("archived_at")]
 
     user = await resolve_supabase_user(request) if should_use_supabase(request) else None
     if should_use_supabase(request) and user:
         try:
-            return [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(user["id"])]
+            normalized = [normalize_board_payload(board).model_dump(mode="json") for board in await supabase_repo.list_boards(user["id"])]
+            return normalized if include_archived else [board for board in normalized if not board.get("archived_at")]
         except SupabaseRepositoryError as exc:
             print(f"Supabase board list fallback: {exc}")
     return [normalize_board_payload(board).model_dump(mode="json") for board in local_boards]
@@ -563,33 +838,53 @@ async def delete_saved_board(saved_id: str, request: Request):
             print(f"Supabase board archive fallback: {exc}")
 
     boards = load_boards()
-    filtered = [board for board in boards if board.get("saved_id") != saved_id]
-    if len(filtered) == len(boards):
+    target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
+    if target_index is None:
         raise HTTPException(status_code=404, detail="未找到该岩板")
-    save_json(SAVED_BOARDS_FILE, filtered)
-    return {"success": True, "message": "岩板已删除"}
+    boards[target_index] = {**boards[target_index], "archived_at": utc_now(), "updated_at": utc_now()}
+    save_json(SAVED_BOARDS_FILE, boards)
+    return {"success": True, "message": "岩板已归档"}
+
+
+@app.post("/api/my-boards/{saved_id}/restore")
+async def restore_saved_board(saved_id: str):
+    boards = load_boards()
+    target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
+    if target_index is None:
+        raise HTTPException(status_code=404, detail="未找到该岩板")
+    restored_payload = {**boards[target_index], "archived_at": None, "updated_at": utc_now()}
+    restored = normalize_board_payload(restored_payload, saved_id=saved_id)
+    boards[target_index] = dump_board(restored)
+    save_json(SAVED_BOARDS_FILE, boards)
+    return {"success": True, "message": "岩板已恢复", **dump_board(normalize_board_payload(boards[target_index], saved_id=saved_id))}
 
 
 @app.get("/api/standard-board/routes", response_model=StandardBoardRouteQueryResponse)
 async def list_standard_board_routes(
+    q: str | None = None,
     difficulty: str | None = None,
-    predicted_v_grade: str | None = None,
+    predicted_grade: str | None = None,
     grade_warning: str | None = None,
     benchmark_only: bool = False,
     min_holds: int | None = None,
     max_holds: int | None = None,
+    tag_ids: str | None = None,
+    tag_match: str = "all",
     sort: str = "score_desc",
     limit: int = 24,
     offset: int = 0,
     valid_only: bool = True,
 ):
     return query_standard_routes(
+        q=q,
         difficulty=difficulty,
-        predicted_v_grade=predicted_v_grade,
+        predicted_grade=predicted_grade,
         grade_warning=grade_warning,
         benchmark_only=benchmark_only,
         min_holds=min_holds,
         max_holds=max_holds,
+        tag_ids=tag_ids,
+        tag_match=tag_match if tag_match in {"all", "any"} else "all",
         sort=sort,
         limit=limit,
         offset=offset,
@@ -665,8 +960,8 @@ async def log_standard_board_ascent(source_id: str, payload: StandardRouteAscent
 
 
 @app.get("/api/standard-board/repairs", response_model=StandardBoardRepairQueryResponse)
-async def list_standard_board_repairs(limit: int = 24, offset: int = 0, status: str | None = None):
-    return query_standard_board_repairs(limit=limit, offset=offset, status=status)
+async def list_standard_board_repairs(q: str | None = None, limit: int = 24, offset: int = 0, status: str | None = None):
+    return query_standard_board_repairs(q=q, limit=limit, offset=offset, status=status)
 
 
 @app.get("/api/standard-board/repairs/{source_id}", response_model=StandardBoardRepairCandidate)
@@ -713,8 +1008,95 @@ async def generate_standard_board_route(payload: StandardBoardGenerateRequest):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def require_simulation_enabled() -> None:
+    if not SIMULATION_ENABLED:
+        raise HTTPException(status_code=404, detail="仿真审核未在本次试运行中开放")
+
+
+@app.get("/api/simulation/climber-profiles", response_model=List[ClimberProfile])
+async def list_simulation_climber_profiles(ability_grade: str = DEFAULT_FONT_GRADE):
+    require_simulation_enabled()
+    return get_climber_profiles(ability_grade)
+
+
+@app.get("/api/simulation/hold-profiles", response_model=List[HoldPhysicsProfile])
+async def list_simulation_hold_profiles():
+    require_simulation_enabled()
+    return get_hold_profiles()
+
+
+@app.put("/api/simulation/hold-profiles/{variant_id}", response_model=HoldPhysicsProfile)
+async def save_simulation_hold_profile(variant_id: str, payload: HoldPhysicsProfile):
+    require_simulation_enabled()
+    return update_hold_profile(variant_id, payload)
+
+
+@app.post(
+    "/api/standard-board/routes/{source_id}/simulation",
+    response_model=GenerationInitiated,
+    status_code=202,
+)
+async def start_standard_board_simulation(source_id: str, payload: SimulationRequest, background_tasks: BackgroundTasks):
+    require_simulation_enabled()
+    if not find_standard_route(source_id):
+        raise HTTPException(status_code=404, detail="未找到该标准板线路")
+    task_id = str(uuid.uuid4())
+    active_tasks[task_id] = task_envelope(task_id, "pending")
+    background_tasks.add_task(run_and_store_simulation, task_id, simulate_route, source_id, payload)
+    return GenerationInitiated(task_id=task_id, status="pending")
+
+
+@app.get(
+    "/api/standard-board/routes/{source_id}/simulation/latest",
+    response_model=SimulationReport,
+)
+async def latest_standard_board_simulation(source_id: str):
+    require_simulation_enabled()
+    report = get_latest_report(source_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="该线路尚无仿真报告")
+    return report
+
+
+@app.post(
+    "/api/standard-board/simulations/batch",
+    response_model=GenerationInitiated,
+    status_code=202,
+)
+async def start_standard_board_simulation_batch(payload: SimulationBatchRequest, background_tasks: BackgroundTasks):
+    require_simulation_enabled()
+    task_id = str(uuid.uuid4())
+    active_tasks[task_id] = task_envelope(task_id, "pending")
+    background_tasks.add_task(run_and_store_simulation, task_id, simulate_batch, payload)
+    return GenerationInitiated(task_id=task_id, status="pending")
+
+
+@app.post(
+    "/api/simulation/reports/{report_id}/repair-candidates",
+    response_model=List[SimulationRepairCandidate],
+)
+async def create_simulation_repair_candidates(report_id: str):
+    require_simulation_enabled()
+    try:
+        return await asyncio.to_thread(generate_repair_candidates, report_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/simulation/reports/{report_id}/feedback",
+    response_model=SimulationFeedbackRecord,
+)
+async def submit_simulation_feedback(report_id: str, payload: SimulationFeedback):
+    require_simulation_enabled()
+    try:
+        return record_feedback(report_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/generate", response_model=GenerationInitiated, status_code=202)
-async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTasks, request: Request):
+async def generate_route(payload: Dict[str, Any], request: Request):
     task_id = str(uuid.uuid4())
     use_supabase = should_use_supabase(request)
     user = await resolve_supabase_user(request) if use_supabase else None
@@ -727,7 +1109,8 @@ async def generate_route(payload: Dict[str, Any], background_tasks: BackgroundTa
             await supabase_repo.create_task(task_id, payload, owner_id)
         except SupabaseRepositoryError as exc:
             print(f"Supabase task create skipped: {exc}")
-    background_tasks.add_task(run_and_store_generation, task_id, payload, owner_id)
+    task = asyncio.create_task(run_and_store_generation(task_id, payload, owner_id))
+    tasks[task_id] = task
     return GenerationInitiated(task_id=task_id, status="pending")
 
 
@@ -763,4 +1146,11 @@ async def cancel_generation_task(task_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, loop="auto", timeout_keep_alive=65)
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("CLIMB_HOST", "127.0.0.1"),
+        port=8000,
+        reload=True,
+        loop="auto",
+        timeout_keep_alive=65,
+    )

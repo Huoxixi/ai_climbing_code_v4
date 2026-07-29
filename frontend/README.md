@@ -1,11 +1,22 @@
-# Vue 3 + Vite
+# 攀岩定线辅助系统前端
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+当前前端服务于本地单机版产品，包含总览、定线工作台、岩点库、岩板资产、标准线路库、仿真审核入口和 AI 实验室。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+- 11×18 标准训练板支持手工定线、完整性检查、AI 组合与审核。
+- 14×20、16×24、18×22 支持手工定线与保存，当前不进入 AI 实验。
+- 当前没有经过确认的板面材质配置，界面不会展示或推测材质。
+- 启动后无需登录；当前版本不宣传云端多用户能力。
 
+从仓库根目录运行 `.\scripts\start_demo.ps1` 可同时启动前后端。仅启动前端时：
 
-
-
-cd "D:\学校课程\ai攀岩定线问题\ai_climbing_code\frontend"
+```powershell
+cd frontend
 npm.cmd run dev
+```
+
+发布前验证：
+
+```powershell
+npm.cmd test
+npm.cmd run build
+```

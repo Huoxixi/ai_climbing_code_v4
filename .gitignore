@@ -16,6 +16,9 @@ backend/.venv/
 backend/.env
 frontend/.env
 !.env.example
+!frontend/.env.production.example
+!deploy/env/
+!deploy/env/*.example
 
 # Node
 node_modules/
@@ -32,3 +35,6 @@ build/
 
 # Generated hold image cache
 backend/data/holds_images_processed/
+
+# Local simulation reports and human feedback
+backend/data/local_simulation/

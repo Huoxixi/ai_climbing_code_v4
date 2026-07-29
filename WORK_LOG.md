@@ -1,5 +1,7 @@
 # Work Log - Backend Interface Sync
 
+> Historical archive: this log records an earlier interface contract. References to free-text AI requirements, account flows, Studio, or AI Lab are not current product promises. Use `PRODUCT.md`, `docs/项目业务审核与修改报告.md`, and the running local UI as the current source of truth.
+
 Date: 2026-05-25
 
 ## Completed

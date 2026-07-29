@@ -1,8 +1,8 @@
 import apiClient from './apiClient'
 
 export const boardService = {
-  listBoards() {
-    return apiClient.get('/api/my-boards')
+  listBoards(includeArchived = false) {
+    return apiClient.get('/api/my-boards', { params: { include_archived: includeArchived } })
   },
 
   createBoard(board) {
@@ -15,6 +15,10 @@ export const boardService = {
 
   deleteBoard(savedId) {
     return apiClient.delete(`/api/my-boards/${savedId}`)
+  },
+
+  restoreBoard(savedId) {
+    return apiClient.post(`/api/my-boards/${savedId}/restore`)
   },
 }
 

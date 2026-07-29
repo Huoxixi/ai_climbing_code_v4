@@ -81,6 +81,17 @@ Before turning a request into implementation:
 
 Success means the agent behaves like a product-minded engineer: clarify the real need, reduce user decision burden, and convert non-technical requests into verifiable implementation steps.
 
+## 实施前产品澄清
+
+除低风险、孤立且可逆的小改动外，在实施前必须先完成以下步骤：
+
+1. 先用只读检查确认代码、数据结构、现有交互和兼容性，不能把可从项目中发现的事实反问给用户。
+2. 用通俗语言说明对用户目标的理解，以及准备交付的用户可见结果。
+3. 只提出会影响范围、历史数据处理、用户流程、关键取舍或验收标准的必要且实际问题；问题应附带推荐方案，避免要求用户做技术实现决策。
+4. 在关键问题得到确认后再修改代码或数据；若采用了安全默认值，必须明确说明该假设。
+
+目标是避免因需求理解偏差导致返工，同时不以无关问题阻塞正常实现。
+
 ---
 
 # Project-Specific Database / Supabase Rules

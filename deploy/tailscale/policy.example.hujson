@@ -1,0 +1,33 @@
+{
+  "groups": {
+    "group:ai-climbing-pilot": [
+      "pilot-owner@example.com",
+      "pilot-user@example.com",
+    ],
+  },
+
+  "tagOwners": {
+    "tag:ai-climbing": ["autogroup:admin"],
+  },
+
+  "grants": [
+    {
+      "src": ["group:ai-climbing-pilot"],
+      "dst": ["tag:ai-climbing"],
+      "ip": ["tcp:443"],
+    },
+    {
+      "src": ["autogroup:admin"],
+      "dst": ["tag:ai-climbing"],
+      "ip": ["tcp:22"],
+    },
+  ],
+
+  "tests": [
+    {
+      "src": "pilot-owner@example.com",
+      "accept": ["tag:ai-climbing:443"],
+      "deny": ["tag:ai-climbing:22"],
+    },
+  ],
+}

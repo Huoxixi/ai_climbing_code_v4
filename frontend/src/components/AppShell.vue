@@ -5,13 +5,14 @@
         <div class="brand-mark">
           <Grid class="brand-icon" />
         </div>
-        <span>Climb OS</span>
+        <span>定线助手</span>
       </div>
       <button
         v-for="item in items"
         :key="item.key"
         class="rail-item"
         :class="{ active: active === item.key }"
+        :aria-current="active === item.key ? 'page' : undefined"
         :title="item.label"
         @click="$emit('update:active', item.key)"
       >
@@ -23,15 +24,13 @@
     <div class="shell-main">
       <header class="topbar">
         <div class="topbar-title">
-          <p class="eyebrow">Climbing Board Studio</p>
+          <p class="eyebrow">本地单机版</p>
           <h1>{{ title }}</h1>
         </div>
         <div class="topbar-status">
           <span class="status-pill">{{ boardLabel }}</span>
           <span class="status-pill">{{ holdCount }} 岩点</span>
           <span class="status-pill" :class="{ dirty: dirty }">{{ dirty ? '未保存' : '已同步' }}</span>
-          <span v-if="userEmail" class="status-pill user-pill">{{ userEmail }}</span>
-          <el-button v-if="userEmail" size="small" @click="$emit('logout')">退出</el-button>
         </div>
       </header>
       <slot />
@@ -42,6 +41,7 @@
         v-for="item in items"
         :key="item.key"
         :class="{ active: active === item.key }"
+        :aria-current="active === item.key ? 'page' : undefined"
         @click="$emit('update:active', item.key)"
       >
         <component :is="item.icon" />
@@ -52,25 +52,31 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { Collection, DataBoard, Grid, Histogram, Platform } from '@element-plus/icons-vue'
 
-defineProps({
+const props = defineProps({
   active: { type: String, required: true },
   title: { type: String, required: true },
   boardLabel: { type: String, default: '未选择岩板' },
   holdCount: { type: Number, default: 0 },
   dirty: { type: Boolean, default: false },
-  userEmail: { type: String, default: '' },
+  simulationEnabled: { type: Boolean, default: false },
 })
 
-defineEmits(['update:active', 'logout'])
+defineEmits(['update:active'])
 
-const items = [
+const baseItems = [
   { key: 'dashboard', label: '总览', short: '总览', icon: DataBoard },
-  { key: 'studio', label: 'Studio', short: '创作', icon: Platform },
+  { key: 'studio', label: '定线工作台', short: '定线', icon: Platform },
   { key: 'library', label: '岩点库', short: '岩点', icon: Collection },
   { key: 'boards', label: '岩板资产', short: '资产', icon: Grid },
   { key: 'standard-board', label: '标准板库', short: '板库', icon: Grid },
-  { key: 'ai-lab', label: 'AI Lab', short: 'AI', icon: Histogram },
+  { key: 'simulation', label: '仿真审核', short: '仿真', icon: Histogram },
+  { key: 'ai-lab', label: 'AI 实验室', short: 'AI', icon: Histogram },
 ]
+
+const items = computed(() => (
+  baseItems.filter((item) => item.key !== 'simulation' || props.simulationEnabled)
+))
 </script>

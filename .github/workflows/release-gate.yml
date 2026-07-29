@@ -1,0 +1,61 @@
+name: release-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - "pilot-v*"
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install locked backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-production.lock
+      - name: Verify backend
+        working-directory: backend
+        env:
+          LOCAL_ONLY: "true"
+          DISABLE_SUPABASE: "true"
+          ENABLE_SIMULATION: "false"
+        run: |
+          pip check
+          python -m unittest \
+            test_ai_lab_experiments \
+            test_hold_image_processing \
+            test_local_only_mode \
+            test_release_hardening \
+            test_release_readiness \
+            test_standard_board \
+            test_standard_board_activity \
+            test_standard_board_difficulty \
+            test_standard_board_local_first \
+            test_standard_board_tags
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify frontend
+        working-directory: frontend
+        env:
+          VITE_ENABLE_SIMULATION: "false"
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Check repository for committed secret files
+        shell: bash
+        run: |
+          tracked_env_files="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.example$' || true)"
+          test -z "${tracked_env_files}" || {
+            echo "A non-example environment file is tracked."
+            exit 1
+          }

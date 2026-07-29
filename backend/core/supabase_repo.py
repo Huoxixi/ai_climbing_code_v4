@@ -19,7 +19,9 @@ LOCAL_ONLY_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 def is_local_only_mode() -> bool:
-    local_only = os.getenv("LOCAL_ONLY", "")
+    # The desktop deployment is intentionally local-first. Cloud storage can
+    # still be enabled explicitly by setting LOCAL_ONLY=false.
+    local_only = os.getenv("LOCAL_ONLY", "true")
     disable_supabase = os.getenv("DISABLE_SUPABASE", "")
     return (
         local_only.strip().lower() in LOCAL_ONLY_TRUE_VALUES
@@ -492,7 +494,7 @@ class SupabaseRepository:
             "source_type": row.get("source_type") or "manual",
             "visibility": row.get("visibility") or "private",
             "tags": row.get("tags") or [],
-            "difficulty": row.get("difficulty") or "V3",
+            "difficulty": row.get("difficulty") or "未定级",
             "created_at": row.get("created_at"),
             "updated_at": row.get("updated_at"),
             "board_spec": row.get("board_spec"),

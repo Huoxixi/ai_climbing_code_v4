@@ -186,15 +186,16 @@ export function useStudioEditor() {
     markUnsaved()
   }
 
-  function loadBoard(board) {
+  function loadBoard(board, { markUnsaved = false } = {}) {
     const copy = JSON.parse(JSON.stringify(board))
+    if (markUnsaved) delete copy.saved_id
     copy.board_spec = normalizeBoardSpec(copy.board_spec)
     copy.placed_holds = Array.isArray(copy.placed_holds) ? copy.placed_holds : []
     copy.beta_sequence = Array.isArray(copy.beta_sequence) ? copy.beta_sequence : []
     currentBoard.value = copy
     activeBoardPresetId.value = copy.board_spec.preset_id || DEFAULT_BOARD_TEMPLATE_ID
     selectedHold.value = null
-    unsavedChanges.value = false
+    unsavedChanges.value = markUnsaved
   }
 
   return {

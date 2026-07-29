@@ -5,7 +5,9 @@ Shared Pydantic contracts for the API, route generator, and frontend board studi
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from core.moonboard_grading import BOUNDARY_LABELS, DEFAULT_FONT_GRADE, FONT_GRADES, UNGRADED, normalize_font_grade
 
 
 class HoldType(str, Enum):
@@ -122,6 +124,14 @@ class RouteRequest(BaseModel):
     recipe: Dict[HoldType, RecipeItem] = Field(default_factory=dict)
     hold_pool: List[HoldSpec] = Field(default_factory=list)
 
+    @field_validator("target_difficulty")
+    @classmethod
+    def validate_target_difficulty(cls, value: str) -> str:
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError(f"目标难度必须是 {FONT_GRADES[0]}–{FONT_GRADES[-1]} 的 Font 等级")
+        return grade
+
 
 class FinalRoute(BaseModel):
     """A generated or saved route shown in the frontend."""
@@ -131,7 +141,14 @@ class FinalRoute(BaseModel):
     source_type: str = "ai-generated"
     visibility: str = "private"
     tags: List[str] = Field(default_factory=list)
-    difficulty: str = "V3"
+    difficulty: str = DEFAULT_FONT_GRADE
+    predicted_grade: Optional[str] = None
+    grade_system: Literal["font"] = "font"
+    grade_origin: Literal["moonboard_source", "transferred", "human_confirmed", "ungraded"] = "ungraded"
+    difficulty_confidence: Optional[float] = Field(None, ge=0, le=1)
+    confidence_tier: Literal["low", "medium", "high"] = "low"
+    calibration_status: Literal["ready", "calibrating", "uncalibrated"] = "uncalibrated"
+    legacy_difficulty: Optional[str] = Field(None, exclude=True)
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     board_spec: Optional[BoardSpec] = None
@@ -140,11 +157,34 @@ class FinalRoute(BaseModel):
     placed_holds: List[Hold]
     beta_sequence: List[BetaStep] = Field(default_factory=list)
 
+    @field_validator("difficulty")
+    @classmethod
+    def validate_difficulty(cls, value: str) -> str:
+        grade = normalize_font_grade(value, allow_ungraded=True)
+        if not grade:
+            raise ValueError(f"难度必须是 {FONT_GRADES[0]}–{FONT_GRADES[-1]} 或“{UNGRADED}”")
+        return grade
+
+    @field_validator("predicted_grade")
+    @classmethod
+    def validate_predicted_grade(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        grade = normalize_font_grade(value)
+        if not grade and value not in BOUNDARY_LABELS:
+            raise ValueError("预测难度必须使用 Font 等级")
+        return grade or value
+
 
 class BoardAsset(FinalRoute):
     """Editable board asset persisted by the redesigned frontend."""
 
     source_type: str = "manual"
+    workflow_status: Literal["draft", "ready_for_review"] = "draft"
+    readiness_issues: List[str] = Field(default_factory=list)
+    readiness_warnings: List[str] = Field(default_factory=list)
+    ai_eligible: bool = False
+    archived_at: Optional[str] = None
 
 
 class RenameBoardRequest(BaseModel):
@@ -172,10 +212,22 @@ class TaskEnvelope(BaseModel):
 class AIExperimentRequest(BaseModel):
     mode: Literal["compose_route", "review_route"] = "compose_route"
     board: BoardAsset
+    generation_goal: Literal["quality_first", "grade_match", "style_variation"] = "quality_first"
+    review_focus: Literal["overall", "footholds", "difficulty", "beta_sequence"] = "overall"
     user_requirements: str = ""
     target_difficulty: Optional[str] = None
     climber_height_cm: int = 175
     climber_span_cm: int = 175
+
+    @field_validator("target_difficulty")
+    @classmethod
+    def validate_optional_target_difficulty(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError("AI 目标难度必须使用 Font 等级")
+        return grade
 
 
 class RouteReviewViolation(BaseModel):
@@ -236,8 +288,12 @@ class RouteOverlayPoint(VirtualLedPoint):
 class StandardBoardRouteSummary(BaseModel):
     source_id: str
     display_name: str
+    source_name: str
+    setter_name: str = "未知定线者"
+    source_url: Optional[str] = None
     grade: str
-    v_grade: str
+    grade_system: Literal["font"] = "font"
+    grade_origin: Literal["moonboard_source"] = "moonboard_source"
     is_benchmark: bool = False
     repeats: int = 0
     score: float
@@ -247,12 +303,15 @@ class StandardBoardRouteSummary(BaseModel):
     marker_summary: Dict[str, Any] = Field(default_factory=dict)
     review_reasons: List[str] = Field(default_factory=list)
     difficulty_score: Optional[float] = None
-    predicted_v_grade: Optional[str] = None
+    predicted_grade: Optional[str] = None
     grade_delta: Optional[int] = None
     difficulty_confidence: Optional[float] = None
     difficulty_breakdown: Dict[str, float] = Field(default_factory=dict)
     difficulty_reasons: List[str] = Field(default_factory=list)
     grade_warning: Literal["none", "soft", "hard", "uncertain"] = "none"
+    confidence_tier: Literal["low", "medium", "high"] = "low"
+    calibration_status: Literal["ready", "calibrating", "uncalibrated"] = "ready"
+    tags: List[str] = Field(default_factory=list)
     features: StandardBoardRouteFeatures
     valid_for_climb: bool = True
 
@@ -277,9 +336,17 @@ class StandardBoardRouteQueryResponse(BaseModel):
 
 
 class StandardBoardGenerateRequest(BaseModel):
-    target_difficulty: str = "V3"
+    target_difficulty: str = DEFAULT_FONT_GRADE
     benchmark_only: bool = False
     variation: bool = True
+
+    @field_validator("target_difficulty")
+    @classmethod
+    def validate_target_difficulty(cls, value: str) -> str:
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError("生成目标难度必须使用 Font 等级")
+        return grade
 
 
 class StandardBoardGenerateResponse(BaseModel):
@@ -300,6 +367,16 @@ class StandardRouteAscentLogRequest(BaseModel):
     perceived_grade: Optional[str] = None
     notes: str = ""
 
+    @field_validator("perceived_grade")
+    @classmethod
+    def validate_perceived_grade(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError("体感难度必须使用 Font 等级")
+        return grade
+
 
 class StandardRouteActivityLog(BaseModel):
     id: str
@@ -308,6 +385,7 @@ class StandardRouteActivityLog(BaseModel):
     perceived_grade: Optional[str] = None
     notes: str = ""
     created_at: str
+    review_status: Literal["pending", "approved", "rejected"] = "pending"
 
 
 class StandardRouteActivityStats(BaseModel):
@@ -326,6 +404,9 @@ class StandardRouteActivityResponse(BaseModel):
 
 class StandardBoardRepairCandidate(BaseModel):
     source_id: str
+    source_name: str = ""
+    setter_name: str = "未知定线者"
+    original_grade: str = ""
     repair_status: Literal["repairable", "repaired", "unrepairable"]
     original_roles: Dict[Literal["start", "mid", "end"], List[str]]
     repaired_roles: Optional[Dict[Literal["start", "mid", "end"], List[str]]] = None
@@ -334,12 +415,14 @@ class StandardBoardRepairCandidate(BaseModel):
     validation: Dict[str, Any] = Field(default_factory=dict)
     quality_score: Optional[float] = None
     difficulty_score: Optional[float] = None
-    predicted_v_grade: Optional[str] = None
+    predicted_grade: Optional[str] = None
     grade_delta: Optional[int] = None
     difficulty_confidence: Optional[float] = None
     difficulty_breakdown: Dict[str, float] = Field(default_factory=dict)
     difficulty_reasons: List[str] = Field(default_factory=list)
     grade_warning: Literal["none", "soft", "hard", "uncertain"] = "none"
+    confidence_tier: Literal["low", "medium", "high"] = "low"
+    calibration_status: Literal["ready", "calibrating", "uncalibrated"] = "ready"
     review_reasons: List[str] = Field(default_factory=list)
 
 
@@ -368,3 +451,253 @@ class StandardBoardRepairPublishSkipped(BaseModel):
 class StandardBoardRepairPublishResponse(BaseModel):
     published: List[StandardBoardRouteSummary] = Field(default_factory=list)
     skipped: List[StandardBoardRepairPublishSkipped] = Field(default_factory=list)
+
+
+class ClimberCapabilities(BaseModel):
+    ability_grade: str = DEFAULT_FONT_GRADE
+    finger_strength: float = Field(55.0, ge=0, le=100)
+    pull_power: float = Field(55.0, ge=0, le=100)
+    core_tension: float = Field(55.0, ge=0, le=100)
+    hip_mobility: float = Field(55.0, ge=0, le=100)
+    shoulder_mobility: float = Field(55.0, ge=0, le=100)
+    endurance: float = Field(55.0, ge=0, le=100)
+    technique: float = Field(55.0, ge=0, le=100)
+
+    @field_validator("ability_grade")
+    @classmethod
+    def validate_ability_grade(cls, value: str) -> str:
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError("攀爬者能力必须使用 Font 等级")
+        return grade
+
+
+class ClimberProfile(BaseModel):
+    id: str
+    label: str
+    description: str = ""
+    height_cm: float = Field(..., gt=100, lt=230)
+    arm_span_cm: float = Field(..., gt=100, lt=240)
+    weight_kg: float = Field(..., gt=25, lt=180)
+    shoulder_width_cm: float
+    hip_width_cm: float
+    torso_length_cm: float
+    upper_arm_cm: float
+    forearm_cm: float
+    hand_reach_cm: float = Field(7.0, ge=4.0, le=12.0)
+    thigh_cm: float
+    shin_cm: float
+    capabilities: ClimberCapabilities = Field(default_factory=ClimberCapabilities)
+    version: str = "1.0"
+
+
+class HoldContactAnchor(BaseModel):
+    x: float = Field(0.0, ge=-1.0, le=1.0)
+    y: float = Field(0.0, ge=-1.0, le=1.0)
+
+
+class HoldPhysicsProfile(BaseModel):
+    variant_id: str
+    hold_type: HoldType
+    grip_family: Literal["jug", "crimp", "sloper", "pinch", "pocket", "foot"]
+    quality: int = Field(3, ge=1, le=5)
+    usable_by: Literal["hand", "foot", "both"] = "hand"
+    preferred_direction_degrees: int = Field(180, ge=0, le=359)
+    direction_tolerance_degrees: int = Field(90, ge=10, le=180)
+    capacity: float = Field(0.7, ge=0.1, le=2.0)
+    confidence: float = Field(0.65, ge=0, le=1)
+    hand_contact_anchor: HoldContactAnchor = Field(default_factory=HoldContactAnchor)
+    foot_contact_anchor: HoldContactAnchor = Field(default_factory=HoldContactAnchor)
+    recovery_contact_anchor: HoldContactAnchor = Field(default_factory=HoldContactAnchor)
+    notes: str = ""
+    version: str = "1.2"
+
+
+class SimulationRequest(BaseModel):
+    ability_grade: Optional[str] = None
+    profile_ids: List[str] = Field(default_factory=list)
+    motion_mode: Optional[Literal["static", "static_then_single_dynamic"]] = None
+    static_only: Optional[bool] = None
+    generate_repairs: bool = False
+    force_refresh: bool = False
+
+    @model_validator(mode="after")
+    def resolve_motion_mode(self):
+        legacy_mode = None
+        if self.static_only is not None:
+            legacy_mode = "static" if self.static_only else "static_then_single_dynamic"
+        if self.motion_mode and legacy_mode and self.motion_mode != legacy_mode:
+            raise ValueError("motion_mode 与 static_only 冲突")
+        self.motion_mode = self.motion_mode or legacy_mode or "static_then_single_dynamic"
+        self.static_only = self.motion_mode == "static"
+        return self
+
+
+class SimulationBatchRequest(SimulationRequest):
+    source_ids: List[str] = Field(default_factory=list)
+    difficulty: Optional[str] = None
+    limit: int = Field(24, ge=1, le=200)
+
+
+class SimulationJointPoint(BaseModel):
+    x: float
+    y: float
+    z: Optional[float] = 0.0
+
+
+class SimulationAction(BaseModel):
+    step: int
+    action_type: Literal["static_move", "match", "deadpoint", "dyno", "cut_loose", "recovery"]
+    moving_limbs: List[Limb] = Field(default_factory=list)
+    target_hold_ids: List[str] = Field(default_factory=list)
+    from_contacts: Dict[str, Optional[str]] = Field(default_factory=dict)
+    to_contacts: Dict[str, Optional[str]] = Field(default_factory=dict)
+    purpose: str
+    technique: str = "direct_reach"
+    support_limbs: List[Limb] = Field(default_factory=list)
+    drive_limbs: List[Limb] = Field(default_factory=list)
+    preparation_required: bool = False
+    dynamic: bool = False
+    duration_seconds: float = 0.0
+    peak_velocity: float = 0.0
+    catch_load_ratio: float = 0.0
+
+
+class SimulationFrame(BaseModel):
+    step: int
+    moving_limb: Optional[Limb] = None
+    hold_id: Optional[str] = None
+    contacts: Dict[str, Optional[str]] = Field(default_factory=dict)
+    joints: Dict[str, SimulationJointPoint] = Field(default_factory=dict)
+    center_of_mass: SimulationJointPoint
+    phase: Literal[
+        "rest",
+        "weight_shift",
+        "crouch",
+        "release",
+        "reach",
+        "place",
+        "push",
+        "flight",
+        "catch",
+        "settle",
+        "recovery",
+    ] = "rest"
+    timestamp_seconds: float = 0.0
+    contact_anchors: Dict[str, SimulationJointPoint] = Field(default_factory=dict)
+    support_limbs: List[Limb] = Field(default_factory=list)
+    shoulder_wall_distance: float = 0.0
+    hip_wall_distance: float = 0.0
+    technique: str = ""
+    contact_loads: Dict[str, float] = Field(default_factory=dict)
+    velocity: Optional[SimulationJointPoint] = None
+    dynamic: bool = False
+    load_ratio: float = 0.0
+    fatigue: float = 0.0
+    stable: bool = True
+    note: str = ""
+
+
+class ClimberRun(BaseModel):
+    profile_id: str
+    profile_label: str
+    status: Literal["passed", "failed", "review"]
+    solution_mode: Literal["static", "single_dynamic", "none"] = "none"
+    search_complete: bool = True
+    expanded_states: int = 0
+    alternatives_found: int = 0
+    movement_count: int = 0
+    dynamic_action_count: int = 0
+    dynamic_feasibility_score: float = 0.0
+    robustness: float = 0.0
+    confidence: float = 0.0
+    fatigue: float = 0.0
+    crux_step: Optional[int] = None
+    failure_step: Optional[int] = None
+    failure_hold_id: Optional[str] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    dynamic_suspected: bool = False
+    demand: Dict[str, float] = Field(default_factory=dict)
+    actions: List[SimulationAction] = Field(default_factory=list)
+    beta_sequence: List[BetaStep] = Field(default_factory=list)
+    frames: List[SimulationFrame] = Field(default_factory=list)
+
+
+class SimulationRepairCandidate(BaseModel):
+    id: str
+    label: str
+    strategy: Literal["reach", "balance", "grade"]
+    reason: str
+    changed_holds: List[Dict[str, str]] = Field(default_factory=list)
+    reuse_rate: float
+    reuse_quality: Literal["below_pass", "pass", "optimal"]
+    predicted_grade: Optional[str] = None
+    majority_passed: bool = False
+    board_asset: Optional[BoardAsset] = None
+
+
+class SimulationReport(BaseModel):
+    report_id: str
+    source_id: str
+    created_at: str
+    engine_version: str
+    input_hash: str
+    verdict: Literal["pass", "pass_body_bias", "review", "fail"]
+    verdict_label: str
+    summary: str
+    ability_grade: str
+    motion_mode: Literal["static", "static_then_single_dynamic"] = "static_then_single_dynamic"
+    pass_count: int
+    profile_count: int
+    feasibility_score: float
+    confidence: float
+    predicted_grade: Optional[str] = None
+    grade_delta: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(default_factory=list)
+    dynamic_suspected: bool = False
+    calibration_complete: bool = False
+    shadow_mode: bool = True
+    route: StandardBoardRouteDetail
+    runs: List[ClimberRun] = Field(default_factory=list)
+    repair_candidates: List[SimulationRepairCandidate] = Field(default_factory=list)
+
+
+class SimulationBatchResult(BaseModel):
+    total: int
+    completed: int
+    reports: List[SimulationReport] = Field(default_factory=list)
+    counts: Dict[str, int] = Field(default_factory=dict)
+
+
+class SimulationFeedback(BaseModel):
+    outcome: Literal["flash", "send", "attempt", "fail"]
+    profile_id: Optional[str] = None
+    height_cm: Optional[float] = Field(None, gt=100, lt=230)
+    arm_span_cm: Optional[float] = Field(None, gt=100, lt=240)
+    ability_grade: Optional[str] = None
+    perceived_grade: Optional[str] = None
+    failure_step: Optional[int] = None
+    failure_hold_id: Optional[str] = None
+    system_correct: Optional[bool] = None
+    notes: str = ""
+
+    @field_validator("ability_grade", "perceived_grade")
+    @classmethod
+    def validate_optional_grade(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        grade = normalize_font_grade(value)
+        if not grade:
+            raise ValueError("能力与体感难度必须使用 Font 等级")
+        return grade
+
+
+class SimulationFeedbackRecord(SimulationFeedback):
+    id: str
+    report_id: str
+    source_id: str
+    created_at: str
+    review_status: Literal["pending", "approved", "rejected"] = "pending"
+    calibration_eligible: bool = False
