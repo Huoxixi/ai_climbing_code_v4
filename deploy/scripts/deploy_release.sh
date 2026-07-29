@@ -71,6 +71,7 @@ fi
 
 cd "${SOURCE_ROOT}/frontend"
 npm ci
+npm audit --audit-level=high
 VITE_ENABLE_SIMULATION=false npm run test
 VITE_ENABLE_SIMULATION=false npm run build
 
