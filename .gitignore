@@ -33,6 +33,9 @@ build/
 # Logs
 *.log
 
+# Local handoff files containing temporary credentials
+.private/
+
 # Generated hold image cache
 backend/data/holds_images_processed/
 
