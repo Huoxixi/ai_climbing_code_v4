@@ -52,9 +52,19 @@ release_sha="$(cat "${target}/RELEASE_SHA")"
 printf 'RELEASE_SHA=%s\n' "${release_sha}" > /etc/ai-climbing/release.env
 chmod 0644 /etc/ai-climbing/release.env
 
-if systemctl restart "${SERVICE_NAME}" &&
-  curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8000/api/health |
-    grep -q "${release_sha:0:12}"; then
+rollback_ok=false
+if systemctl restart "${SERVICE_NAME}"; then
+  for _ in {1..45}; do
+    if curl --fail --silent --max-time 3 http://127.0.0.1:8000/api/health |
+      grep -q "${release_sha:0:12}"; then
+      rollback_ok=true
+      break
+    fi
+    sleep 1
+  done
+fi
+
+if [[ "${rollback_ok}" == true ]]; then
   nginx -t
   systemctl reload nginx
   echo "Rolled back code to ${RELEASE_NAME}; runtime data was not changed."

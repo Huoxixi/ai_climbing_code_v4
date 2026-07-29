@@ -167,9 +167,19 @@ mv -Tf "${temporary_link}" "${CURRENT_LINK}"
 printf 'RELEASE_SHA=%s\n' "${release_sha}" > /etc/ai-climbing/release.env
 chmod 0644 /etc/ai-climbing/release.env
 
-if ! systemctl restart ai-climbing.service ||
-  ! curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8000/api/health |
-    grep -q "${release_sha:0:12}"; then
+activation_ok=false
+if systemctl restart ai-climbing.service; then
+  for _ in {1..45}; do
+    if curl --fail --silent --max-time 3 http://127.0.0.1:8000/api/health |
+      grep -q "${release_sha:0:12}"; then
+      activation_ok=true
+      break
+    fi
+    sleep 1
+  done
+fi
+
+if [[ "${activation_ok}" != true ]]; then
   if [[ -n "${previous}" && -d "${previous}" ]]; then
     ln -s "${previous}" "${temporary_link}"
     mv -Tf "${temporary_link}" "${CURRENT_LINK}"
