@@ -47,8 +47,12 @@ check "后端服务正在运行" systemctl is-active --quiet ai-climbing.service
 check "本地健康接口正常" health_ok
 check "最近30小时存在成功备份" backup_recent
 check "磁盘使用率低于80%" disk_below_threshold
-check "Tailscale在线" tailscale status
+check "SSH隧道策略配置有效" sshd -t
+check "操作入口仅监听本机8080端口" bash -c \
+  "ss -lnt | grep -Eq '[[:space:]]127[.]0[.]0[.]1:8080[[:space:]]'"
+check "只读入口仅监听本机8081端口" bash -c \
+  "ss -lnt | grep -Eq '[[:space:]]127[.]0[.]0[.]1:8081[[:space:]]'"
 check "累计健康记录可用率不低于98%" health_availability
 
-echo "人工补充检查：对象存储控制台版本/保留策略、AI余额、参与人员名单、未解决问题。"
+echo "人工补充检查：公网网页端口、安全组、对象存储版本/保留策略、AI余额、参与人员名单、未解决问题。"
 exit "${failed}"

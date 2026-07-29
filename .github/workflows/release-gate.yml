@@ -59,3 +59,24 @@ jobs:
             echo "A non-example environment file is tracked."
             exit 1
           }
+      - name: Verify production server configuration
+        shell: bash
+        run: |
+          bash -n deploy/scripts/*.sh
+          sudo apt-get update
+          sudo apt-get install --yes nginx openssh-server
+          sudo groupadd --force ai-climbing-operators
+          sudo groupadd --force ai-climbing-viewers
+          sudo install -d -m 0755 /run/sshd /etc/ssh/sshd_config.d
+          sudo install -m 0644 \
+            deploy/ssh/60-ai-climbing-pilot.conf \
+            /etc/ssh/sshd_config.d/60-ai-climbing-pilot.conf
+          sudo sshd -t
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo install -m 0644 \
+            deploy/nginx/ai_climbing.conf \
+            /etc/nginx/sites-available/ai_climbing.conf
+          sudo ln -sfn \
+            /etc/nginx/sites-available/ai_climbing.conf \
+            /etc/nginx/sites-enabled/ai_climbing.conf
+          sudo nginx -t

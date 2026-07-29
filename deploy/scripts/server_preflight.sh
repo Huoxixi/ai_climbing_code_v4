@@ -31,7 +31,7 @@ else
   failed=1
 fi
 
-for command_name in git rsync nginx python3.12 node npm tailscale rclone curl tar sha256sum flock; do
+for command_name in git rsync nginx sshd python3.12 node npm rclone curl tar sha256sum flock; do
   require_command "${command_name}"
 done
 
@@ -39,14 +39,14 @@ if command -v nginx >/dev/null; then
   public_nginx_listeners="$(
     nginx -T 2>&1 |
       sed -nE 's/^[[:space:]]*(listen[[:space:]]+[^;]+;).*$/\1/p' |
-      grep -Ev '^listen[[:space:]]+127\.0\.0\.1:8080([[:space:]]|;)' || true
+      grep -Ev '^listen[[:space:]]+127\.0\.0\.1:808[01]([[:space:]]|;)' || true
   )"
   if [[ -n "${public_nginx_listeners}" ]]; then
-    echo "[FAIL] Nginx has listeners other than 127.0.0.1:8080:"
+    echo "[FAIL] Nginx has listeners other than 127.0.0.1:8080/8081:"
     printf '%s\n' "${public_nginx_listeners}"
     failed=1
   else
-    echo "[PASS] Nginx is limited to 127.0.0.1:8080"
+    echo "[PASS] Nginx is limited to 127.0.0.1:8080/8081"
   fi
 fi
 
