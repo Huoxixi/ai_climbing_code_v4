@@ -24,13 +24,40 @@
     <div class="shell-main">
       <header class="topbar">
         <div class="topbar-title">
-          <p class="eyebrow">本地单机版</p>
+          <p class="eyebrow">{{ pilotAccess.session.authEnabled ? '小范围线上试用' : '本地单机版' }}</p>
           <h1>{{ title }}</h1>
         </div>
         <div class="topbar-status">
           <span class="status-pill">{{ boardLabel }}</span>
           <span class="status-pill">{{ holdCount }} 岩点</span>
           <span class="status-pill" :class="{ dirty: dirty }">{{ dirty ? '未保存' : '已同步' }}</span>
+          <span
+            class="status-pill access-status"
+            :class="{ editing: pilotAccess.lease.ownedByMe, waiting: pilotAccess.lease.active && !pilotAccess.lease.ownedByMe }"
+          >
+            {{ editStatusLabel }}
+          </span>
+          <el-button
+            v-if="!pilotAccess.lease.ownedByMe"
+            size="small"
+            type="primary"
+            :loading="pilotAccess.lease.loading"
+            @click="pilotAccess.acquireLease"
+          >
+            开始编辑
+          </el-button>
+          <el-button
+            v-else
+            size="small"
+            :loading="pilotAccess.lease.loading"
+            @click="pilotAccess.releaseLease"
+          >
+            释放编辑权
+          </el-button>
+          <div class="pilot-user-menu">
+            <span>{{ pilotAccess.session.displayName }}</span>
+            <button v-if="pilotAccess.session.authEnabled" type="button" @click="pilotAccess.logout">退出</button>
+          </div>
         </div>
       </header>
       <slot />
@@ -52,7 +79,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { Collection, DataBoard, Grid, Histogram, Platform } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -65,6 +92,8 @@ const props = defineProps({
 })
 
 defineEmits(['update:active'])
+
+const pilotAccess = inject('pilotAccess')
 
 const baseItems = [
   { key: 'dashboard', label: '总览', short: '总览', icon: DataBoard },
@@ -79,4 +108,10 @@ const baseItems = [
 const items = computed(() => (
   baseItems.filter((item) => item.key !== 'simulation' || props.simulationEnabled)
 ))
+
+const editStatusLabel = computed(() => {
+  if (pilotAccess.lease.ownedByMe) return '我正在编辑'
+  if (pilotAccess.lease.active) return `${pilotAccess.lease.holderDisplayName}正在编辑`
+  return '浏览模式'
+})
 </script>

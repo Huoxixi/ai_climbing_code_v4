@@ -1,0 +1,32 @@
+[Unit]
+Description=AI Climbing temporary Cloudflare Quick Tunnel
+After=network-online.target nginx.service ai-climbing.service
+Wants=network-online.target
+Requires=nginx.service ai-climbing.service
+
+[Service]
+Type=simple
+User=ai-climbing
+Group=ai-climbing
+RuntimeDirectory=ai-climbing-tunnel
+RuntimeDirectoryMode=0750
+Environment=QUICK_TUNNEL_ORIGIN=http://127.0.0.1:8080
+Environment=QUICK_TUNNEL_STATE_DIR=/run/ai-climbing-tunnel
+ExecStart=/usr/local/lib/ai-climbing/run_quick_tunnel.sh
+Restart=always
+RestartSec=8
+TimeoutStopSec=20
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

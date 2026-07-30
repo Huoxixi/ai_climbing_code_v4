@@ -24,9 +24,9 @@ import {
 } from 'element-plus'
 import 'element-plus/dist/index.css'
 import './style.css'
-import App from './App.vue'
+import RootApp from './RootApp.vue'
 
-const app = createApp(App)
+const app = createApp(RootApp)
 const elementComponents = [
   ElAlert,
   ElButton,

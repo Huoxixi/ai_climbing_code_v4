@@ -18,7 +18,9 @@ import numpy as np
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from agent.controller import generate_route_with_reflection
 from agent.experiments import run_ai_experiment
@@ -70,6 +72,14 @@ from core.moonboard_grading import (
     assess_equivalent_grade,
     hold_transfer_demand,
     normalize_font_grade,
+)
+from core.pilot_access import (
+    EditLeaseError,
+    InvalidCredentialsError,
+    LoginBlockedError,
+    PilotAccessError,
+    PilotAccessManager,
+    PilotUser,
 )
 from core.standard_board import (
     detail_for,
@@ -159,6 +169,11 @@ HOLDS_METADATA_FILE = os.path.join(DATA_DIR, "hold_assets_meta.json")
 SAVED_BOARDS_FILE = os.path.join(DATA_DIR, "saved_boards.json")
 EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 STANDARD_BOARD_ACTIVITY_FILE = os.path.join(DATA_DIR, "standard_board_activity.json")
+PILOT_AUTH_ENABLED = env_flag("PILOT_AUTH_ENABLED", default=APP_ENV == "production")
+PILOT_COOKIE_SECURE = env_flag("PILOT_COOKIE_SECURE", default=APP_ENV == "production")
+PILOT_COOKIE_NAME = "ai_climbing_session"
+PILOT_USERS_FILE = os.getenv("PILOT_USERS_FILE", os.path.join(DATA_DIR, "pilot_users.json"))
+PILOT_AUDIT_FILE = os.getenv("PILOT_AUDIT_FILE", os.path.join(DATA_DIR, "pilot_audit.jsonl"))
 
 os.makedirs(PROCESSED_HOLDS_IMAGES_DIR, exist_ok=True)
 app.mount("/images/processed", StaticFiles(directory=PROCESSED_HOLDS_IMAGES_DIR), name="processed-images")
@@ -168,6 +183,93 @@ tasks: Dict[str, asyncio.Task] = {}
 supabase_repo = SupabaseRepository()
 _json_locks: Dict[str, threading.RLock] = {}
 _json_locks_guard = threading.Lock()
+pilot_access = PilotAccessManager(
+    users_file=PILOT_USERS_FILE,
+    audit_file=PILOT_AUDIT_FILE,
+)
+
+
+class PilotLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+def request_client_ip(request: Request) -> str:
+    return (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.client.host if request.client else "unknown")
+    )
+
+
+def request_user(request: Request) -> PilotUser:
+    user = getattr(request.state, "pilot_user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录。")
+    return user
+
+
+def audit_request(request: Request, status: int, event: str | None = None) -> None:
+    user = getattr(request.state, "pilot_user", None)
+    pilot_access.audit(
+        username=user.username if user else "anonymous",
+        request_id=getattr(request.state, "request_id", "unknown"),
+        method=request.method,
+        path=request.url.path,
+        status=status,
+        event=event,
+    )
+
+
+@app.middleware("http")
+async def pilot_access_middleware(request: Request, call_next):
+    request.state.request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    path = request.url.path
+    if not PILOT_AUTH_ENABLED:
+        request.state.pilot_user = PilotUser("owner", "负责人")
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
+
+    public_paths = {
+        "/api/health",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+    }
+    if request.method == "OPTIONS" or path in public_paths:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
+
+    token = request.cookies.get(PILOT_COOKIE_NAME)
+    user = pilot_access.session_user(token)
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "登录已失效，请重新登录。"},
+            headers={"X-Request-ID": request.state.request_id},
+        )
+    request.state.pilot_user = user
+
+    is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
+    lease_path = path.startswith("/api/pilot/edit-lease")
+    if is_write and path.startswith("/api/") and not lease_path:
+        try:
+            pilot_access.require_lease(user.username)
+        except EditLeaseError as exc:
+            audit_request(request, 423, "write_blocked_without_edit_lease")
+            return JSONResponse(
+                status_code=423,
+                content={"detail": str(exc)},
+                headers={"X-Request-ID": request.state.request_id},
+            )
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
+    if is_write and not lease_path:
+        audit_request(request, response.status_code)
+    return response
 
 
 def is_local_demo_request(request: Request) -> bool:
@@ -233,6 +335,15 @@ def json_file_lock(file_path: str) -> threading.RLock:
     normalized = os.path.abspath(file_path)
     with _json_locks_guard:
         return _json_locks.setdefault(normalized, threading.RLock())
+
+
+def mutate_json(file_path: str, default: Any, mutator) -> Any:
+    """Read, mutate and atomically replace one JSON file under the same lock."""
+    with json_file_lock(file_path):
+        data = load_json(file_path, default)
+        result = mutator(data)
+        save_json(file_path, data)
+        return result
 
 
 def task_envelope(task_id: str, status: str, result: Any = None, error: str | None = None) -> Dict[str, Any]:
@@ -459,6 +570,9 @@ def save_standard_activity_store(store: Dict[str, Any]) -> None:
 def local_activity_user_key(request: Request, owner_id: str | None = None) -> str:
     if owner_id:
         return owner_id
+    pilot_user = getattr(request.state, "pilot_user", None)
+    if pilot_user:
+        return pilot_user.username
     token = extract_bearer_token(request.headers.get("authorization"))
     if token and token.startswith("mock-token-local-demo"):
         return "local-demo-user"
@@ -514,30 +628,167 @@ async def get_standard_activity(request: Request, source_id: str) -> StandardRou
 
 async def append_standard_activity_event(request: Request, source_id: str, activity_type: str, content: str, rating: int | None = None, metadata: Dict[str, Any] | None = None) -> StandardRouteActivityResponse:
     user_key = local_activity_user_key(request)
-    store = load_standard_activity_store()
     key = local_activity_key(user_key, source_id)
     now = utc_now()
     metadata = metadata or {}
-    if activity_type == "favorite":
-        store["favorites"][key] = {"user_key": user_key, "source_id": source_id, "active": bool(metadata.get("active")), "updated_at": now}
-    elif activity_type == "rating":
-        store["ratings"][key] = {"user_key": user_key, "source_id": source_id, "rating": rating, "updated_at": now}
-    elif activity_type == "ascent_log":
-        store["logs"].append(
-            {
-                "id": str(uuid.uuid4()),
-                "user_key": user_key,
-                "source_id": source_id,
-                "result": metadata.get("result"),
-                "attempts": metadata.get("attempts") or 1,
-                "perceived_grade": metadata.get("perceived_grade"),
-                "notes": metadata.get("notes") or "",
-                "created_at": now,
-                "review_status": "pending",
-            }
+
+    def update(store: Dict[str, Any]) -> StandardRouteActivityResponse:
+        if not isinstance(store, dict):
+            raise HTTPException(status_code=500, detail="活动记录文件格式不正确。")
+        store.setdefault("favorites", {})
+        store.setdefault("ratings", {})
+        store.setdefault("logs", [])
+        if activity_type == "favorite":
+            store["favorites"][key] = {"user_key": user_key, "source_id": source_id, "active": bool(metadata.get("active")), "updated_at": now}
+        elif activity_type == "rating":
+            store["ratings"][key] = {"user_key": user_key, "source_id": source_id, "rating": rating, "updated_at": now}
+        elif activity_type == "ascent_log":
+            store["logs"].append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_key": user_key,
+                    "source_id": source_id,
+                    "result": metadata.get("result"),
+                    "attempts": metadata.get("attempts") or 1,
+                    "perceived_grade": metadata.get("perceived_grade"),
+                    "notes": metadata.get("notes") or "",
+                    "created_at": now,
+                    "review_status": "pending",
+                }
+            )
+        favorite = bool(store["favorites"].get(key, {}).get("active"))
+        rating_entry = store["ratings"].get(key) or {}
+        logs = [
+            item
+            for item in store["logs"]
+            if item.get("user_key") == user_key and str(item.get("source_id")) == str(source_id)
+        ]
+        return activity_from_entries(favorite, rating_entry.get("rating"), logs)
+
+    return mutate_json(STANDARD_BOARD_ACTIVITY_FILE, {}, update)
+
+
+@app.post("/api/auth/login")
+async def pilot_login(payload: PilotLoginRequest, request: Request):
+    try:
+        token, user = pilot_access.authenticate(
+            payload.username,
+            payload.password,
+            request_client_ip(request),
         )
-    save_standard_activity_store(store)
-    return get_local_standard_activity(user_key, source_id)
+    except LoginBlockedError as exc:
+        pilot_access.audit(
+            username=payload.username.strip().lower() or "anonymous",
+            request_id=request.state.request_id,
+            method=request.method,
+            path=request.url.path,
+            status=429,
+            event="login_blocked",
+        )
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except (InvalidCredentialsError, PilotAccessError) as exc:
+        pilot_access.audit(
+            username=payload.username.strip().lower() or "anonymous",
+            request_id=request.state.request_id,
+            method=request.method,
+            path=request.url.path,
+            status=401,
+            event="login_failed",
+        )
+        raise HTTPException(status_code=401, detail="用户名或密码不正确。") from exc
+
+    request.state.pilot_user = user
+    response = JSONResponse(
+        {
+            "authenticated": True,
+            "username": user.username,
+            "display_name": user.display_name,
+        }
+    )
+    response.set_cookie(
+        PILOT_COOKIE_NAME,
+        token,
+        max_age=pilot_access.session_seconds,
+        secure=PILOT_COOKIE_SECURE,
+        httponly=True,
+        samesite="strict",
+        path="/",
+    )
+    audit_request(request, 200, "login_succeeded")
+    return response
+
+
+@app.post("/api/auth/logout")
+async def pilot_logout(request: Request):
+    user = pilot_access.logout(request.cookies.get(PILOT_COOKIE_NAME))
+    request.state.pilot_user = user
+    response = JSONResponse({"authenticated": False})
+    response.delete_cookie(
+        PILOT_COOKIE_NAME,
+        secure=PILOT_COOKIE_SECURE,
+        httponly=True,
+        samesite="strict",
+        path="/",
+    )
+    if user:
+        audit_request(request, 200, "logout")
+    return response
+
+
+@app.get("/api/auth/session")
+async def pilot_session(request: Request):
+    if not PILOT_AUTH_ENABLED:
+        return {
+            "authenticated": True,
+            "username": "owner",
+            "display_name": "负责人",
+            "auth_enabled": False,
+        }
+    user = pilot_access.session_user(request.cookies.get(PILOT_COOKIE_NAME))
+    if not user:
+        raise HTTPException(status_code=401, detail="登录已失效，请重新登录。")
+    return {
+        "authenticated": True,
+        "username": user.username,
+        "display_name": user.display_name,
+        "auth_enabled": True,
+    }
+
+
+@app.get("/api/pilot/edit-lease")
+async def get_pilot_edit_lease(request: Request):
+    user = request_user(request)
+    return pilot_access.lease_status(user.username)
+
+
+@app.post("/api/pilot/edit-lease/acquire")
+async def acquire_pilot_edit_lease(request: Request):
+    user = request_user(request)
+    try:
+        status = pilot_access.acquire_lease(user)
+    except EditLeaseError as exc:
+        audit_request(request, 423, "edit_lease_acquire_blocked")
+        raise HTTPException(status_code=423, detail=str(exc)) from exc
+    audit_request(request, 200, "edit_lease_acquired")
+    return status
+
+
+@app.post("/api/pilot/edit-lease/heartbeat")
+async def heartbeat_pilot_edit_lease(request: Request):
+    user = request_user(request)
+    try:
+        return pilot_access.heartbeat_lease(user)
+    except EditLeaseError as exc:
+        audit_request(request, 423, "edit_lease_heartbeat_failed")
+        raise HTTPException(status_code=423, detail=str(exc)) from exc
+
+
+@app.delete("/api/pilot/edit-lease")
+async def release_pilot_edit_lease(request: Request):
+    user = request_user(request)
+    status = pilot_access.release_lease(user)
+    audit_request(request, 200, "edit_lease_released")
+    return status
 
 
 @app.get("/api/health")
@@ -741,10 +992,15 @@ async def delete_hold(hold_type: str, variant: str, request: Request):
     vectors = load_json(HOLDS_VECTORS_FILE, {})
     if variant not in mapping.get(hold_type, {}) and variant not in vectors.get(hold_type, {}):
         raise HTTPException(status_code=404, detail="未找到该岩点")
-    metadata = load_json(HOLDS_METADATA_FILE, {})
     key = hold_asset_key(hold_type, variant)
-    metadata[key] = {**metadata.get(key, {}), "archived_at": utc_now(), "updated_at": utc_now()}
-    save_json(HOLDS_METADATA_FILE, metadata)
+    mutate_json(
+        HOLDS_METADATA_FILE,
+        {},
+        lambda metadata: metadata.__setitem__(
+            key,
+            {**metadata.get(key, {}), "archived_at": utc_now(), "updated_at": utc_now()},
+        ),
+    )
     return {"success": True, "message": "岩点已归档"}
 
 
@@ -754,10 +1010,15 @@ async def restore_hold(hold_type: str, variant: str):
     vectors = load_json(HOLDS_VECTORS_FILE, {})
     if variant not in mapping.get(hold_type, {}) and variant not in vectors.get(hold_type, {}):
         raise HTTPException(status_code=404, detail="未找到该岩点")
-    metadata = load_json(HOLDS_METADATA_FILE, {})
     key = hold_asset_key(hold_type, variant)
-    metadata[key] = {**metadata.get(key, {}), "archived_at": None, "updated_at": utc_now()}
-    save_json(HOLDS_METADATA_FILE, metadata)
+    mutate_json(
+        HOLDS_METADATA_FILE,
+        {},
+        lambda metadata: metadata.__setitem__(
+            key,
+            {**metadata.get(key, {}), "archived_at": None, "updated_at": utc_now()},
+        ),
+    )
     return {"success": True, "message": "岩点已恢复"}
 
 
@@ -772,12 +1033,11 @@ async def save_board(payload: Dict[str, Any], request: Request):
         except SupabaseRepositoryError as exc:
             print(f"Supabase board create fallback: {exc}")
 
-    boards = load_boards()
     board = normalize_board_payload(payload)
     board.saved_id = str(uuid.uuid4())
-    boards.append(dump_board(board))
-    save_json(SAVED_BOARDS_FILE, boards)
-    return {"success": True, "message": "岩板已保存", **dump_board(board)}
+    saved = dump_board(board)
+    mutate_json(SAVED_BOARDS_FILE, [], lambda boards: boards.append(saved))
+    return {"success": True, "message": "岩板已保存", **saved}
 
 
 @app.get("/api/my-boards", response_model=List[BoardAsset])
@@ -809,20 +1069,19 @@ async def update_saved_board(saved_id: str, payload: Dict[str, Any], request: Re
         except SupabaseRepositoryError as exc:
             print(f"Supabase board update fallback: {exc}")
 
-    boards = load_boards()
-    target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
-    if target_index is None:
-        raise HTTPException(status_code=404, detail="未找到该岩板")
+    def update_board(boards: List[Dict[str, Any]]) -> Dict[str, Any]:
+        target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
+        if target_index is None:
+            raise HTTPException(status_code=404, detail="未找到该岩板")
+        merged = {**boards[target_index], **payload, "saved_id": saved_id}
+        if not str(merged.get("route_name", "")).strip():
+            raise HTTPException(status_code=400, detail="岩板名称不能为空")
+        saved = dump_board(normalize_board_payload(merged, saved_id=saved_id))
+        boards[target_index] = saved
+        return saved
 
-    existing = boards[target_index]
-    merged = {**existing, **payload, "saved_id": saved_id}
-    if not str(merged.get("route_name", "")).strip():
-        raise HTTPException(status_code=400, detail="岩板名称不能为空")
-
-    board = normalize_board_payload(merged, saved_id=saved_id)
-    boards[target_index] = dump_board(board)
-    save_json(SAVED_BOARDS_FILE, boards)
-    return {"success": True, "message": "岩板已更新", **dump_board(board)}
+    saved = mutate_json(SAVED_BOARDS_FILE, [], update_board)
+    return {"success": True, "message": "岩板已更新", **saved}
 
 
 @app.delete("/api/my-boards/{saved_id}")
@@ -837,26 +1096,29 @@ async def delete_saved_board(saved_id: str, request: Request):
         except SupabaseRepositoryError as exc:
             print(f"Supabase board archive fallback: {exc}")
 
-    boards = load_boards()
-    target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
-    if target_index is None:
-        raise HTTPException(status_code=404, detail="未找到该岩板")
-    boards[target_index] = {**boards[target_index], "archived_at": utc_now(), "updated_at": utc_now()}
-    save_json(SAVED_BOARDS_FILE, boards)
+    def archive_board(boards: List[Dict[str, Any]]) -> None:
+        target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
+        if target_index is None:
+            raise HTTPException(status_code=404, detail="未找到该岩板")
+        boards[target_index] = {**boards[target_index], "archived_at": utc_now(), "updated_at": utc_now()}
+
+    mutate_json(SAVED_BOARDS_FILE, [], archive_board)
     return {"success": True, "message": "岩板已归档"}
 
 
 @app.post("/api/my-boards/{saved_id}/restore")
 async def restore_saved_board(saved_id: str):
-    boards = load_boards()
-    target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
-    if target_index is None:
-        raise HTTPException(status_code=404, detail="未找到该岩板")
-    restored_payload = {**boards[target_index], "archived_at": None, "updated_at": utc_now()}
-    restored = normalize_board_payload(restored_payload, saved_id=saved_id)
-    boards[target_index] = dump_board(restored)
-    save_json(SAVED_BOARDS_FILE, boards)
-    return {"success": True, "message": "岩板已恢复", **dump_board(normalize_board_payload(boards[target_index], saved_id=saved_id))}
+    def restore_board(boards: List[Dict[str, Any]]) -> Dict[str, Any]:
+        target_index = next((index for index, board in enumerate(boards) if board.get("saved_id") == saved_id), None)
+        if target_index is None:
+            raise HTTPException(status_code=404, detail="未找到该岩板")
+        restored_payload = {**boards[target_index], "archived_at": None, "updated_at": utc_now()}
+        saved = dump_board(normalize_board_payload(restored_payload, saved_id=saved_id))
+        boards[target_index] = saved
+        return saved
+
+    restored = mutate_json(SAVED_BOARDS_FILE, [], restore_board)
+    return {"success": True, "message": "岩板已恢复", **restored}
 
 
 @app.get("/api/standard-board/routes", response_model=StandardBoardRouteQueryResponse)

@@ -31,6 +31,7 @@ jobs:
             test_ai_lab_experiments \
             test_hold_image_processing \
             test_local_only_mode \
+            test_pilot_access \
             test_release_hardening \
             test_release_readiness \
             test_standard_board \
@@ -69,6 +70,7 @@ jobs:
           test -x deploy/scripts/backup_data.sh
           test -x deploy/scripts/restore_data.sh
           test -x deploy/scripts/create_tunnel_user.sh
+          test -x deploy/scripts/run_quick_tunnel.sh
           bash -n deploy/scripts/*.sh
           sudo apt-get update
           sudo apt-get install --yes nginx openssh-server

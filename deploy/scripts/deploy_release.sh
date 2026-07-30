@@ -34,6 +34,12 @@ grep -q '^APP_ENV=production$' /etc/ai-climbing/backend.env
 grep -q '^LOCAL_ONLY=true$' /etc/ai-climbing/backend.env
 grep -q '^DISABLE_SUPABASE=true$' /etc/ai-climbing/backend.env
 grep -q '^ENABLE_SIMULATION=false$' /etc/ai-climbing/backend.env
+grep -q '^PILOT_AUTH_ENABLED=true$' /etc/ai-climbing/backend.env
+grep -q '^PILOT_COOKIE_SECURE=true$' /etc/ai-climbing/backend.env
+[[ -r /etc/ai-climbing/pilot-users.json ]] || {
+  echo "/etc/ai-climbing/pilot-users.json is missing or unreadable."
+  exit 1
+}
 
 temporary_root="$(mktemp -d /tmp/ai_climbing_code_v4.XXXXXX)"
 building_release="${RELEASE_ROOT}/.${RELEASE_TAG}.building"
@@ -104,6 +110,7 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_ai_lab_experiments \
   test_hold_image_processing \
   test_local_only_mode \
+  test_pilot_access \
   test_release_hardening \
   test_release_readiness \
   test_standard_board \
