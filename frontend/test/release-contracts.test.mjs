@@ -77,12 +77,37 @@ test('客户界面不显示旧材质和过时工作区名称', async () => {
   assert.match(appSource, /定线工作台/)
 })
 
-test('AI 实验室把风险和润色状态显示为通俗中文', async () => {
+test('AI 实验室把风险、润色状态和解释证据显示为通俗中文', async () => {
   const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
-  assert.match(appSource, /风险等级：\{\{ riskLevelLabel\(routeGen\.result\.risk_level\) \}\}/)
+  const explanationSource = await readFile(new URL('../src/components/AIExperimentExplanation.vue', import.meta.url), 'utf8')
+  assert.match(appSource, /riskAssessmentLabel\(routeGen\.result\)/)
+  assert.match(appSource, /风险未完整评估/)
+  assert.match(appSource, /结构与动作风险/)
   assert.match(appSource, /AI 已用中文润色/)
   assert.match(appSource, /本地中文结果/)
-  assert.doesNotMatch(appSource, /风险等级：\{\{ routeGen\.result\.risk_level \}\}/)
+  assert.match(appSource, /AIExperimentExplanation/)
+  assert.match(explanationSource, /本次结果如何得出/)
+  assert.match(explanationSource, /规则检查清单/)
+  assert.match(explanationSource, /候选选择过程/)
+  assert.match(explanationSource, /通过.*需关注.*未通过.*未检查/s)
+  assert.doesNotMatch(appSource, /风险\{\{ routeGen\.result\.risk_level \}\}/)
+})
+
+test('AI 实验室明确辅助定位并展示量化建议证据', async () => {
+  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const comparisonSource = await readFile(new URL('../src/components/BoardComparisonPanel.vue', import.meta.url), 'utf8')
+
+  assert.match(appSource, /辅助定线，不替代试爬/)
+  assert.match(appSource, /本次观测/)
+  assert.match(appSource, /判定阈值/)
+  assert.match(appSource, /预计改善/)
+  assert.match(appSource, /Beta 步骤/)
+  assert.match(appSource, /审核对象/)
+  assert.match(comparisonSource, /重组依据/)
+  assert.match(comparisonSource, /原线路/)
+  assert.match(comparisonSource, /候选草案/)
+  assert.match(comparisonSource, /动作未评估/)
+  assert.match(comparisonSource, /不代表推荐 Beta/)
 })
 
 test('总览不再展示固定客户推荐，标准线路库入口仍然保留', async () => {

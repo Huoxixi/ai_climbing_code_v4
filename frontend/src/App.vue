@@ -852,6 +852,10 @@
           </div>
           <el-button :icon="Refresh" :loading="boards.loading" @click="boards.fetchMyBoards">刷新岩板</el-button>
         </div>
+        <div class="ai-lab-scope" role="note" aria-label="AI 实验室功能定位">
+          <strong>辅助定线，不替代试爬</strong>
+          <span>用于讨论候选、发现明显结构问题、生成不覆盖原线路的草案，并保留可复核的评分和规则证据。</span>
+        </div>
         <section class="ai-board-picker">
           <div class="panel-heading">
             <div>
@@ -947,8 +951,8 @@
           </el-select>
           <p class="control-help">
             {{ aiExperiment.mode === 'compose_route'
-              ? '所选目标会直接改变候选排序，不会向客户承诺无法执行的自由文本要求。'
-              : 'Beta 不完整时系统只做岩点布局初审，并在结果中明确标注。' }}
+              ? '目标策略不可用时会明确回退原因；候选只完成结构检查，仍需复核动作并试爬。'
+              : '所选重点会改变专项检查；基本结构始终检查，未执行项目会明确标为未检查。' }}
           </p>
         </div>
         <div class="command-row">
@@ -956,7 +960,12 @@
           <el-button v-if="routeGen.loading" @click="routeGen.cancelGeneration">取消任务</el-button>
           <el-button @click="activePage = 'studio'">返回定线工作台</el-button>
         </div>
-        <el-alert v-if="routeGen.taskId" type="info" :closable="false" :title="`任务 ID：${routeGen.taskId}`" />
+        <el-alert
+          v-if="routeGen.taskId"
+          type="info"
+          :closable="false"
+          :title="`任务 ${routeGen.taskId} · ${aiTaskStatusLabel(routeGen.status)} · ${routeGen.elapsedSeconds} 秒`"
+        />
         <el-alert v-if="routeGen.error" type="error" :closable="false" :title="routeGen.error" />
         <section v-if="routeGen.result" class="experiment-result">
           <div class="result-context">
@@ -964,20 +973,42 @@
             <span>{{ selectedAiBoardStats.holds }} 岩点 / {{ selectedAiBoardStats.beta }} Beta / {{ selectedAiBoardStats.difficulty }}</span>
             <span>{{ routeGen.result.llm_enriched ? 'AI 已用中文润色' : '本地中文结果' }}</span>
           </div>
+          <header class="experiment-verdict">
+            <div>
+              <span>{{ routeGen.result.mode === 'review_route' ? '审核结论' : '组合结论' }}</span>
+              <strong>{{ routeGen.result.review_summary || routeGen.result.analysis_summary }}</strong>
+            </div>
+            <span
+              v-if="routeGen.result.risk_level"
+              :class="['verdict-risk', `is-${routeGen.result.metrics?.risk_assessment_status === 'partial' ? 'partial' : routeGen.result.risk_level}`]"
+            >
+              {{ riskAssessmentLabel(routeGen.result) }}
+            </span>
+          </header>
           <div class="result-metrics">
-            <span v-if="routeGen.result.analysis_summary">{{ routeGen.result.analysis_summary }}</span>
             <span v-if="routeGen.result.metrics?.target_grade">目标 {{ routeGen.result.metrics.target_grade }}</span>
-            <span v-if="routeGen.result.metrics?.quality_score !== undefined">质量 {{ routeGen.result.metrics.quality_score }}</span>
+            <span v-if="routeGen.result.metrics?.quality_score !== undefined">结构质量 {{ routeGen.result.metrics.quality_score }}</span>
             <span v-if="routeGen.result.metrics?.predicted_grade">MoonBoard 等效难度 {{ routeGen.result.metrics.predicted_grade }}</span>
-            <span v-if="routeGen.result.metrics?.risk_score !== undefined">风险 {{ routeGen.result.metrics.risk_score }}</span>
+            <span v-if="routeGen.result.metrics?.risk_score !== undefined">{{ riskMetricLabel(routeGen.result.metrics) }}</span>
             <span v-if="routeGen.result.risk_level">等级 {{ riskLevelLabel(routeGen.result.risk_level) }}</span>
             <span v-if="routeGen.result.metrics?.review_scope">
-              {{ routeGen.result.metrics.review_scope === 'full_beta' ? '完整动作检查' : '岩点布局初审' }}
+              {{ reviewScopeLabel(routeGen.result.metrics.review_scope) }}
             </span>
           </div>
           <div v-if="routeGen.result.applied_constraints?.length" class="result-metrics">
             <span v-for="constraint in routeGen.result.applied_constraints" :key="constraint">{{ constraint }}</span>
           </div>
+          <template v-if="routeGen.result.mode === 'review_route'">
+            <article v-for="violation in routeGen.result.violations" :key="violation.code" class="result-card result-card-critical">
+              <span>必须处理</span>
+              <strong>{{ violation.message }}</strong>
+              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join('、') }}</small>
+            </article>
+          </template>
+          <AIExperimentExplanation
+            v-if="routeGen.result.explanation"
+            :explanation="routeGen.result.explanation"
+          />
           <template v-if="routeGen.result.mode === 'compose_route'">
             <el-alert
               v-if="routeGen.result.failure_suggestion"
@@ -1017,18 +1048,37 @@
             </div>
           </template>
           <template v-else>
-            <strong>{{ routeGen.result.review_summary }}</strong>
-            <p>风险等级：{{ riskLevelLabel(routeGen.result.risk_level) }}</p>
-            <article v-for="violation in routeGen.result.violations" :key="violation.code" class="result-card result-card-critical">
-              <span>必须修</span>
-              <strong>{{ violation.message }}</strong>
-              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join(', ') }}</small>
-            </article>
+            <div v-if="routeGen.result.board" class="review-board-preview">
+              <BoardComparisonPanel
+                :board="routeGen.result.board"
+                label="审核对象"
+                baseline
+                :resolve-hold-visual="library.resolveHoldVisual"
+              />
+            </div>
             <article v-for="suggestion in routeGen.result.suggestions" :key="suggestion.title" class="result-card">
               <span>{{ suggestionGroupLabel(suggestion) }}</span>
               <strong>{{ suggestion.title }}</strong>
               <p>{{ suggestion.detail }}</p>
-              <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join(', ') }}</span>
+              <dl class="suggestion-evidence">
+                <div>
+                  <dt>本次观测</dt>
+                  <dd>{{ suggestion.observed || '暂无量化观测' }}</dd>
+                </div>
+                <div>
+                  <dt>判定阈值</dt>
+                  <dd>{{ suggestion.threshold || '未设置阈值' }}</dd>
+                </div>
+                <div>
+                  <dt>预计改善</dt>
+                  <dd>{{ suggestion.expected_effect || '需要定线者复核' }}</dd>
+                </div>
+              </dl>
+              <div class="suggestion-locators">
+                <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join('、') }}</span>
+                <span v-if="suggestion.beta_steps?.length">Beta 步骤：{{ suggestion.beta_steps.join('、') }}</span>
+                <span>证据{{ evidenceStatusLabel(suggestion.evidence_status) }} · {{ confidenceLabel(suggestion.confidence) }}</span>
+              </div>
               <el-button v-if="suggestion.candidate_route" type="primary" plain @click="loadAiCandidateIntoStudio(suggestion.candidate_route)">载入修复候选</el-button>
             </article>
           </template>
@@ -1045,6 +1095,7 @@
 import { computed, defineAsyncComponent, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Collection, Delete, DocumentChecked, Edit, EditPen, Grid, Histogram, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AIExperimentExplanation from './components/AIExperimentExplanation.vue'
 import AppShell from './components/AppShell.vue'
 import BoardCanvas from './components/BoardCanvas.vue'
 import BoardComparisonPanel from './components/BoardComparisonPanel.vue'
@@ -1206,7 +1257,8 @@ const aiBoardBlockingMessage = computed(() => {
   if (!holds.length) return '所选岩板没有岩点，无法提交。'
   const columns = Number(board.board_spec?.columns || board.board_spec?.cols || 11)
   const rows = Number(board.board_spec?.rows || 18)
-  if (columns !== 11 || rows !== 18) return 'AI 实验目前只支持 11×18 岩板，其他规格可以继续手工编辑。'
+  const angle = Number(board.board_spec?.angle_degrees || 40)
+  if (columns !== 11 || rows !== 18 || angle !== 40) return 'AI 实验目前只支持 11×18、40° 岩板，其他规格可以继续手工编辑。'
   if (aiExperiment.mode === 'compose_route' && !board.ai_eligible) {
     return board.readiness_issues?.[0] || 'AI 组合只接受通过完整性检查的线路。'
   }
@@ -1828,6 +1880,48 @@ function riskLevelLabel(level) {
     medium: '中',
     high: '高',
   }[level] || level
+}
+
+function riskAssessmentLabel(result) {
+  if (result?.metrics?.risk_assessment_status === 'partial') return '风险未完整评估'
+  return `风险${riskLevelLabel(result?.risk_level)}`
+}
+
+function riskMetricLabel(metrics = {}) {
+  const scope = metrics.risk_scope
+  if (metrics.risk_assessment_status === 'partial') {
+    return `结构风险 ${metrics.risk_score} / 动作未完整评估`
+  }
+  if (scope === 'structure_and_action') return `结构与动作风险 ${metrics.risk_score}`
+  if (scope === 'structure_and_difficulty') return `结构与难度风险 ${metrics.risk_score}`
+  return `结构风险 ${metrics.risk_score}`
+}
+
+function reviewScopeLabel(scope) {
+  return {
+    full_beta: '已执行完整 Beta 检查',
+    layout_and_difficulty: '结构与难度专项检查',
+    layout_only: '岩点布局初审',
+  }[scope] || scope
+}
+
+function evidenceStatusLabel(status) {
+  return {
+    measured: '已量化',
+    estimated: '为模型估算',
+    not_measured: '尚未量化',
+  }[status] || '待复核'
+}
+
+function aiTaskStatusLabel(status) {
+  return {
+    idle: '尚未提交',
+    pending: '等待执行',
+    running: '正在计算',
+    completed: '已完成',
+    failed: '执行失败',
+    cancelled: '已取消',
+  }[status] || status
 }
 
 function candidateMeta(index) {

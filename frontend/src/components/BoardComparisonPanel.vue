@@ -69,16 +69,40 @@
     </div>
 
     <div v-if="meta && Object.keys(meta).length" class="candidate-facts" aria-label="候选质量信息">
-      <span>质量 {{ meta.quality_score ?? '-' }}</span>
+      <span>结构质量 {{ meta.quality_score ?? '-' }}</span>
       <span>等效难度 {{ meta.predicted_grade || '-' }}</span>
       <span>{{ confidenceLabel(meta.confidence_tier) }} · {{ calibrationLabel(meta.calibration_status) }}</span>
-      <span>风险 {{ riskLabel(meta.risk_level, meta.risk_score) }}</span>
+      <span>{{ candidateRiskLabel(meta) }}</span>
     </div>
+    <p v-if="meta?.why_selected" class="candidate-selection-reason">
+      <strong>入选原因</strong>
+      {{ meta.why_selected }}
+    </p>
+    <ul v-if="meta?.selection_basis?.length" class="candidate-selection-basis">
+      <li v-for="item in meta.selection_basis" :key="item">{{ item }}</li>
+    </ul>
+    <p v-if="meta?.change_evidence?.strategy_reason" class="candidate-change-reason">
+      <strong>重组依据</strong>
+      {{ meta.change_evidence.strategy_reason }}
+    </p>
+    <dl v-if="meta?.before_after" class="candidate-before-after">
+      <div>
+        <dt>原线路</dt>
+        <dd>{{ metricSnapshot(meta.before_after.before) }}</dd>
+      </div>
+      <div>
+        <dt>候选草案</dt>
+        <dd>{{ metricSnapshot(meta.before_after.after) }}</dd>
+      </div>
+    </dl>
     <p v-if="board.setter_commentary" class="candidate-commentary">{{ board.setter_commentary }}</p>
     <small v-if="meta?.notes?.length" class="candidate-notes">{{ meta.notes.join('；') }}</small>
 
     <section class="comparison-beta">
-      <strong>完整动作序列</strong>
+      <strong>{{ meta?.movement_validation_status === 'not_run' ? '动作草案' : '完整动作序列' }}</strong>
+      <p v-if="meta?.movement_validation_status === 'not_run'" class="beta-boundary">
+        按岩点顺序生成，尚未通过完整身体平衡检查，不代表推荐 Beta。
+      </p>
       <ol v-if="board.beta_sequence?.length">
         <li v-for="(step, index) in sortedSteps" :key="`${step.step}-${step.limb}-${step.hold_id}-${index}`">
           {{ betaStepLabel(step, index) }}
@@ -133,13 +157,20 @@ function percent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`
 }
 
-function riskLabel(level, score) {
-  const numericScore = Number(score)
-  const inferredLevel = Number.isFinite(numericScore)
-    ? (numericScore <= 25 ? 'low' : numericScore <= 55 ? 'medium' : 'high')
-    : ''
-  const label = { low: '低', medium: '中', high: '高' }[level || inferredLevel]
-  if (label) return score === undefined ? label : `${label}（${score}）`
-  return score === undefined ? '-' : score
+function candidateRiskLabel(meta) {
+  if (meta.risk_assessment_status === 'partial') {
+    return `结构风险 ${meta.structural_risk_score ?? meta.risk_score ?? '-'} · 动作未评估`
+  }
+  return `风险 ${meta.risk_score ?? '-'}`
+}
+
+function metricSnapshot(snapshot = {}) {
+  return [
+    `结构质量 ${snapshot.structural_quality ?? '-'}`,
+    `等效难度 ${snapshot.predicted_grade || '-'}`,
+    `岩点 ${snapshot.hold_count ?? '-'}`,
+    `横向 ${snapshot.horizontal_span ?? '-'} 列`,
+    `最大断档 ${snapshot.max_vertical_gap ?? '-'} 排`,
+  ].join('，')
 }
 </script>

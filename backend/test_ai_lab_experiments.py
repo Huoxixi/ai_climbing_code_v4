@@ -58,6 +58,29 @@ class AILabExperimentsTest(unittest.TestCase):
         self.assertTrue(all(candidate["valid_for_climb"] for candidate in response.candidate_routes))
         self.assertIn("standard_reference", response.metrics)
 
+    def test_compose_explanation_is_deterministic_and_accounts_for_scores(self):
+        request = AIExperimentRequest(mode="compose_route", board=sample_board(), target_difficulty="6B+")
+        with patch("agent.experiments.settings.api_key", ""):
+            first = asyncio.run(compose_route_from_board(request))
+            second = asyncio.run(compose_route_from_board(request))
+
+        self.assertIsNotNone(first.explanation)
+        self.assertEqual(first.explanation.input_fingerprint, second.explanation.input_fingerprint)
+        self.assertAlmostEqual(
+            sum(item.score for item in first.explanation.score_breakdown),
+            first.candidate_routes[0]["quality_score"],
+            places=2,
+        )
+        self.assertAlmostEqual(
+            sum(float(item["points"]) for item in first.explanation.risk_breakdown),
+            first.candidate_routes[0]["risk_score"],
+            places=2,
+        )
+        self.assertTrue(any(item.status == "selected" for item in first.explanation.candidate_trace))
+        self.assertTrue(all(item.reason_code and item.reason for item in first.explanation.candidate_trace))
+        self.assertNotIn("优质标准线路结构参考", first.applied_constraints)
+        self.assertIn("仅用于结果对照", first.explanation.reference_note)
+
     def test_compose_does_not_fabricate_a_second_candidate(self):
         request = AIExperimentRequest(mode="compose_route", board=sample_board(), target_difficulty="6B+")
         single_layout = [hold for hold in sample_board().placed_holds if hold.id != "H16"]
@@ -70,6 +93,39 @@ class AILabExperimentsTest(unittest.TestCase):
 
         self.assertEqual(len(response.selected_routes), 1)
         self.assertEqual(len(response.selected_routes), len(response.candidate_routes))
+
+    def test_compose_explains_fallback_and_marks_action_risk_unchecked(self):
+        board = sample_board()
+        changed_layout = [hold for hold in board.placed_holds if hold.id not in {"H16", "D14"}]
+
+        def strategy_result(holds, target_grade, strategy):
+            return changed_layout if strategy == "different_style" else holds
+
+        request = AIExperimentRequest(
+            mode="compose_route",
+            board=board,
+            target_difficulty="6B+",
+            generation_goal="quality_first",
+        )
+        with (
+            patch("agent.experiments.settings.api_key", ""),
+            patch("agent.experiments.AStarSolver.solve", return_value=(None, {"reason": "没有找到动作候选"})),
+            patch("agent.experiments._compose_strategy_holds", side_effect=strategy_result),
+        ):
+            response = asyncio.run(compose_route_from_board(request))
+
+        candidate = response.candidate_routes[0]
+        self.assertEqual(candidate["selection_mode"], "fallback")
+        self.assertEqual(candidate["movement_validation_status"], "not_run")
+        self.assertEqual(candidate["risk_scope"], "structure_only")
+        self.assertEqual(candidate["risk_assessment_status"], "partial")
+        self.assertIn("回退", candidate["why_selected"])
+        self.assertIn("动作风险尚未评估", candidate["why_selected"])
+        self.assertTrue(candidate["change_evidence"]["removed_hold_ids"])
+        self.assertEqual(
+            next(item for item in response.explanation.candidate_trace if item.status == "selected").reason_code,
+            "selected_as_fallback",
+        )
 
     def test_compose_rejects_english_llm_copy_and_keeps_chinese_fallback(self):
         request = AIExperimentRequest(
@@ -152,6 +208,92 @@ class AILabExperimentsTest(unittest.TestCase):
         missing = [violation for violation in response.violations if violation.code == "missing_beta_hold"]
         self.assertTrue(missing)
         self.assertEqual(missing[0].hold_ids, ["Z99"])
+        checks = {item.id: item for item in response.explanation.checks}
+        self.assertEqual(checks["beta_references"].status, "fail")
+        self.assertEqual(checks["beta_balance"].status, "not_run")
+
+    def test_review_without_beta_marks_action_checks_not_run(self):
+        board = sample_board()
+        board.beta_sequence = []
+        request = AIExperimentRequest(mode="review_route", board=board, target_difficulty="6B+")
+        with patch("agent.experiments.settings.api_key", ""):
+            response = asyncio.run(review_board_route(request))
+
+        checks = {item.id: item for item in response.explanation.checks}
+        self.assertEqual(checks["beta_references"].status, "not_run")
+        self.assertEqual(checks["beta_balance"].status, "not_run")
+        self.assertIn("Beta 缺失或引用不完整", " ".join(response.explanation.uncertainties))
+
+    def test_review_focus_changes_executed_rules(self):
+        with patch("agent.experiments.settings.api_key", ""):
+            footholds = asyncio.run(
+                review_board_route(
+                    AIExperimentRequest(
+                        mode="review_route",
+                        board=sample_board(),
+                        target_difficulty="6B+",
+                        review_focus="footholds",
+                    )
+                )
+            )
+            difficulty = asyncio.run(
+                review_board_route(
+                    AIExperimentRequest(
+                        mode="review_route",
+                        board=sample_board(),
+                        target_difficulty="6B+",
+                        review_focus="difficulty",
+                    )
+                )
+            )
+            beta = asyncio.run(
+                review_board_route(
+                    AIExperimentRequest(
+                        mode="review_route",
+                        board=sample_board(),
+                        target_difficulty="6B+",
+                        review_focus="beta_sequence",
+                    )
+                )
+            )
+
+        foothold_checks = {item.id: item.status for item in footholds.explanation.checks}
+        difficulty_checks = {item.id: item.status for item in difficulty.explanation.checks}
+        beta_checks = {item.id: item.status for item in beta.explanation.checks}
+        self.assertEqual(foothold_checks["difficulty_match"], "not_run")
+        self.assertEqual(foothold_checks["hand_move_sequence"], "not_run")
+        self.assertEqual(difficulty_checks["beta_balance"], "not_run")
+        self.assertNotEqual(difficulty_checks["difficulty_match"], "not_run")
+        self.assertNotEqual(beta_checks["hand_move_sequence"], "not_run")
+
+    def test_review_suggestions_are_quantified_and_risk_matches_findings(self):
+        request = AIExperimentRequest(
+            mode="review_route",
+            board=sample_board(),
+            target_difficulty="6B+",
+            review_focus="overall",
+        )
+        with patch("agent.experiments.settings.api_key", ""):
+            response = asyncio.run(review_board_route(request))
+
+        self.assertTrue(all(item.reason_code for item in response.suggestions))
+        self.assertTrue(all(item.observed and item.threshold and item.expected_effect for item in response.suggestions))
+        self.assertAlmostEqual(
+            sum(float(item["points"]) for item in response.explanation.risk_breakdown),
+            response.metrics["risk_score"],
+            places=2,
+        )
+        if any(item.group == "should_fix" for item in response.suggestions):
+            self.assertGreater(response.metrics["risk_score"], 0)
+            self.assertEqual(response.risk_level, "medium")
+
+    def test_review_rejects_uncalibrated_board_angle(self):
+        board = sample_board()
+        board.board_spec = BoardSpec(columns=11, rows=18, angle_degrees=25)
+        request = AIExperimentRequest(mode="review_route", board=board, target_difficulty="6B+")
+
+        with self.assertRaisesRegex(ValueError, "11×18、40°"):
+            asyncio.run(review_board_route(request))
 
 
 if __name__ == "__main__":

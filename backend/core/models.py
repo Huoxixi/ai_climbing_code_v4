@@ -242,6 +242,60 @@ class RouteReviewSuggestion(BaseModel):
     hold_ids: List[str] = Field(default_factory=list)
     group: Literal["must_fix", "should_fix", "optional"] = "optional"
     candidate_route: Optional[FinalRoute] = None
+    reason_code: str = ""
+    observed: str = ""
+    threshold: str = ""
+    expected_effect: str = ""
+    beta_steps: List[int] = Field(default_factory=list)
+    confidence: Literal["low", "medium", "high"] = "medium"
+    evidence_status: Literal["measured", "estimated", "not_measured"] = "measured"
+
+
+class AIExperimentScoreItem(BaseModel):
+    id: str
+    label: str
+    score: float
+    max_score: float
+    observed: str
+    threshold: str
+    explanation: str
+    related_hold_ids: List[str] = Field(default_factory=list)
+
+
+class AIExperimentCheck(BaseModel):
+    id: str
+    label: str
+    status: Literal["pass", "warning", "fail", "not_run"]
+    observed: str
+    threshold: str
+    explanation: str
+    related_hold_ids: List[str] = Field(default_factory=list)
+
+
+class AIExperimentCandidateTrace(BaseModel):
+    strategy: str
+    strategy_label: str
+    source: str
+    status: Literal["selected", "rejected", "duplicate", "failed_validation"]
+    reason_code: str
+    reason: str
+    signature: Optional[str] = None
+    selected_rank: Optional[int] = None
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AIExperimentExplanation(BaseModel):
+    schema_version: str = "ai-explanation-v1"
+    decision_sources: List[Dict[str, str]] = Field(default_factory=list)
+    input_summary: Dict[str, Any] = Field(default_factory=dict)
+    input_fingerprint: str
+    score_breakdown: List[AIExperimentScoreItem] = Field(default_factory=list)
+    risk_breakdown: List[Dict[str, Any]] = Field(default_factory=list)
+    checks: List[AIExperimentCheck] = Field(default_factory=list)
+    candidate_trace: List[AIExperimentCandidateTrace] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+    versions: Dict[str, str] = Field(default_factory=dict)
+    reference_note: Optional[str] = None
 
 
 class AIExperimentResponse(BaseModel):
@@ -259,6 +313,7 @@ class AIExperimentResponse(BaseModel):
     applied_constraints: List[str] = Field(default_factory=list)
     algorithm_notes: List[str] = Field(default_factory=list)
     llm_enriched: bool = False
+    explanation: Optional[AIExperimentExplanation] = None
 
 
 class StandardBoardRouteFeatures(BaseModel):
