@@ -225,6 +225,20 @@ def audit_request(request: Request, status: int, event: str | None = None) -> No
 async def pilot_access_middleware(request: Request, call_next):
     request.state.request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
     path = request.url.path
+    simulation_path = (
+        path.startswith("/api/simulation/")
+        or path == "/api/standard-board/simulations/batch"
+        or (
+            path.startswith("/api/standard-board/routes/")
+            and "/simulation" in path
+        )
+    )
+    if not SIMULATION_ENABLED and simulation_path:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "仿真审核未在本次试运行中开放。"},
+            headers={"X-Request-ID": request.state.request_id},
+        )
     if not PILOT_AUTH_ENABLED:
         request.state.pilot_user = PilotUser("owner", "负责人")
         response = await call_next(request)
