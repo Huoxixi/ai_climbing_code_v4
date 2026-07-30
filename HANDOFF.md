@@ -1,10 +1,572 @@
 # 项目交接文档
 
-> 当前状态说明（2026-07-18）：本文保留较长的历史实现记录，其中的旧账号流程、自由文本 AI 要求、英文工作区名称和早期岩板外观设定不再代表当前产品。当前版本定位为“本地单机版攀岩定线辅助系统”，以 `PRODUCT.md`、`docs/项目业务审核与修改报告.md` 和实际运行界面为准。
+> 当前最新状态（2026-07-30）：项目已经从“本地单机演示”推进为现有上海服务器上的三人线上全功能试运营。新对话必须先读紧接着的“2026-07-30 最新交接”。下方2026-07-18及更早章节仅作为产品和代码历史背景，其中的测试数量、本地启动方式、账号流程和“尚未上线”判断已经过期。
 
-## 2026-07-18 最新交接：岩板多板对照与 AI 重组可视化
+## 2026-07-30 最新交接：上海服务器双教师线上全功能试运营
 
-> 新对话请先读本节。本节是当前最新状态；下方“标准板修复队列”“AI Lab 本地化”等章节是仍有参考价值的历史记录，但其中测试数量、文件状态和待验证事项可能已经过期。
+### 一、给完全没有上下文的新对话
+
+用户是非技术负责人。当前目标不是继续搭一个本地演示，而是让负责人、马老师、邓老师在不同电脑上，通过一个临时 HTTPS 链接访问同一套服务器数据，完整试用攀岩定线系统。
+
+本次固定边界：
+
+- 使用现有阿里云上海服务器，不新增香港服务器。
+- 域名 `panyandingxian.cn` 已购买，但备案尚未完成，当前不使用正式域名。
+- 使用 Cloudflare Quick Tunnel 提供临时 `https://随机名称.trycloudflare.com` 入口。
+- 马老师账号：`ma-trial`。
+- 邓老师账号：`deng-trial`。
+- 负责人账号：`owner`，不在登录页公开展示。
+- 三个账号功能相同，共享同一套服务器数据。
+- 所有人可以同时浏览，但同一时刻只有一个账号可以编辑。
+- 仿真功能关闭；其他当前生产功能开放。
+- `LOCAL_ONLY=true`、`DISABLE_SUPABASE=true`，不得连接、迁移或修改 Supabase。
+- OSS只保存迁移包和备份，不是实时数据库。
+- 当前线上数据以2026-07-30冻结的本地数据为初始基线。
+
+用户沟通时优先说清楚“老师能不能打开、数据存在哪里、修改会不会丢、网址有没有变化”，不要先抛技术术语。
+
+### 二、当前实际运行架构
+
+老师访问链路：
+
+```text
+老师浏览器
+  → Cloudflare trycloudflare.com HTTPS
+  → 服务器 cloudflared 出站隧道
+  → Nginx 127.0.0.1:8080
+  → Vue生产构建或FastAPI API
+  → /var/lib/ai-climbing/data
+```
+
+主要组件：
+
+- 前端：Vue 3、Vite、Element Plus、Axios。
+- 后端：Python 3.12、FastAPI、Uvicorn、Pydantic、bcrypt、OpenCV、NumPy。
+- 入口：Nginx。
+- 临时公网访问：Cloudflare Quick Tunnel。
+- 服务管理：systemd。
+- 实时存储：服务器本地JSON和图片文件。
+- 备份：rclone上传阿里云OSS私有Bucket并回读校验。
+- 代码源：GitHub `Huoxixi/ai_climbing_code_v4`。
+
+当前服务器：
+
+```text
+公网IP：106.14.216.81
+系统：Ubuntu 24.04.4 LTS
+CPU：2核
+内存：约1.6GiB
+Swap：2GiB
+系统盘：40GB
+```
+
+公网只应直接监听SSH 22。FastAPI 8000、Nginx 8080/8081/8443只监听 `127.0.0.1`。不得公开80、443、8000、8080、8081、8443或5173。
+
+### 三、已完成的代码改造
+
+#### 1. 简单网页登录
+
+已实现：
+
+```text
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/session
+```
+
+安全机制：
+
+- 密码使用bcrypt摘要。
+- 登录成功生成8小时随机会话。
+- Cookie设置 `Secure`、`HttpOnly`、`SameSite=Strict`。
+- 15分钟内同一IP和账号连续失败5次会被临时封禁。
+- 错误提示不泄露账号是否存在。
+- 未登录业务API返回401。
+- 登录页只显示 `ma-trial` 和 `deng-trial` 用户名卡片，不显示密码。
+
+账号配置：
+
+```text
+/etc/ai-climbing/pilot-users.json
+权限：640 root:ai-climbing
+```
+
+负责人领取密码的文件：
+
+```text
+/root/ai-climbing-pilot-credentials.txt
+权限：600 root:root
+```
+
+绝不能在回复、日志、GitHub或截图中输出真实密码。需要用户查看时，只告诉用户在服务器执行：
+
+```bash
+cat /root/ai-climbing-pilot-credentials.txt
+```
+
+#### 2. 单人编辑权
+
+已实现：
+
+```text
+GET    /api/pilot/edit-lease
+POST   /api/pilot/edit-lease/acquire
+POST   /api/pilot/edit-lease/heartbeat
+DELETE /api/pilot/edit-lease
+```
+
+规则：
+
+- 编辑权15分钟有效。
+- 前端编辑页面每30秒续期。
+- 没有编辑权的写请求由后端返回423。
+- 注销、主动释放或超时会释放编辑权。
+- 第二个账号仍能浏览和搜索。
+
+会话、编辑权和AI任务都保存在单个后端进程内，因此生产环境必须保持：
+
+```text
+Uvicorn --workers 1
+```
+
+禁止擅自改成多进程，否则会出现会话、编辑权和任务状态不一致。
+
+#### 3. 文件写入加固
+
+岩板、岩点元数据和标准线路活动修改使用：
+
+```text
+文件锁
+→ 读取最新内容
+→ 修改指定对象
+→ 写临时文件
+→ fsync
+→ 原子替换
+→ 释放锁
+```
+
+操作审计写入：
+
+```text
+/var/lib/ai-climbing/data/pilot_audit.jsonl
+```
+
+记录账号、时间、请求编号、方法、路径、状态和编辑权事件；不记录密码、AI密钥或完整岩板正文。
+
+#### 4. 生产功能门禁
+
+已确认：
+
+- `/docs` 返回404。
+- `/openapi.json` 返回404。
+- `/redoc` 返回404。
+- 仿真API在认证前直接返回404。
+- 仿真导航和前端入口关闭。
+- 未登录业务API返回401。
+
+不要把调试文档或仿真接口重新打开。
+
+#### 5. AI规则
+
+本地确定性算法负责岩点、Beta、难度、风险、候选排序和可攀性判断；外部OpenAI兼容服务只允许润色中文名称和说明。
+
+如果外部AI无配置、超时或失败，必须保留本地规则结果，不能阻塞核心工作。不要让大模型决定岩点位置、难度、风险、安全结论或候选排序。
+
+已用教师账号提交过真实AI审核任务并取得完成结果，该冒烟测试没有保存或修改正式岩板。
+
+### 四、数据迁移已经完成
+
+冻结基线：
+
+| 项目 | 数量 |
+| --- | ---: |
+| 岩板总数 | 7 |
+| 正常展示岩板 | 3 |
+| 已归档可恢复岩板 | 4 |
+| 岩点原图 | 9 |
+| 岩点处理图 | 33 |
+| 标准线路 | 30,642 |
+| 当前可攀标准线路 | 12,123 |
+| 完整数据文件 | 95 |
+
+迁移批次：
+
+```text
+20260730T031732Z
+```
+
+制品：
+
+```text
+full-local-snapshot.tar.gz
+runtime-data.tar.gz
+manifest.json
+board-inventory.json
+migration-report.txt
+两份SHA-256
+```
+
+运行包SHA-256：
+
+```text
+8b42eebbc54d011bedde6431ea2ebdc0265f12f84960f49c755a09f413bb1739
+```
+
+OSS位置：
+
+```text
+oss:climbing-pilot-backup-sh-2026/migration/20260730T031732Z/
+```
+
+已经完成本地、服务器、OSS回读三次SHA-256校验和逐字节比较。
+
+负责人已经准确回复过“确认执行”，生产数据切换已完成。当前唯一实时数据目录：
+
+```text
+/var/lib/ai-climbing/data
+```
+
+切换前服务器旧数据保留在：
+
+```text
+/var/lib/ai-climbing/archives/pre-local-migration-20260730T103848Z
+```
+
+不要把本地数据再次自动覆盖到服务器。试运营期间服务器数据是唯一真实数据。
+
+### 五、OSS和备份状态
+
+OSS用途：
+
+- `migration/`：本地到服务器的迁移制品。
+- `daily/`：每日完整数据备份。
+- `monthly/`：每月长期备份。
+
+OSS不是数据库，不参与老师每次保存。老师修改先写服务器，随后由每日备份上传OSS。
+
+RAM用户已绑定：
+
+```text
+AIClimbingBackupBucketAccess
+AIClimbingMigrationAccess
+```
+
+权限只用于指定Bucket和前缀的列出、读取、上传，不应增加公开Bucket、删除Bucket或修改ACL权限。
+
+当前生命周期大意：
+
+- 每日备份约保留30天。
+- 每月备份约保留190天。
+- 历史版本和文件碎片约7天清理。
+
+每天03:15由 `ai-climbing-backup.timer` 执行：
+
+```text
+停止后端写入
+→ 打包整个数据目录
+→ SHA-256
+→ 启动并健康检查
+→ rclone上传OSS
+→ 从OSS下载
+→ 再次校验
+```
+
+每5分钟由 `ai-climbing-health.timer` 记录健康状态。journald保留30天、最多1GB。
+
+重要：`manual/` OSS前缀没有授权。之前运行 `backup_data.sh manual` 只生成了本地包，远端上传失败。需要云端验证时使用正式 `daily` 或 `pre-deploy` 路径，不要误以为 `manual` 已经上传OSS。
+
+### 六、当前发布状态
+
+代码分支：
+
+```text
+codex/pilot-release-hardening
+```
+
+生产代码标签：
+
+```text
+pilot-v2026.07.30-rc10
+```
+
+生产代码提交：
+
+```text
+8ffdee010b4482c45a344146718bae5471213c0b
+```
+
+服务器实际运行：
+
+```text
+/opt/ai-climbing/releases/pilot-v2026.07.30-rc10
+/opt/ai-climbing/current -> 上述目录
+```
+
+分支上还有上线状态和README文档提交，README提交为：
+
+```text
+930ed80 docs: add server operations command guide
+```
+
+这不代表生产程序已经部署到930ed80；实际程序仍是rc10的8ffdee0。不要把 `/root/ai_climbing_code` 的HEAD误认为生产运行版本，应以以下两个命令为准：
+
+```bash
+readlink -f /opt/ai-climbing/current
+cat /etc/ai-climbing/release.env
+```
+
+已完成验证：
+
+- 后端67项测试通过。
+- 前端14项测试通过。
+- 前端生产构建通过。
+- npm高危依赖检查通过。
+- 登录、注销、会话、两个教师账号通过。
+- 7块岩板、9张原图、33张处理图通过。
+- 30,642条标准线路和12,123条可攀线路通过。
+- 单人编辑权冲突返回423。
+- AI真实任务完成。
+- 后端重启后重复验收通过。
+- 外部HTTPS首页200、健康200、匿名业务API401。
+
+GitHub连接器能读取私有仓库，但创建PR时曾被集成权限403拒绝；本轮通过本机SSH Git成功推送分支和标签。不要假设连接器已经获得PR写权限。未来需要PR时先检查权限，不要反复盲试。
+
+### 七、服务器服务和重要路径
+
+服务均已启用：
+
+```text
+ai-climbing.service
+nginx.service
+ai-climbing-tunnel.service
+ai-climbing-backup.timer
+ai-climbing-health.timer
+```
+
+重要路径：
+
+```text
+/root/ai_climbing_code                 GitHub同步和构建目录
+/root/ai_climbing_code/README.md       非技术负责人运维指令
+/opt/ai-climbing/releases              不可变程序版本
+/opt/ai-climbing/current               当前程序链接
+/var/lib/ai-climbing/data              唯一实时数据
+/var/lib/ai-climbing/archives          旧数据归档
+/var/backups/ai-climbing               本机备份
+/etc/ai-climbing/backend.env           生产环境配置，禁止输出
+/etc/ai-climbing/release.env           当前发布SHA
+/etc/ai-climbing/pilot-users.json      bcrypt账号摘要
+/etc/ai-climbing/rclone.conf           OSS凭据，禁止输出
+/run/ai-climbing-tunnel/url            当前Quick Tunnel网址
+```
+
+所有主要运维指令已经写入：
+
+```text
+/root/ai_climbing_code/README.md
+```
+
+新对话若要指导用户操作，优先让用户执行：
+
+```bash
+cd /root/ai_climbing_code
+less README.md
+```
+
+### 八、当前卡在哪里
+
+短期三人线上试用没有代码或部署 blocker，系统当前可用。
+
+剩余限制和待办：
+
+1. Cloudflare Quick Tunnel没有固定地址和SLA。
+2. 当前隧道服务依赖后端；后端或每日备份重启后，随机网址可能变化。
+3. 会话、编辑权和AI任务在内存中；后端重启后所有人要重新登录。
+4. 没有自动短信、微信或邮件告警，09:00需要人工检查。
+5. 尚未完成试运行第15天的隔离恢复演练。
+6. 域名备案完成后，要切换正式固定HTTPS入口并停用Quick Tunnel。
+7. 超过5人、需要多人同时编辑或正式公开时，必须引入数据库、持久会话、角色权限和更完整审计。
+
+最值得优先考虑的改进是：把Quick Tunnel与后端短暂停止解耦，使每日备份时网址尽量不变化。这个改动需要修改 `ai-climbing-tunnel.service` 的依赖关系、测试并重新发布，不能在没有说明影响的情况下直接改服务器。
+
+### 九、下一步计划
+
+建议新对话按以下顺序：
+
+1. 先读：
+   - `AGENTS.md`
+   - 本文件最上方2026-07-30交接
+   - `README.md`
+   - `docs/线上全功能试运营需求与实施状态.md`
+2. 执行 `git status --short`，确认并保护用户未提交文件。
+3. 只读检查服务器：
+
+   ```bash
+   systemctl is-active ai-climbing nginx ai-climbing-tunnel
+   curl -fsS http://127.0.0.1:8000/api/health
+   cat /run/ai-climbing-tunnel/url
+   cat /var/lib/ai-climbing/ops/last-backup.env
+   ```
+
+4. 让马老师、邓老师开始真实试用，记录：
+   - 登录是否顺畅；
+   - 岩板和图片是否完整；
+   - 保存、更新、归档、恢复是否符合预期；
+   - 标准线路搜索和活动记录；
+   - AI审核和候选保存；
+   - 单人编辑权是否影响使用。
+5. 每天09:00人工检查网址、备份、日志、磁盘、AI余额。
+6. 第15天做隔离恢复演练，绝不能覆盖生产数据。
+7. 如用户同意，实施“备份时保持Quick Tunnel进程运行”的小改造。
+8. 备案完成后，部署固定域名入口、正式证书和稳定隧道，然后删除Quick Tunnel服务。
+9. 30天结束后按备份成功率、可用率、严重问题和恢复时间决定是否扩大范围。
+
+### 十、一定不要再踩的坑
+
+1. **不要直接修改服务器当前运行目录。**
+   代码必须在仓库修改、测试、推送、创建新的不可变标签，再使用发布脚本部署。
+
+2. **不要在 `/root/ai_climbing_code` 中把 `git pull` 当生产发布。**
+   项目规定使用GitHub重新克隆和rsync同步；正式发布使用：
+
+   ```bash
+   /usr/local/lib/ai-climbing/deploy_release.sh pilot-vYYYY.MM.DD-rcN
+   ```
+
+3. **不要重复部署已存在的标签。**
+   发布目录不可变，`pilot-v2026.07.30-rc10` 已存在。每次代码发布创建新标签，不要移动旧标签或强推标签。
+
+4. **不要公开Web和开发端口。**
+   8000、8080、8081、8443、5173必须保持本机监听。老师通过Cloudflare链接访问。
+
+5. **不要把Quick Tunnel网址当成永久域名。**
+   没有固定换号周期，只要进程重启就可能换。任何重启、备份或发布后都执行：
+
+   ```bash
+   cat /run/ai-climbing-tunnel/url
+   ```
+
+6. **不要在隧道正常时随意重启。**
+   重启很可能产生新网址。仅在服务异常时重启。
+
+7. **不要把后端改成多worker。**
+   当前会话、编辑权、限速记录和AI任务在内存中，必须单进程。
+
+8. **不要重新启用Supabase。**
+   保持 `LOCAL_ONLY=true`、`DISABLE_SUPABASE=true`；不得迁移、连接或修改数据库。
+
+9. **不要把OSS当实时数据库。**
+   老师修改首先写服务器；OSS每天备份。服务器与本地电脑不会自动双向同步。
+
+10. **不要只看rclone第一次403就下结论，也不要忽略403。**
+    曾出现第一次上传403、第二次重试成功。必须以“上传、回读、SHA-256一致”为最终成功标准。迁移前缀403最终通过 `AIClimbingMigrationAccess` 修复。
+
+11. **不要打印凭据文件或环境文件。**
+    禁止输出 `/etc/ai-climbing/backend.env`、`rclone.conf`、AI Key、OSS AccessKey或真实密码。
+
+12. **不要为了普通程序故障恢复数据。**
+    程序故障使用代码回退；数据恢复会覆盖当前数据，必须等待负责人准确回复“确认执行”。
+
+13. **不要删除旧数据归档。**
+    `/var/lib/ai-climbing/archives/pre-local-migration-20260730T103848Z` 是数据切换回退依据。
+
+14. **不要让AI决定结构事实。**
+    LLM只润色文字；岩点、Beta、难度、风险、排序由本地确定性算法决定。
+
+15. **不要把AI候选自动写入岩板库。**
+    AI结果只有用户明确载入工作台并保存后才成为正式岩板。
+
+16. **不要把默认岩板列表数量误判为数据丢失。**
+    `/api/my-boards` 默认只返回3块未归档岩板。核对总数时必须使用 `include_archived=true`，总数应为7。
+
+17. **不要把Nginx 404错误页强行按JSON解析。**
+    最终验收脚本曾因此误报；404页面可能是HTML，只检查状态码即可。
+
+18. **服务器访问trycloudflare域名可能优先走不可用IPv6。**
+    从服务器做外部回访时可强制IPv4；最终应从服务器外部电脑再验证一次。
+
+19. **PowerShell会提前展开远程命令里的 `$()`。**
+    复杂SSH检查使用单引号或PowerShell here-string原样传递，不要让Windows把Linux命令先执行。
+
+20. **不要探查用户SSH配置或PowerShell历史来找凭据。**
+    当前已有SSH Agent可以直接连接：
+
+    ```text
+    root@106.14.216.81
+    ```
+
+    使用现有身份即可，不读取或输出私钥、SSH配置和历史。
+
+21. **服务器内存较小，不要并行启动多个构建或后端。**
+    机器只有约1.6GiB内存，已增加2GiB Swap。发布时避免并行重型任务。
+
+22. **Windows本地运行npm使用 `npm.cmd`。**
+    PowerShell执行策略可能阻止 `npm.ps1`。
+
+23. **不要清理用户脏工作区。**
+    当前确认存在：
+
+    ```text
+    M backend/data/hold_assets_meta.json
+    ?? open-ai-climbing.ps1
+    ```
+
+    这些属于用户，不要暂存、提交、删除、重置或覆盖。禁止 `git reset --hard` 和 `git checkout -- .`。
+
+24. **README已直接复制到服务器构建目录，但这不是程序发布。**
+    `/root/ai_climbing_code/README.md` 与本地提交 `930ed80` 一致；生产程序仍是rc10。不要因README更新而修改生产SHA。
+
+### 十一、关键文件索引
+
+- 非技术运维指令：`README.md`
+- 当前上线状态：`docs/线上全功能试运营需求与实施状态.md`
+- 后端入口和中间件：`backend/main.py`
+- 登录、会话、限速和编辑权：`backend/core/pilot_access.py`
+- AI实验：`backend/agent/experiments.py`
+- 登录页：`frontend/src/components/PilotLogin.vue`
+- 前端API客户端：`frontend/src/services/apiClient.js`
+- 后端systemd：`deploy/systemd/ai-climbing.service`
+- Quick Tunnel systemd：`deploy/systemd/ai-climbing-tunnel.service`
+- Nginx：`deploy/nginx/ai_climbing.conf`
+- 发布：`deploy/scripts/deploy_release.sh`
+- 回退：`deploy/scripts/rollback_release.sh`
+- 备份：`deploy/scripts/backup_data.sh`
+- 数据恢复：`deploy/scripts/restore_data.sh`
+- 每日检查：`deploy/scripts/daily_check.sh`
+- GitHub发布门禁：`.github/workflows/release-gate.yml`
+
+### 十二、新对话开始时最小状态核对
+
+本地：
+
+```powershell
+cd "D:\学校课程\ai攀岩定线问题\ai_climbing_code"
+git status --short --branch
+git log -5 --oneline --decorate
+```
+
+服务器：
+
+```bash
+systemctl is-active ai-climbing nginx ai-climbing-tunnel
+readlink -f /opt/ai-climbing/current
+cat /etc/ai-climbing/release.env
+curl -fsS http://127.0.0.1:8000/api/health
+cat /run/ai-climbing-tunnel/url
+cat /var/lib/ai-climbing/ops/last-backup.env
+df -h /
+```
+
+若只想知道如何操作服务器，先读：
+
+```bash
+cd /root/ai_climbing_code
+less README.md
+```
+
+## 2026-07-18 历史交接：岩板多板对照与 AI 重组可视化
+
+> 本节是历史产品和代码背景，不再是当前部署状态。新对话应先读本文最上方2026-07-30交接；本节测试数量、文件状态和待验证事项可能已经过期。
 
 ### 一、我们正在做什么
 
