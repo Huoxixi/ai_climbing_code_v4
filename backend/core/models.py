@@ -298,8 +298,15 @@ class AIExperimentExplanation(BaseModel):
     reference_note: Optional[str] = None
 
 
+class AIExperimentRecommendation(BaseModel):
+    status: Literal["optimized", "keep_original"]
+    title: str
+    summary: str
+
+
 class AIExperimentResponse(BaseModel):
     mode: Literal["compose_route", "review_route"]
+    recommendation: Optional[AIExperimentRecommendation] = None
     selected_routes: List[FinalRoute] = Field(default_factory=list)
     review_summary: Optional[str] = None
     violations: List[RouteReviewViolation] = Field(default_factory=list)

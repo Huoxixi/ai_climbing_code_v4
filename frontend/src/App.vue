@@ -951,8 +951,8 @@
           </el-select>
           <p class="control-help">
             {{ aiExperiment.mode === 'compose_route'
-              ? '目标策略不可用时会明确回退原因；候选只完成结构检查，仍需复核动作并试爬。'
-              : '所选重点会改变专项检查；基本结构始终检查，未执行项目会明确标为未检查。' }}
+              ? '只有通过完整静态人体工学门禁的岩板才会返回；无合格路径时建议保留原线路。'
+              : '所选重点会改变专项检查；自动修复岩板同样必须通过完整静态门禁。' }}
           </p>
         </div>
         <div class="command-row">
@@ -968,15 +968,11 @@
         />
         <el-alert v-if="routeGen.error" type="error" :closable="false" :title="routeGen.error" />
         <section v-if="routeGen.result" class="experiment-result">
-          <div class="result-context">
-            <span>分析岩板：{{ selectedAiBoard?.route_name || '所选岩板' }}</span>
-            <span>{{ selectedAiBoardStats.holds }} 岩点 / {{ selectedAiBoardStats.beta }} Beta / {{ selectedAiBoardStats.difficulty }}</span>
-            <span>{{ routeGen.result.llm_enriched ? 'AI 已用中文润色' : '本地中文结果' }}</span>
-          </div>
           <header class="experiment-verdict">
             <div>
-              <span>{{ routeGen.result.mode === 'review_route' ? '审核结论' : '组合结论' }}</span>
-              <strong>{{ routeGen.result.review_summary || routeGen.result.analysis_summary }}</strong>
+              <span>{{ routeGen.result.mode === 'review_route' ? '定线建议' : '重组建议' }}</span>
+              <strong>{{ routeGen.result.recommendation?.title || routeGen.result.review_summary || routeGen.result.analysis_summary }}</strong>
+              <p>{{ routeGen.result.recommendation?.summary || routeGen.result.review_summary }}</p>
             </div>
             <span
               v-if="routeGen.result.risk_level"
@@ -985,30 +981,7 @@
               {{ riskAssessmentLabel(routeGen.result) }}
             </span>
           </header>
-          <div class="result-metrics">
-            <span v-if="routeGen.result.metrics?.target_grade">目标 {{ routeGen.result.metrics.target_grade }}</span>
-            <span v-if="routeGen.result.metrics?.quality_score !== undefined">结构质量 {{ routeGen.result.metrics.quality_score }}</span>
-            <span v-if="routeGen.result.metrics?.predicted_grade">MoonBoard 等效难度 {{ routeGen.result.metrics.predicted_grade }}</span>
-            <span v-if="routeGen.result.metrics?.risk_score !== undefined">{{ riskMetricLabel(routeGen.result.metrics) }}</span>
-            <span v-if="routeGen.result.risk_level">等级 {{ riskLevelLabel(routeGen.result.risk_level) }}</span>
-            <span v-if="routeGen.result.metrics?.review_scope">
-              {{ reviewScopeLabel(routeGen.result.metrics.review_scope) }}
-            </span>
-          </div>
-          <div v-if="routeGen.result.applied_constraints?.length" class="result-metrics">
-            <span v-for="constraint in routeGen.result.applied_constraints" :key="constraint">{{ constraint }}</span>
-          </div>
-          <template v-if="routeGen.result.mode === 'review_route'">
-            <article v-for="violation in routeGen.result.violations" :key="violation.code" class="result-card result-card-critical">
-              <span>必须处理</span>
-              <strong>{{ violation.message }}</strong>
-              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join('、') }}</small>
-            </article>
-          </template>
-          <AIExperimentExplanation
-            v-if="routeGen.result.explanation"
-            :explanation="routeGen.result.explanation"
-          />
+
           <template v-if="routeGen.result.mode === 'compose_route'">
             <el-alert
               v-if="routeGen.result.failure_suggestion"
@@ -1017,74 +990,119 @@
               :title="routeGen.result.failure_suggestion"
               show-icon
             />
-            <el-alert
-              v-if="!routeGen.result.failure_suggestion && (routeGen.result.selected_routes?.length || 0) < 2"
-              type="info"
-              :closable="false"
-              title="算法只找到一块不同且通过检查的有效候选，因此不复制或伪造第二块结果。"
-              show-icon
-            />
-            <div
-              v-if="aiComparisonReference"
-              :class="['ai-comparison-grid', `count-${1 + (routeGen.result.selected_routes?.length || 0)}`]"
-            >
+            <div v-if="routeGen.result.selected_routes?.[0]" class="ai-primary-board">
               <BoardComparisonPanel
-                :board="aiComparisonReference"
-                label="原岩板"
-                baseline
-                :resolve-hold-visual="library.resolveHoldVisual"
-              />
-              <BoardComparisonPanel
-                v-for="(route, index) in routeGen.result.selected_routes || []"
-                :key="`${route.route_name}-${index}`"
-                :board="route"
-                :reference="aiComparisonReference"
-                :label="candidateMeta(index).label_text || `候选 ${index + 1}`"
-                :meta="candidateMeta(index)"
+                :board="routeGen.result.selected_routes[0]"
+                label="最佳新岩板"
                 loadable
+                :show-beta="false"
+                :show-movement-count="false"
+                :show-details="false"
                 :resolve-hold-visual="library.resolveHoldVisual"
-                @load="loadAiCandidateIntoStudio(route)"
+                @load="loadAiCandidateIntoStudio(routeGen.result.selected_routes[0])"
               />
             </div>
           </template>
+
           <template v-else>
-            <div v-if="routeGen.result.board" class="review-board-preview">
-              <BoardComparisonPanel
-                :board="routeGen.result.board"
-                label="审核对象"
-                baseline
-                :resolve-hold-visual="library.resolveHoldVisual"
-              />
-            </div>
+            <article v-for="violation in routeGen.result.violations" :key="violation.code" class="result-card result-card-critical">
+              <span>必须处理</span>
+              <strong>{{ violation.message }}</strong>
+              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join('、') }}</small>
+            </article>
             <article v-for="suggestion in routeGen.result.suggestions" :key="suggestion.title" class="result-card">
               <span>{{ suggestionGroupLabel(suggestion) }}</span>
               <strong>{{ suggestion.title }}</strong>
               <p>{{ suggestion.detail }}</p>
-              <dl class="suggestion-evidence">
-                <div>
-                  <dt>本次观测</dt>
-                  <dd>{{ suggestion.observed || '暂无量化观测' }}</dd>
-                </div>
-                <div>
-                  <dt>判定阈值</dt>
-                  <dd>{{ suggestion.threshold || '未设置阈值' }}</dd>
-                </div>
-                <div>
-                  <dt>预计改善</dt>
-                  <dd>{{ suggestion.expected_effect || '需要定线者复核' }}</dd>
-                </div>
-              </dl>
-              <div class="suggestion-locators">
-                <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join('、') }}</span>
-                <span v-if="suggestion.beta_steps?.length">Beta 步骤：{{ suggestion.beta_steps.join('、') }}</span>
-                <span>证据{{ evidenceStatusLabel(suggestion.evidence_status) }} · {{ confidenceLabel(suggestion.confidence) }}</span>
-              </div>
-              <el-button v-if="suggestion.candidate_route" type="primary" plain @click="loadAiCandidateIntoStudio(suggestion.candidate_route)">载入修复候选</el-button>
             </article>
+            <div v-if="reviewRepairCandidate" class="ai-primary-board">
+              <BoardComparisonPanel
+                :board="reviewRepairCandidate"
+                label="通过门禁的修复岩板"
+                loadable
+                :show-beta="false"
+                :show-movement-count="false"
+                :show-details="false"
+                :resolve-hold-visual="library.resolveHoldVisual"
+                @load="loadAiCandidateIntoStudio(reviewRepairCandidate)"
+              />
+            </div>
           </template>
-          <div v-if="routeGen.result.algorithm_notes?.length" class="result-metrics">
-            <span v-for="note in routeGen.result.algorithm_notes" :key="note">{{ note }}</span>
-          </div>
+
+          <el-collapse class="ai-analysis-collapse">
+            <el-collapse-item title="查看分析依据" name="analysis">
+              <div class="result-context">
+                <span>分析岩板：{{ selectedAiBoard?.route_name || '所选岩板' }}</span>
+                <span>{{ selectedAiBoardStats.holds }} 岩点 / {{ selectedAiBoardStats.difficulty }}</span>
+                <span>{{ routeGen.result.llm_enriched ? 'AI 已用中文润色' : '本地中文结果' }}</span>
+              </div>
+              <div class="result-metrics">
+                <span v-if="routeGen.result.metrics?.target_grade">目标 {{ routeGen.result.metrics.target_grade }}</span>
+                <span v-if="routeGen.result.metrics?.quality_score !== undefined">结构质量 {{ routeGen.result.metrics.quality_score }}</span>
+                <span v-if="routeGen.result.metrics?.predicted_grade">MoonBoard 等效难度 {{ routeGen.result.metrics.predicted_grade }}</span>
+                <span v-if="routeGen.result.metrics?.risk_score !== undefined">{{ riskMetricLabel(routeGen.result.metrics) }}</span>
+                <span v-if="routeGen.result.risk_level">等级 {{ riskLevelLabel(routeGen.result.risk_level) }}</span>
+                <span v-if="routeGen.result.metrics?.review_scope">{{ reviewScopeLabel(routeGen.result.metrics.review_scope) }}</span>
+              </div>
+              <div v-if="routeGen.result.applied_constraints?.length" class="result-metrics">
+                <span v-for="constraint in routeGen.result.applied_constraints" :key="constraint">{{ constraint }}</span>
+              </div>
+
+              <div v-if="routeGen.result.mode === 'compose_route' && aiComparisonReference" class="ai-comparison-grid count-2">
+                <BoardComparisonPanel
+                  :board="aiComparisonReference"
+                  label="原岩板"
+                  baseline
+                  :show-beta="false"
+                  :show-movement-count="false"
+                  :resolve-hold-visual="library.resolveHoldVisual"
+                />
+                <BoardComparisonPanel
+                  v-if="routeGen.result.selected_routes?.[0]"
+                  :board="routeGen.result.selected_routes[0]"
+                  :reference="aiComparisonReference"
+                  :label="candidateMeta(0).label_text || '最佳新岩板'"
+                  :meta="candidateMeta(0)"
+                  :show-beta="false"
+                  :show-movement-count="false"
+                  :resolve-hold-visual="library.resolveHoldVisual"
+                />
+              </div>
+
+              <template v-if="routeGen.result.mode === 'review_route'">
+                <div v-if="routeGen.result.board" class="review-board-preview">
+                  <BoardComparisonPanel
+                    :board="routeGen.result.board"
+                    label="审核对象"
+                    baseline
+                    :show-movement-count="false"
+                    :resolve-hold-visual="library.resolveHoldVisual"
+                  />
+                </div>
+                <article v-for="suggestion in routeGen.result.suggestions" :key="`evidence-${suggestion.title}`" class="result-card">
+                  <strong>{{ suggestion.title }}</strong>
+                  <dl class="suggestion-evidence">
+                    <div><dt>本次观测</dt><dd>{{ suggestion.observed || '暂无量化观测' }}</dd></div>
+                    <div><dt>判定阈值</dt><dd>{{ suggestion.threshold || '未设置阈值' }}</dd></div>
+                    <div><dt>预计改善</dt><dd>{{ suggestion.expected_effect || '需要定线者复核' }}</dd></div>
+                  </dl>
+                  <div class="suggestion-locators">
+                    <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join('、') }}</span>
+                    <span v-if="suggestion.beta_steps?.length">原线路 Beta 步骤：{{ suggestion.beta_steps.join('、') }}</span>
+                    <span>证据{{ evidenceStatusLabel(suggestion.evidence_status) }} · {{ confidenceLabel(suggestion.confidence) }}</span>
+                  </div>
+                </article>
+              </template>
+
+              <AIExperimentExplanation
+                v-if="routeGen.result.explanation"
+                :explanation="routeGen.result.explanation"
+              />
+              <div v-if="routeGen.result.algorithm_notes?.length" class="result-metrics">
+                <span v-for="note in routeGen.result.algorithm_notes" :key="note">{{ note }}</span>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
         </section>
       </div>
     </section>
@@ -1294,6 +1312,9 @@ const comparedBoards = computed(() => compareBoardIds.value
   .map((savedId) => boards.savedBoards.find((board) => board.saved_id === savedId))
   .filter(Boolean))
 const aiComparisonReference = computed(() => routeGen.result?.board || selectedAiBoard.value)
+const reviewRepairCandidate = computed(() => (
+  routeGen.result?.suggestions?.find((suggestion) => suggestion.candidate_route)?.candidate_route || null
+))
 
 const someVisibleRepairedSelected = computed(() => (
   visibleRepairedIds.value.some((sourceId) => standardBoard.selectedRepairIds.includes(sourceId))

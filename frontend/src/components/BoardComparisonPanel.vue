@@ -13,7 +13,7 @@
       <span>MoonBoard 等效 {{ board.difficulty || '未定级' }}</span>
       <span>{{ confidenceLabel(board.confidence_tier) }}</span>
       <span>{{ board.placed_holds?.length || 0 }} 个岩点</span>
-      <span>{{ board.beta_sequence?.length || 0 }} 个动作</span>
+      <span v-if="showMovementCount">{{ board.beta_sequence?.length || 0 }} 个动作</span>
       <span>{{ workflowLabel }}</span>
     </div>
 
@@ -33,18 +33,18 @@
         :resolve-hold-visual="resolveHoldVisual"
         :comparison-status-by-id="comparison?.statusById || {}"
         readonly
-        show-beta-steps
+        :show-beta-steps="showBeta"
       />
     </div>
 
-    <div v-if="comparison" class="comparison-legend" aria-label="差异图例">
+    <div v-if="showDetails && comparison" class="comparison-legend" aria-label="差异图例">
       <span><i class="legend-dot retained" />保留 {{ comparison.retained.length }}</span>
       <span><i class="legend-dot added" />新增 {{ comparison.added.length }}</span>
       <span><i class="legend-dot removed" />移除 {{ comparison.removed.length }}</span>
       <span><i class="legend-dot changed" />修改 {{ comparison.changed.length }}</span>
     </div>
 
-    <div v-if="comparison" class="comparison-summary">
+    <div v-if="showDetails && comparison" class="comparison-summary">
       <strong>变化说明</strong>
       <p>{{ comparison.summary }}</p>
       <p>
@@ -68,24 +68,24 @@
       </dl>
     </div>
 
-    <div v-if="meta && Object.keys(meta).length" class="candidate-facts" aria-label="候选质量信息">
+    <div v-if="showDetails && meta && Object.keys(meta).length" class="candidate-facts" aria-label="候选质量信息">
       <span>结构质量 {{ meta.quality_score ?? '-' }}</span>
       <span>等效难度 {{ meta.predicted_grade || '-' }}</span>
       <span>{{ confidenceLabel(meta.confidence_tier) }} · {{ calibrationLabel(meta.calibration_status) }}</span>
       <span>{{ candidateRiskLabel(meta) }}</span>
     </div>
-    <p v-if="meta?.why_selected" class="candidate-selection-reason">
+    <p v-if="showDetails && meta?.why_selected" class="candidate-selection-reason">
       <strong>入选原因</strong>
       {{ meta.why_selected }}
     </p>
-    <ul v-if="meta?.selection_basis?.length" class="candidate-selection-basis">
+    <ul v-if="showDetails && meta?.selection_basis?.length" class="candidate-selection-basis">
       <li v-for="item in meta.selection_basis" :key="item">{{ item }}</li>
     </ul>
-    <p v-if="meta?.change_evidence?.strategy_reason" class="candidate-change-reason">
+    <p v-if="showDetails && meta?.change_evidence?.strategy_reason" class="candidate-change-reason">
       <strong>重组依据</strong>
       {{ meta.change_evidence.strategy_reason }}
     </p>
-    <dl v-if="meta?.before_after" class="candidate-before-after">
+    <dl v-if="showDetails && meta?.before_after" class="candidate-before-after">
       <div>
         <dt>原线路</dt>
         <dd>{{ metricSnapshot(meta.before_after.before) }}</dd>
@@ -95,10 +95,10 @@
         <dd>{{ metricSnapshot(meta.before_after.after) }}</dd>
       </div>
     </dl>
-    <p v-if="board.setter_commentary" class="candidate-commentary">{{ board.setter_commentary }}</p>
-    <small v-if="meta?.notes?.length" class="candidate-notes">{{ meta.notes.join('；') }}</small>
+    <p v-if="showDetails && board.setter_commentary" class="candidate-commentary">{{ board.setter_commentary }}</p>
+    <small v-if="showDetails && meta?.notes?.length" class="candidate-notes">{{ meta.notes.join('；') }}</small>
 
-    <section class="comparison-beta">
+    <section v-if="showBeta" class="comparison-beta">
       <strong>{{ meta?.movement_validation_status === 'not_run' ? '动作草案' : '完整动作序列' }}</strong>
       <p v-if="meta?.movement_validation_status === 'not_run'" class="beta-boundary">
         按岩点顺序生成，尚未通过完整身体平衡检查，不代表推荐 Beta。
@@ -134,6 +134,9 @@ const props = defineProps({
   removable: { type: Boolean, default: false },
   loadable: { type: Boolean, default: false },
   meta: { type: Object, default: null },
+  showBeta: { type: Boolean, default: true },
+  showMovementCount: { type: Boolean, default: true },
+  showDetails: { type: Boolean, default: true },
   resolveHoldVisual: { type: Function, required: true },
 })
 

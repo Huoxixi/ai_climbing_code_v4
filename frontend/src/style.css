@@ -780,6 +780,12 @@ h3 { margin-bottom: 0; font-size: 16px; }
 .experiment-verdict > div { min-width: 0; display: grid; gap: 5px; }
 .experiment-verdict > div > span { color: var(--muted); font-size: 12px; font-weight: 700; }
 .experiment-verdict strong { font-size: 16px; line-height: 1.5; }
+.experiment-verdict p { margin: 0; color: var(--muted); line-height: 1.65; }
+.ai-primary-board { width: min(720px, 100%); min-width: 0; }
+.ai-analysis-collapse { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.ai-analysis-collapse .el-collapse-item__header { min-height: 52px; padding: 0 16px; font-weight: 700; }
+.ai-analysis-collapse .el-collapse-item__wrap { border-bottom: 0; }
+.ai-analysis-collapse .el-collapse-item__content { display: grid; gap: 14px; padding: 0 16px 16px; }
 .verdict-risk, .explanation-total, .check-status, .trace-status {
   width: max-content;
   max-width: 100%;

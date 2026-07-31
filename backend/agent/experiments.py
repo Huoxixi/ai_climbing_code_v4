@@ -76,8 +76,8 @@ LATIN_CHARACTER_PATTERN = re.compile(r"[A-Za-z]")
 ALLOWED_TECHNICAL_TOKEN_PATTERN = re.compile(
     r"(?i)\b(?:AI|Beta|LH|RH|LF|RF)\b|\b(?:6B\+?|6C\+?|7A\+?|7B\+?|7C\+?|8A\+?|8B\+?)\b|\b[A-Z]{1,2}\d{1,2}\b"
 )
-EXPLANATION_SCHEMA_VERSION = "ai-explanation-v2"
-RULESET_VERSION = "ai-lab-rules-v2"
+EXPLANATION_SCHEMA_VERSION = "ai-explanation-v3"
+RULESET_VERSION = "ai-lab-rules-v3"
 REFERENCE_NOTE = "同难度优质标准线路的平均结构仅用于结果对照，当前不参与候选评分或排序。"
 STRATEGY_LABELS = {
     "best_quality": "质量优先",
@@ -313,10 +313,14 @@ def _rule_checks(
         balance_status: Literal["pass", "warning", "fail", "not_run"] = "not_run"
         balance_observed = "未执行"
         balance_explanation = "Beta 不完整，不能给出完整身体平衡结论。"
+    elif not review_mode and metrics.get("movement_validation_status") == "passed":
+        balance_status = "pass"
+        balance_observed = f"内部验证 {int((metrics.get('movement_validation') or {}).get('evaluated_states') or 0)} 个静态状态"
+        balance_explanation = "候选的内部动作路径已通过完整静态人体工学门禁；动作细节不对外返回。"
     elif not review_mode:
         balance_status = "not_run"
-        balance_observed = "候选生成阶段"
-        balance_explanation = "候选生成只验证基本可攀性，完整身体平衡需要进入审核模式。"
+        balance_observed = "未执行"
+        balance_explanation = "没有完整动作验证结果。"
     elif "beta_balance" in violation_map:
         balance_status = "fail"
         balance_observed = "未通过"
@@ -338,7 +342,11 @@ def _rule_checks(
     )
 
     max_consecutive_hand_moves = metrics.get("max_consecutive_hand_moves")
-    if not review_mode or not hand_sequence_check_enabled or max_consecutive_hand_moves is None:
+    if not review_mode and metrics.get("movement_validation_status") == "passed":
+        hand_sequence_status = "pass"
+        hand_sequence_observed = "最多连续 2 次手部动作"
+        hand_sequence_explanation = "内部验证路径强制在连续两次手部动作后插入有效脚步。"
+    elif not review_mode or not hand_sequence_check_enabled or max_consecutive_hand_moves is None:
         hand_sequence_status: Literal["pass", "warning", "fail", "not_run"] = "not_run"
         hand_sequence_observed = "未执行"
         hand_sequence_explanation = "需要完整 Beta，并选择综合、脚点或动作顺序重点后才能检查。"
@@ -379,6 +387,60 @@ def _rule_checks(
             explanation="MoonBoard 等效难度来自固定版本模型，结果需结合可信度和校准状态理解。",
         )
     )
+    if not review_mode:
+        movement = metrics.get("movement_validation") or {}
+        movement_passed = metrics.get("movement_validation_status") == "passed"
+        body_profile = movement.get("body_profile") or {}
+        movement_status: Literal["pass", "warning", "fail", "not_run"] = "pass" if movement_passed else "not_run"
+        checks.extend(
+            [
+                AIExperimentCheck(
+                    id="ergonomic_crossing",
+                    label="手脚交叉",
+                    status=movement_status,
+                    observed="未检测到交叉手或交叉脚" if movement_passed else "未执行",
+                    threshold="左手不越过右手，左脚不越过右脚",
+                    explanation="每个内部动作状态都执行左右肢体顺序检查。",
+                ),
+                AIExperimentCheck(
+                    id="ergonomic_height",
+                    label="脚手高度与身体展开",
+                    status=movement_status,
+                    observed="脚点均低于较低手点，身体展开未超限" if movement_passed else "未执行",
+                    threshold="最高脚点低于较低手点，纵向展开不超过身高阈值",
+                    explanation="不启用高脚或动态动作例外。",
+                ),
+                AIExperimentCheck(
+                    id="ergonomic_reach",
+                    label="身高与臂展触达",
+                    status=movement_status,
+                    observed=(
+                        f"身高 {body_profile.get('height_cm', '-')} cm，臂展 {body_profile.get('span_cm', '-')} cm"
+                        if movement_passed
+                        else "未执行"
+                    ),
+                    threshold="手部≤臂展×0.8，脚部≤身高×0.45",
+                    explanation="每次移动前按当前身体重心执行静态触达检查。",
+                ),
+                AIExperimentCheck(
+                    id="ergonomic_support",
+                    label="稳定接触",
+                    status=movement_status,
+                    observed="每个状态保持两手和至少一脚接触" if movement_passed else "未执行",
+                    threshold="两手和至少一脚稳定接触",
+                    explanation="支撑不足的路径不能进入候选排名。",
+                ),
+                AIExperimentCheck(
+                    id="ergonomic_finish",
+                    label="静态完攀",
+                    status=movement_status,
+                    observed="已在 Y16–Y18 非脚点双手登顶" if movement_passed else "未执行",
+                    threshold="完整静态路径并完成双手登顶",
+                    explanation="未完攀路径不会作为回退候选。",
+                    related_hold_ids=top_ids,
+                ),
+            ]
+        )
     return checks
 
 
@@ -841,26 +903,6 @@ def _compose_strategy_holds(board_holds: List[Hold], target_grade: str, strategy
     return route_holds
 
 
-def _beta_from_holds(holds: Sequence[Hold]) -> List[BetaStep]:
-    starts = [hold for hold in holds if hold.is_start]
-    hand_cycle = [Limb.LH, Limb.RH]
-    foot_cycle = [Limb.LF, Limb.RF]
-    steps: List[BetaStep] = []
-    for index, hold in enumerate([hold for hold in starts if hold.hold_type != HoldType.FOOT]):
-        steps.append(BetaStep(step=0, limb=hand_cycle[index % 2], hold_id=hold.id, intent="Start"))
-    for index, hold in enumerate([hold for hold in starts if hold.hold_type == HoldType.FOOT]):
-        steps.append(BetaStep(step=0, limb=foot_cycle[index % 2], hold_id=hold.id, intent="Start foot"))
-
-    move_index = 1
-    middle = [hold for hold in holds if hold not in starts]
-    middle.sort(key=lambda hold: (hold.y, _x_index(hold)))
-    for hold in middle:
-        is_top = hold.y >= 16 and hold.hold_type != HoldType.FOOT
-        steps.append(BetaStep(step=move_index, limb=hand_cycle[move_index % 2], hold_id=hold.id, intent="Top" if is_top else "Move", is_top=is_top))
-        move_index += 1
-    return steps
-
-
 def _route_with_board_metadata(route: FinalRoute, request: AIExperimentRequest) -> FinalRoute:
     board = request.board
     return route.model_copy(
@@ -960,9 +1002,12 @@ def _candidate_record(
         "calibration_status": metrics.get("calibration_status"),
         "risk_score": metrics.get("risk_score"),
         "structural_risk_score": metrics.get("structural_risk_score", metrics.get("risk_score")),
-        "risk_scope": "structure_only",
-        "risk_assessment_status": "partial",
-        "movement_validation_status": "not_run",
+        "risk_scope": "structure_and_action",
+        "risk_assessment_status": "complete",
+        "movement_validation_status": "passed",
+        "movement_validation": metrics.get("movement_validation", {}),
+        "passed_movement_rules": metrics.get("movement_validation", {}).get("passed_rules", []),
+        "body_profile": metrics.get("movement_validation", {}).get("body_profile", {}),
         "hold_count": metrics.get("hold_count"),
         "reuse_rate": metrics.get("reuse_rate"),
         "reuse_tier": reuse_tier,
@@ -981,7 +1026,7 @@ def _candidate_record(
             f"结构质量 {metrics.get('quality_score')} / 100。",
             f"预测 {metrics.get('predicted_grade')}，与目标 {target_grade} 相差 {abs(int(metrics.get('grade_delta') or 0))} 级。",
             f"复用原岩点 {reuse_rate * 100:.0f}%，属于“{reuse_tier_label}”。",
-            "动作草案尚未执行完整身体平衡检查，不能据此判断最终安全性或流畅性。",
+            "内部验证路径已通过静态人体工学门禁；动作细节不对外展示。",
         ],
         "change_evidence": _candidate_change_evidence(source_holds, route.placed_holds, label),
         "before_after": {
@@ -993,7 +1038,7 @@ def _candidate_record(
             f"结构质量 {metrics.get('quality_score')}，"
             f"与目标难度偏差 {abs(int(metrics.get('grade_delta') or 0))} 级，"
             f"结构风险 {metrics.get('risk_score')}，"
-            f"复用率 {reuse_rate * 100:.0f}%。动作风险尚未评估。"
+            f"复用率 {reuse_rate * 100:.0f}%，且完整动作路径已通过静态人体工学门禁。"
         ),
     }
 
@@ -1026,41 +1071,105 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
     if not request.board.ai_eligible:
         detail = "；".join(request.board.readiness_issues) or "AI 实验仅支持通过完整性检查的 11×18 岩板"
         raise ValueError(f"当前岩板不能进入 AI 实验：{detail}")
+
     target_grade = request.target_difficulty or request.board.difficulty or DEFAULT_FONT_GRADE
     reference = _standard_reference(target_grade)
     board_holds = _infer_start_flags(request.board.placed_holds)
     source_ids = _hold_ids(request.board.placed_holds)
     solver = AStarSolver(request.climber_height_cm, request.climber_span_cm)
     validator = PhysicsValidator()
-    raw_candidates: List[Tuple[str, str, List[Hold], List[BetaStep]]] = []
+    raw_candidates: List[Tuple[str, str, List[Hold], List[BetaStep], Dict[str, Any]]] = []
     candidate_trace: List[AIExperimentCandidateTrace] = []
 
-    astar_candidate, report = solver.solve(board_holds, _board_budget(board_holds))
-    if astar_candidate:
-        raw_candidates.append(("best_quality", "a_star", astar_candidate.placed_holds, astar_candidate.beta_sequence))
-    else:
-        candidate_trace.append(
-            AIExperimentCandidateTrace(
-                strategy="best_quality",
-                strategy_label=STRATEGY_LABELS["best_quality"],
-                source="a_star",
-                status="failed_validation",
-                reason_code="solver_no_candidate",
-                reason=_plain_chinese_text(report.get("reason")) or "动作顺序搜索没有找到可用候选。",
+    def failure_code(report: Dict[str, Any]) -> str:
+        text = f"{report.get('rule_violation') or ''}{report.get('reason') or ''}"
+        mappings = (
+            ("交叉手", "crossed_hands"),
+            ("交叉脚", "crossed_feet"),
+            ("脚不能等于或高于手", "foot_not_below_hands"),
+            ("触达", "reach_exceeded"),
+            ("伸展", "body_extension_exceeded"),
+            ("高踩", "contralateral_high_step"),
+            ("连续手部", "too_many_hand_moves"),
+            ("支撑", "unstable_support"),
+            ("完攀", "no_static_top_path"),
+            ("终点", "no_valid_top"),
+        )
+        return next((code for marker, code in mappings if marker in text), "solver_no_static_solution")
+
+    def register_solver_result(
+        label: str,
+        source: str,
+        candidate: Any,
+        report: Dict[str, Any],
+    ) -> None:
+        if candidate is None:
+            candidate_trace.append(
+                AIExperimentCandidateTrace(
+                    strategy=label,
+                    strategy_label=STRATEGY_LABELS.get(label, label),
+                    source=source,
+                    status="failed_validation",
+                    reason_code=failure_code(report),
+                    reason=_plain_chinese_text(report.get("reason")) or "没有找到通过静态人体工学门禁的完整完攀路径。",
+                    metrics={"max_y": report.get("max_y"), "rule_violation": report.get("rule_violation")},
+                )
+            )
+            return
+        passed, movement_report = solver.validate_static_beta(candidate.beta_sequence, candidate.placed_holds)
+        if not passed:
+            candidate_trace.append(
+                AIExperimentCandidateTrace(
+                    strategy=label,
+                    strategy_label=STRATEGY_LABELS.get(label, label),
+                    source=source,
+                    status="failed_validation",
+                    reason_code=str(movement_report.get("reason_code") or "static_kinematics_failed"),
+                    reason=str(movement_report.get("reason") or "内部动作路径未通过静态人体工学门禁。"),
+                    signature=_route_signature(candidate.placed_holds),
+                )
+            )
+            return
+        raw_candidates.append(
+            (
+                label,
+                source,
+                candidate.placed_holds,
+                candidate.beta_sequence,
+                movement_report,
             )
         )
 
-    for label in ("best_quality", "target_grade", "different_style"):
-        strategy_holds = _compose_strategy_holds([hold.model_copy() for hold in board_holds], target_grade, label)  # type: ignore[arg-type]
-        if strategy_holds:
-            raw_candidates.append((label, "local_strategy", strategy_holds, _beta_from_holds(strategy_holds)))
+    astar_candidate, astar_report = solver.solve(board_holds, _board_budget(board_holds))
+    register_solver_result("best_quality", "a_star", astar_candidate, astar_report)
 
-    selected: Dict[str, Tuple[FinalRoute, Dict[str, Any], str]] = {}
-    # A recombination must differ from the source layout as well as from the
-    # other candidates. Returning the source board under a new name is not a
-    # valid candidate.
+    for label in ("best_quality", "target_grade", "different_style"):
+        strategy_holds = _compose_strategy_holds(
+            [hold.model_copy() for hold in board_holds],
+            target_grade,
+            label,
+        )  # type: ignore[arg-type]
+        if not strategy_holds:
+            candidate_trace.append(
+                AIExperimentCandidateTrace(
+                    strategy=label,
+                    strategy_label=STRATEGY_LABELS[label],
+                    source="local_strategy",
+                    status="failed_validation",
+                    reason_code="strategy_no_layout",
+                    reason="该本地策略没有形成可进入动作搜索的岩点布局。",
+                )
+            )
+            continue
+        strategy_candidate, strategy_report = solver.solve(
+            strategy_holds,
+            _board_budget(strategy_holds),
+        )
+        register_solver_result(label, "local_strategy", strategy_candidate, strategy_report)
+
+    validated: List[Tuple[str, FinalRoute, Dict[str, Any], str]] = []
     seen_signatures: set[str] = {_route_signature(request.board.placed_holds)}
-    for label, source, holds, beta in raw_candidates:
+    for label, source, holds, beta, movement_report in raw_candidates:
         signature = _route_signature(holds)
         if signature in seen_signatures:
             candidate_trace.append(
@@ -1076,15 +1185,18 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
             )
             continue
         seen_signatures.add(signature)
+
         metrics = _board_metrics(holds, target_grade)
-        metrics["movement_validation_status"] = "not_run"
-        metrics["risk_scope"] = "structure_only"
-        metrics["risk_assessment_status"] = "partial"
         ok, baseline_message = validator.validate_baseline(holds, target_grade=target_grade)
         metrics["valid_for_climb"] = bool(metrics.get("valid_for_climb")) and ok
         metrics["baseline_message"] = baseline_message
         metrics["reuse_rate"] = round(len(_hold_ids(holds) & source_ids) / len(source_ids), 3) if source_ids else 1.0
         metrics["standard_reference"] = reference
+        metrics["movement_validation_status"] = "passed"
+        metrics["movement_validation"] = movement_report
+        metrics["max_consecutive_hand_moves"] = 2
+        metrics["risk_scope"] = "structure_and_action"
+        metrics["risk_assessment_status"] = "complete"
         if not metrics["valid_for_climb"]:
             reasons = list(metrics.get("review_reasons") or [])
             if not ok and baseline_message:
@@ -1095,8 +1207,8 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
                     strategy_label=STRATEGY_LABELS.get(label, label),
                     source=source,
                     status="failed_validation",
-                    reason_code="rule_validation_failed",
-                    reason="；".join(dict.fromkeys(reasons)) or "候选未通过基本可攀性检查。",
+                    reason_code="structure_validation_failed",
+                    reason="；".join(dict.fromkeys(reasons)) or "候选未通过结构完整性检查。",
                     signature=signature,
                     metrics={
                         "quality_score": metrics.get("quality_score"),
@@ -1108,18 +1220,24 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
                 )
             )
             continue
+
         route_name = {
             "best_quality": "AI 实验室重组：质量优先",
             "target_grade": "AI 实验室重组：难度匹配",
             "different_style": "AI 实验室重组：风格变化",
         }.get(label, "AI 实验室重组路线")
         commentary = (
-            f"本地算法从当前岩板中生成结构草案，结构质量 {metrics['quality_score']}，"
-            f"MoonBoard 等效难度 {metrics.get('predicted_grade') or '-'}，复用率 {metrics['reuse_rate'] * 100:.1f}%。"
-            "动作顺序用于讨论，仍需定线者复核和试爬。"
+            f"结构质量 {metrics['quality_score']}，等效难度 {metrics.get('predicted_grade') or '-'}，"
+            f"复用率 {metrics['reuse_rate'] * 100:.1f}%。内部动作路径已通过静态人体工学门禁，"
+            "仍建议由定线者试爬复核。"
         )
         route = _route_with_board_metadata(
-            FinalRoute(route_name=route_name, setter_commentary=commentary, placed_holds=holds, beta_sequence=beta),
+            FinalRoute(
+                route_name=route_name,
+                setter_commentary=commentary,
+                placed_holds=holds,
+                beta_sequence=beta,
+            ),
             request,
         ).model_copy(
             update={
@@ -1131,29 +1249,15 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
                 "calibration_status": metrics.get("calibration_status") or "calibrating",
             }
         )
-        score = (
-            float(metrics.get("quality_score") or 0.0),
-            -abs(int(metrics.get("grade_delta") or 0)),
-            -float(metrics.get("risk_score") or 0.0),
-            float(metrics.get("reuse_rate") or 0.0),
-        )
-        current = selected.get(label)
-        current_score = (
-            float(current[1].get("quality_score") or 0.0),
-            -abs(int(current[1].get("grade_delta") or 0)),
-            -float(current[1].get("risk_score") or 0.0),
-            float(current[1].get("reuse_rate") or 0.0),
-        ) if current else None
-        if not current or score > current_score:
-            selected[label] = (route, metrics, source)
+        validated.append((label, route, metrics, source))
         candidate_trace.append(
             AIExperimentCandidateTrace(
                 strategy=label,
                 strategy_label=STRATEGY_LABELS.get(label, label),
                 source=source,
                 status="rejected",
-                reason_code="not_in_final_selection",
-                reason="候选已通过检查，最终根据所选实验目标和候选排名决定是否展示。",
+                reason_code="lower_ranked_valid_candidate",
+                reason="候选通过全部硬门禁，等待按实验目标、结构质量、难度偏差、风险和复用率排序。",
                 signature=signature,
                 metrics={
                     "quality_score": metrics.get("quality_score"),
@@ -1161,22 +1265,43 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
                     "grade_delta": metrics.get("grade_delta"),
                     "risk_score": metrics.get("risk_score"),
                     "reuse_rate": metrics.get("reuse_rate"),
+                    "movement_validation_status": "passed",
                 },
             )
         )
 
-    if not selected:
+    if not validated:
         board_metrics = _board_metrics(request.board.placed_holds, target_grade)
-        solver_reason = _plain_chinese_text(report.get("reason")) or "没有找到同时满足岩点数量、起终点和动作连续性的候选"
+        board_metrics["movement_validation_status"] = "not_run"
+        failure_reasons = [trace.reason for trace in candidate_trace if trace.status == "failed_validation"]
+        summary = (
+            "；".join(dict.fromkeys(failure_reasons[:3]))
+            or "没有找到通过全部静态人体工学门禁的完整完攀路径"
+        ).rstrip("。；")
         return AIExperimentResponse(
             mode="compose_route",
+            recommendation={
+                "status": "keep_original",
+                "title": "建议保留原线路",
+                "summary": f"本次没有找到可安全推荐的新岩板。{summary}。",
+            },
             selected_routes=[],
-            failure_suggestion=f"当前岩板暂时无法生成可用候选：{solver_reason}。",
+            failure_suggestion="本次不建议自动优化，请保留原线路并由定线者人工调整。",
             board=request.board,
-            analysis_summary="当前岩板结构不足，AI 实验室未生成可载入候选。",
+            analysis_summary="所有候选均未通过完整静态动作门禁，因此没有生成回退岩板。",
             metrics=board_metrics,
-            applied_constraints=["基本完整性检查", "目标难度匹配"],
-            algorithm_notes=[*board_metrics.get("algorithm_notes", []), REFERENCE_NOTE],
+            applied_constraints=[
+                "11×18、40° 适用范围",
+                "结构完整性检查",
+                "静态人体工学硬门禁",
+                "完整双手登顶",
+            ],
+            algorithm_notes=[
+                *board_metrics.get("algorithm_notes", []),
+                "无合格动作路径时不生成新岩板",
+                "内部 Beta 不通过公共接口返回",
+                REFERENCE_NOTE,
+            ],
             explanation=_explanation(
                 request,
                 target_grade,
@@ -1192,11 +1317,20 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
         "grade_match": "target_grade",
         "style_variation": "different_style",
     }[request.generation_goal]
-    order = [preferred_label, *[label for label in ("best_quality", "target_grade", "different_style") if label != preferred_label]]
-    # The client renders the original board beside at most two distinct,
-    # validated alternatives. Never pad this list by copying a candidate.
-    final_items = [(label, *selected[label]) for label in order if label in selected][:2]
-    selected_routes = [item[1] for item in final_items]
+    validated.sort(
+        key=lambda item: (
+            item[0] == preferred_label,
+            float(item[2].get("quality_score") or 0.0),
+            -abs(int(item[2].get("grade_delta") or 0)),
+            -float(item[2].get("risk_score") or 0.0),
+            float(item[2].get("reuse_rate") or 0.0),
+            item[0],
+            item[3],
+        ),
+        reverse=True,
+    )
+    label, selected_internal_route, selected_metrics, selected_source = validated[0]
+    final_items = [(label, selected_internal_route, selected_metrics, selected_source)]
     source_metrics = _board_metrics(request.board.placed_holds, target_grade)
     preferred_failures = [
         trace.reason
@@ -1204,59 +1338,48 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
         if trace.strategy == preferred_label and trace.status in {"duplicate", "failed_validation"}
     ]
     fallback_reason = "；".join(dict.fromkeys(preferred_failures))
-    candidate_routes = []
-    selection_modes: Dict[str, Literal["requested_goal", "fallback", "alternative"]] = {}
-    for rank, (label, route, item_metrics, source) in enumerate(final_items, start=1):
-        if rank > 1:
-            selection_mode: Literal["requested_goal", "fallback", "alternative"] = "alternative"
-        elif label == preferred_label:
-            selection_mode = "requested_goal"
-        else:
-            selection_mode = "fallback"
-        signature = _route_signature(route.placed_holds)
-        selection_modes[signature] = selection_mode
-        candidate_routes.append(
-            _candidate_record(
-                label,
-                route,
-                item_metrics,
-                source,
-                target_grade,
-                source_holds=request.board.placed_holds,
-                source_metrics=source_metrics,
-                selection_mode=selection_mode,
-                fallback_reason=fallback_reason if selection_mode == "fallback" else "",
-            )
+    selection_mode: Literal["requested_goal", "fallback", "alternative"] = (
+        "requested_goal" if label == preferred_label else "fallback"
+    )
+    selected_signature = _route_signature(selected_internal_route.placed_holds)
+    candidate_routes = [
+        _candidate_record(
+            label,
+            selected_internal_route,
+            selected_metrics,
+            selected_source,
+            target_grade,
+            source_holds=request.board.placed_holds,
+            source_metrics=source_metrics,
+            selection_mode=selection_mode,
+            fallback_reason=fallback_reason if selection_mode == "fallback" else "",
         )
-    selected_signatures = {
-        _route_signature(route.placed_holds): rank
-        for rank, route in enumerate(selected_routes, start=1)
-    }
+    ]
     for trace in candidate_trace:
-        if trace.signature in selected_signatures:
+        if trace.signature == selected_signature:
             trace.status = "selected"
-            trace.selected_rank = selected_signatures[trace.signature]
-            selection_mode = selection_modes.get(trace.signature, "alternative")
+            trace.selected_rank = 1
             if selection_mode == "requested_goal":
                 trace.reason_code = "selected_for_requested_goal"
-                trace.reason = f"通过结构检查，并与“{GENERATION_GOAL_LABELS[request.generation_goal]}”目标一致。"
-            elif selection_mode == "fallback":
-                trace.reason_code = "selected_as_fallback"
                 trace.reason = (
-                    f"请求的“{GENERATION_GOAL_LABELS[request.generation_goal]}”策略没有可展示候选"
-                    f"（{fallback_reason or '未生成不同且通过检查的布局'}），因此按固定顺序回退到"
-                    f"“{trace.strategy_label}”草案。"
+                    f"通过全部静态人体工学与结构检查，并在“{GENERATION_GOAL_LABELS[request.generation_goal]}”"
+                    "目标下按质量、难度偏差、风险和复用率排名第一。"
                 )
             else:
-                trace.reason_code = "selected_as_alternative"
-                trace.reason = "作为第二个不同且通过结构检查的备选草案展示。"
+                trace.reason_code = "selected_as_fallback"
+                trace.reason = (
+                    f"请求策略没有合格候选（{fallback_reason or '未生成不同且通过检查的布局'}），"
+                    f"因此选用通过全部硬门禁且综合排名最高的“{trace.strategy_label}”。"
+                )
+
     metrics = {
-        "candidate_count": len(candidate_routes),
+        "candidate_count": 1,
         "generation_goal": request.generation_goal,
         "target_grade": target_grade,
         "standard_reference": reference,
-        "best_quality_score": max(float(item[2].get("quality_score") or 0.0) for item in final_items),
-        "closest_grade_delta": min(abs(int(item[2].get("grade_delta") or 0)) for item in final_items),
+        "best_quality_score": float(selected_metrics.get("quality_score") or 0.0),
+        "closest_grade_delta": abs(int(selected_metrics.get("grade_delta") or 0)),
+        "movement_validation_status": "passed",
     }
 
     llm_enriched = False
@@ -1282,31 +1405,45 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
     if llm_result:
         route_names = llm_result.get("route_names") if isinstance(llm_result.get("route_names"), dict) else {}
         summary = _plain_chinese_text(llm_result.get("summary"))
-        for record, route in zip(candidate_routes, selected_routes):
-            label = str(record["label"])
-            route_name = _plain_chinese_text(route_names.get(label), allow_technical_tokens=False)
-            if route_name:
-                route.route_name = route_name
-                llm_enriched = True
-            if summary:
-                route.setter_commentary = f"{route.setter_commentary} {summary}"
-                llm_enriched = True
+        route_name = _plain_chinese_text(route_names.get(label), allow_technical_tokens=False)
+        if route_name:
+            selected_internal_route.route_name = route_name
+            llm_enriched = True
+        if summary:
+            selected_internal_route.setter_commentary = f"{selected_internal_route.setter_commentary} {summary}"
+            llm_enriched = True
+
+    public_route = selected_internal_route.model_copy(update={"beta_sequence": []})
+    recommendation_summary = (
+        f"该岩板通过完整静态人体工学门禁，结构质量 {selected_metrics.get('quality_score')}，"
+        f"等效难度 {selected_metrics.get('predicted_grade') or '-'}，"
+        f"复用原岩点 {float(selected_metrics.get('reuse_rate') or 0) * 100:.0f}%。"
+    )
 
     return AIExperimentResponse(
         mode="compose_route",
-        selected_routes=selected_routes,
+        recommendation={
+            "status": "optimized",
+            "title": "建议采用新岩板",
+            "summary": recommendation_summary,
+        },
+        selected_routes=[public_route],
         board=request.board,
-        analysis_summary=(
-            f"本地算法生成 {len(selected_routes)} 条结构候选草案，最接近目标难度偏差 {metrics['closest_grade_delta']} 级。"
-            + ("请求目标没有形成可展示候选，首个结果来自固定回退策略。" if candidate_routes[0]["selection_mode"] == "fallback" else "")
-        ),
+        analysis_summary="系统仅返回综合排名第一且通过完整静态动作门禁的新岩板。",
         metrics=metrics,
         candidate_routes=candidate_routes,
-        applied_constraints=["11×18 规格", "基本完整性检查", "动作顺序搜索", f"生成目标：{GENERATION_GOAL_LABELS[request.generation_goal]}"],
+        applied_constraints=[
+            "11×18、40° 适用范围",
+            "结构完整性检查",
+            "静态人体工学硬门禁",
+            "完整双手登顶",
+            f"生成目标：{GENERATION_GOAL_LABELS[request.generation_goal]}",
+        ],
         algorithm_notes=[
             "候选路线不会覆盖原岩板",
-            "结果是定线讨论草案，不替代真人复核与试爬",
-            "候选风险分只覆盖结构规则，未检查的动作风险不视为安全",
+            "内部动作路径通过硬门禁后才允许参与排名",
+            "公共接口不返回内部 Beta",
+            "结果仍需真人试爬复核",
             "AI 只润色中文名称和说明，不参与候选排序",
             REFERENCE_NOTE,
         ],
@@ -1314,9 +1451,9 @@ async def compose_route_from_board(request: AIExperimentRequest) -> AIExperiment
         explanation=_explanation(
             request,
             target_grade,
-            final_items[0][2],
-            selected_routes[0].placed_holds,
-            selected_routes[0].beta_sequence,
+            selected_metrics,
+            selected_internal_route.placed_holds,
+            selected_internal_route.beta_sequence,
             candidate_trace=candidate_trace,
             llm_enriched=llm_enriched,
         ),
@@ -1354,20 +1491,33 @@ def _suggestion(
     )
 
 
-def _candidate_route_for_fix(board: BoardAsset, target_grade: str, label: str = "target_grade") -> Optional[FinalRoute]:
+def _candidate_route_for_fix(
+    board: BoardAsset,
+    target_grade: str,
+    climber_height_cm: int,
+    climber_span_cm: int,
+    label: str = "target_grade",
+) -> Optional[FinalRoute]:
     holds = _compose_strategy_holds(_infer_start_flags([hold.model_copy() for hold in board.placed_holds]), target_grade, label)  # type: ignore[arg-type]
     if not holds:
         return None
+    solver = AStarSolver(climber_height_cm, climber_span_cm)
+    candidate, _ = solver.solve(holds, _board_budget(holds))
+    if candidate is None:
+        return None
+    passed, _ = solver.validate_static_beta(candidate.beta_sequence, candidate.placed_holds)
+    if not passed:
+        return None
     return FinalRoute(
         route_name="AI 实验室修复候选",
-        setter_commentary="根据当前岩板自动生成的结构修复草案，不会覆盖原岩板；动作顺序仍需定线者复核和试爬。",
+        setter_commentary="该修复岩板的内部动作路径已通过静态人体工学门禁；仍建议由定线者试爬复核。",
         source_type="ai-generated",
         visibility=board.visibility,
         tags=list(dict.fromkeys([*board.tags, "ai-lab-review"])),
         difficulty=target_grade,
         board_spec=board.board_spec,
-        placed_holds=holds,
-        beta_sequence=_beta_from_holds(holds),
+        placed_holds=candidate.placed_holds,
+        beta_sequence=[],
     )
 
 
@@ -1437,12 +1587,19 @@ def _deterministic_review(
     board: BoardAsset,
     target_grade: str,
     review_focus: Literal["overall", "footholds", "difficulty", "beta_sequence"] = "overall",
+    climber_height_cm: int = 175,
+    climber_span_cm: int = 175,
 ) -> tuple[List[RouteReviewViolation], List[RouteReviewSuggestion], str, Dict[str, Any]]:
     validator = PhysicsValidator()
     metrics = _board_metrics(board.placed_holds, target_grade)
     violations: List[RouteReviewViolation] = []
     suggestions: List[RouteReviewSuggestion] = []
-    candidate_fix = _candidate_route_for_fix(board, target_grade)
+    candidate_fix = _candidate_route_for_fix(
+        board,
+        target_grade,
+        climber_height_cm,
+        climber_span_cm,
+    )
     action_checks_enabled = review_focus in {"overall", "footholds", "beta_sequence"}
     hand_sequence_check_enabled = review_focus in {"overall", "beta_sequence"}
     difficulty_check_enabled = review_focus in {"overall", "difficulty"}
@@ -1686,6 +1843,8 @@ async def review_board_route(request: AIExperimentRequest) -> AIExperimentRespon
         request.board,
         target_grade,
         request.review_focus,
+        request.climber_height_cm,
+        request.climber_span_cm,
     )
     review_scope = metrics.get("review_scope", "layout_only")
     if risk_level == "low":
@@ -1722,8 +1881,31 @@ async def review_board_route(request: AIExperimentRequest) -> AIExperimentRespon
         summary = chinese_review_summary
 
     grouped_counts = Counter(suggestion.group for suggestion in suggestions)
+    repair_candidate = next(
+        (suggestion.candidate_route for suggestion in suggestions if suggestion.candidate_route),
+        None,
+    )
+    recommendation = (
+        {
+            "status": "optimized",
+            "title": "建议采用修复岩板",
+            "summary": "系统发现需要调整的项目，并生成了一块通过静态人体工学门禁的修复岩板。",
+        }
+        if repair_candidate
+        else {
+            "status": "keep_original",
+            "title": "暂不自动生成新岩板",
+            "summary": (
+                "当前检查建议保留为文字依据；没有形成通过完整静态动作门禁的修复岩板，"
+                "请由定线者按建议人工调整。"
+                if risk_level != "low"
+                else "当前已执行的检查没有发现需要自动修改的问题，建议保留原线路。"
+            ),
+        }
+    )
     return AIExperimentResponse(
         mode="review_route",
+        recommendation=recommendation,
         review_summary=summary,
         violations=violations,
         suggestions=suggestions,

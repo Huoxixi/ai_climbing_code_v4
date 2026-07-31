@@ -93,21 +93,25 @@ test('AI 实验室把风险、润色状态和解释证据显示为通俗中文',
   assert.doesNotMatch(appSource, /风险\{\{ routeGen\.result\.risk_level \}\}/)
 })
 
-test('AI 实验室明确辅助定位并展示量化建议证据', async () => {
+test('AI 实验室首屏收敛，量化证据默认折叠且不展示内部动作', async () => {
   const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
   const comparisonSource = await readFile(new URL('../src/components/BoardComparisonPanel.vue', import.meta.url), 'utf8')
 
   assert.match(appSource, /辅助定线，不替代试爬/)
+  assert.match(appSource, /查看分析依据/)
+  assert.match(appSource, /最佳新岩板/)
+  assert.match(appSource, /:show-beta="false"/)
+  assert.match(appSource, /:show-movement-count="false"/)
   assert.match(appSource, /本次观测/)
   assert.match(appSource, /判定阈值/)
   assert.match(appSource, /预计改善/)
-  assert.match(appSource, /Beta 步骤/)
+  assert.match(appSource, /原线路 Beta 步骤/)
   assert.match(appSource, /审核对象/)
   assert.match(comparisonSource, /重组依据/)
   assert.match(comparisonSource, /原线路/)
   assert.match(comparisonSource, /候选草案/)
-  assert.match(comparisonSource, /动作未评估/)
-  assert.match(comparisonSource, /不代表推荐 Beta/)
+  assert.match(comparisonSource, /v-if="showBeta"/)
+  assert.match(comparisonSource, /:show-beta-steps="showBeta"/)
 })
 
 test('总览不再展示固定客户推荐，标准线路库入口仍然保留', async () => {

@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from agent.experiments import _plain_chinese_text, compose_route_from_board, review_board_route
+from core.a_star_solver import AStarSolver
 from core.models import AIExperimentRequest, BoardAsset, BetaStep, BoardSpec, Hold, HoldType, Limb
 
 
@@ -49,13 +50,24 @@ class AILabExperimentsTest(unittest.TestCase):
         self.assertEqual(response.mode, "compose_route")
         self.assertFalse(response.llm_enriched)
         self.assertGreaterEqual(len(response.selected_routes), 1)
-        self.assertLessEqual(len(response.selected_routes), 2)
+        self.assertLessEqual(len(response.selected_routes), 1)
         self.assertEqual(len(response.selected_routes), len(response.candidate_routes))
+        self.assertEqual(response.recommendation.status, "optimized")
+        self.assertTrue(all(not route.beta_sequence for route in response.selected_routes))
         signatures = {"|".join(sorted(hold.id for hold in route.placed_holds)) for route in response.selected_routes}
         self.assertEqual(len(signatures), len(response.selected_routes))
         source_signature = "|".join(sorted(hold.id for hold in request.board.placed_holds))
         self.assertNotIn(source_signature, signatures)
         self.assertTrue(all(candidate["valid_for_climb"] for candidate in response.candidate_routes))
+        self.assertTrue(all(candidate["movement_validation_status"] == "passed" for candidate in response.candidate_routes))
+        self.assertTrue(all(candidate["risk_assessment_status"] == "complete" for candidate in response.candidate_routes))
+        ergonomic_checks = {
+            check.id: check.status
+            for check in response.explanation.checks
+            if check.id.startswith("ergonomic_")
+        }
+        self.assertTrue(ergonomic_checks)
+        self.assertTrue(all(status == "pass" for status in ergonomic_checks.values()))
         self.assertIn("standard_reference", response.metrics)
 
     def test_compose_explanation_is_deterministic_and_accounts_for_scores(self):
@@ -81,7 +93,7 @@ class AILabExperimentsTest(unittest.TestCase):
         self.assertNotIn("优质标准线路结构参考", first.applied_constraints)
         self.assertIn("仅用于结果对照", first.explanation.reference_note)
 
-    def test_compose_does_not_fabricate_a_second_candidate(self):
+    def test_compose_keeps_original_when_all_action_searches_fail(self):
         request = AIExperimentRequest(mode="compose_route", board=sample_board(), target_difficulty="6B+")
         single_layout = [hold for hold in sample_board().placed_holds if hold.id != "H16"]
         with (
@@ -91,10 +103,12 @@ class AILabExperimentsTest(unittest.TestCase):
         ):
             response = asyncio.run(compose_route_from_board(request))
 
-        self.assertEqual(len(response.selected_routes), 1)
-        self.assertEqual(len(response.selected_routes), len(response.candidate_routes))
+        self.assertEqual(response.selected_routes, [])
+        self.assertEqual(response.candidate_routes, [])
+        self.assertEqual(response.recommendation.status, "keep_original")
+        self.assertIn("保留原线路", response.recommendation.title)
 
-    def test_compose_explains_fallback_and_marks_action_risk_unchecked(self):
+    def test_all_local_strategies_run_action_search_and_not_run_never_selects(self):
         board = sample_board()
         changed_layout = [hold for hold in board.placed_holds if hold.id not in {"H16", "D14"}]
 
@@ -109,23 +123,19 @@ class AILabExperimentsTest(unittest.TestCase):
         )
         with (
             patch("agent.experiments.settings.api_key", ""),
-            patch("agent.experiments.AStarSolver.solve", return_value=(None, {"reason": "没有找到动作候选"})),
+            patch(
+                "agent.experiments.AStarSolver.solve",
+                return_value=(None, {"reason": "没有找到动作候选", "rule_violation": "无静态完攀路径"}),
+            ) as solve_mock,
             patch("agent.experiments._compose_strategy_holds", side_effect=strategy_result),
         ):
             response = asyncio.run(compose_route_from_board(request))
 
-        candidate = response.candidate_routes[0]
-        self.assertEqual(candidate["selection_mode"], "fallback")
-        self.assertEqual(candidate["movement_validation_status"], "not_run")
-        self.assertEqual(candidate["risk_scope"], "structure_only")
-        self.assertEqual(candidate["risk_assessment_status"], "partial")
-        self.assertIn("回退", candidate["why_selected"])
-        self.assertIn("动作风险尚未评估", candidate["why_selected"])
-        self.assertTrue(candidate["change_evidence"]["removed_hold_ids"])
-        self.assertEqual(
-            next(item for item in response.explanation.candidate_trace if item.status == "selected").reason_code,
-            "selected_as_fallback",
-        )
+        self.assertEqual(solve_mock.call_count, 4)
+        self.assertEqual(response.selected_routes, [])
+        self.assertEqual(response.recommendation.status, "keep_original")
+        self.assertFalse(any(item.status == "selected" for item in response.explanation.candidate_trace))
+        self.assertTrue(all(item.reason_code != "not_run" for item in response.explanation.candidate_trace))
 
     def test_compose_rejects_english_llm_copy_and_keeps_chinese_fallback(self):
         request = AIExperimentRequest(
@@ -177,8 +187,136 @@ class AILabExperimentsTest(unittest.TestCase):
             response = asyncio.run(compose_route_from_board(request))
 
         target_candidates = [candidate for candidate in response.candidate_routes if candidate["label"] == "target_grade"]
-        self.assertTrue(target_candidates)
-        self.assertLessEqual(abs(target_candidates[0]["grade_delta"]), 4)
+        if target_candidates:
+            self.assertLessEqual(abs(target_candidates[0]["grade_delta"]), 4)
+
+    def test_user_reported_height_sorted_beta_is_rejected_and_never_returned(self):
+        holds = [
+            Hold(id="G3", x="G", y=3, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="J5", x="J", y=5, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="H1", x="H", y=1, hold_type=HoldType.FOOT, is_start=True),
+            Hold(id="G2", x="G", y=2, hold_type=HoldType.FOOT, is_start=True),
+            Hold(id="C9", x="C", y=9, hold_type=HoldType.CRIMP),
+            Hold(id="I12", x="I", y=12, hold_type=HoldType.CRIMP),
+            Hold(id="E15", x="E", y=15, hold_type=HoldType.CRIMP),
+            Hold(id="D17", x="D", y=17, hold_type=HoldType.JUG),
+        ]
+        bad_beta = [
+            BetaStep(step=0, limb=Limb.LH, hold_id="G3"),
+            BetaStep(step=0, limb=Limb.RH, hold_id="J5"),
+            BetaStep(step=0, limb=Limb.LF, hold_id="H1"),
+            BetaStep(step=0, limb=Limb.RF, hold_id="G2"),
+            BetaStep(step=1, limb=Limb.RH, hold_id="C9"),
+            BetaStep(step=2, limb=Limb.LH, hold_id="I12"),
+            BetaStep(step=3, limb=Limb.RH, hold_id="E15"),
+            BetaStep(step=4, limb=Limb.LH, hold_id="D17", is_top=True),
+        ]
+        passed, report = AStarSolver(175, 175).validate_static_beta(bad_beta, holds)
+        self.assertFalse(passed)
+        self.assertIn(
+            report["reason_code"],
+            {"crossed_feet", "crossed_hands", "reach_exceeded", "too_many_hand_moves", "no_static_top_path"},
+        )
+
+    def test_static_gate_reports_stable_reason_codes(self):
+        solver = AStarSolver(175, 175)
+
+        def audit(start_holds, moves=()):
+            return solver.validate_static_beta(
+                [
+                    BetaStep(step=0, limb=limb, hold_id=hold_id)
+                    for limb, hold_id in (
+                        (Limb.LH, start_holds[0].id),
+                        (Limb.RH, start_holds[1].id),
+                        (Limb.LF, start_holds[2].id),
+                        (Limb.RF, start_holds[3].id),
+                    )
+                ] + list(moves),
+                start_holds + [
+                    Hold(id="D6", x="D", y=6, hold_type=HoldType.JUG),
+                    Hold(id="F7", x="F", y=7, hold_type=HoldType.JUG),
+                    Hold(id="E8", x="E", y=8, hold_type=HoldType.JUG),
+                    Hold(id="C6", x="C", y=6, hold_type=HoldType.FOOT),
+                ],
+            )
+
+        normal = [
+            Hold(id="C5", x="C", y=5, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="G5", x="G", y=5, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="D2", x="D", y=2, hold_type=HoldType.FOOT, is_start=True),
+            Hold(id="F2", x="F", y=2, hold_type=HoldType.FOOT, is_start=True),
+        ]
+        crossed_hands = [normal[1], normal[0], normal[2], normal[3]]
+        crossed_feet = [normal[0], normal[1], normal[3], normal[2]]
+        high_feet = [
+            normal[0],
+            normal[1],
+            Hold(id="D5", x="D", y=5, hold_type=HoldType.FOOT, is_start=True),
+            Hold(id="F4", x="F", y=4, hold_type=HoldType.FOOT, is_start=True),
+        ]
+        self.assertEqual(audit(crossed_hands)[1]["reason_code"], "crossed_hands")
+        self.assertEqual(audit(crossed_feet)[1]["reason_code"], "crossed_feet")
+        self.assertEqual(audit(high_feet)[1]["reason_code"], "foot_not_below_hands")
+        self.assertEqual(
+            audit(normal, [BetaStep(step=1, limb=Limb.LF, hold_id="C6")])[1]["reason_code"],
+            "high_step_exceeded",
+        )
+        self.assertEqual(
+            audit(
+                normal,
+                [
+                    BetaStep(step=1, limb=Limb.LH, hold_id="D6"),
+                    BetaStep(step=2, limb=Limb.RH, hold_id="F7"),
+                    BetaStep(step=3, limb=Limb.LH, hold_id="E8"),
+                ],
+            )[1]["reason_code"],
+            "too_many_hand_moves",
+        )
+        self.assertEqual(audit(normal)[1]["reason_code"], "no_static_top_path")
+
+    def test_static_gate_uses_body_dimensions_and_requires_stable_support(self):
+        normal = [
+            Hold(id="C5", x="C", y=5, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="G5", x="G", y=5, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="D2", x="D", y=2, hold_type=HoldType.FOOT, is_start=True),
+            Hold(id="F2", x="F", y=2, hold_type=HoldType.FOOT, is_start=True),
+        ]
+        limbs = {
+            Limb.LH: normal[0],
+            Limb.RH: normal[1],
+            Limb.LF: normal[2],
+            Limb.RF: normal[3],
+        }
+        far_hand = Hold(id="A10", x="A", y=10, hold_type=HoldType.JUG)
+        self.assertFalse(AStarSolver(175, 150)._within_reach(limbs, Limb.LH, far_hand))
+        self.assertTrue(AStarSolver(175, 220)._within_reach(limbs, Limb.LH, far_hand))
+
+        extended = [
+            Hold(id="C13", x="C", y=13, hold_type=HoldType.JUG, is_start=True),
+            Hold(id="G13", x="G", y=13, hold_type=HoldType.JUG, is_start=True),
+            normal[2],
+            normal[3],
+        ]
+        extended_beta = [
+            BetaStep(step=0, limb=Limb.LH, hold_id="C13"),
+            BetaStep(step=0, limb=Limb.RH, hold_id="G13"),
+            BetaStep(step=0, limb=Limb.LF, hold_id="D2"),
+            BetaStep(step=0, limb=Limb.RF, hold_id="F2"),
+        ]
+        self.assertEqual(
+            AStarSolver(140, 175).validate_static_beta(extended_beta, extended)[1]["reason_code"],
+            "body_extension_exceeded",
+        )
+        self.assertEqual(
+            AStarSolver(175, 175).validate_static_beta(
+                [
+                    BetaStep(step=0, limb=Limb.LH, hold_id="C5"),
+                    BetaStep(step=0, limb=Limb.RH, hold_id="G5"),
+                ],
+                normal,
+            )[1]["reason_code"],
+            "unstable_support",
+        )
 
     def test_review_groups_hard_failures_as_must_fix(self):
         bad_board = BoardAsset(
