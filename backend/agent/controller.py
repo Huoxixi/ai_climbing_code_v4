@@ -1,7 +1,7 @@
 """
 Legacy recipe-based generation path.
 
-The redesigned AI Lab uses agent.experiments for board-based compose/review modes.
+The current AI experiment workflow uses agent.experiments for board-based compose/review modes.
 This module remains as a compatibility adapter for old RouteRequest payloads.
 """
 

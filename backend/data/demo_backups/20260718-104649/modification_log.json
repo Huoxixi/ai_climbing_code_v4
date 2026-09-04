@@ -1,0 +1,258 @@
+[
+  {
+    "timestamp": "2026-04-28T15:21:20+08:00",
+    "module": "backend/core/a_star_solver.py",
+    "changes": [
+      "新增手部横向开距软惩罚，降低难发力的大横拉姿态",
+      "新增脚部横向开距软惩罚，抑制双脚过度横向展开",
+      "新增双脚上下高差软惩罚与硬红线，减少脚步垂直跨度过大",
+      "新增低位脚点优先决策：存在更低且稳定的候选脚点时，不直接踩更高脚点",
+      "新增补低脚上提奖励，鼓励先提升稳定性再继续向上"
+    ],
+    "reason": [
+      "手脚横向距离过大导致难以发力，需要扣分并抑制",
+      "脚上下跨度过大会降低稳定性，需要限制",
+      "若可踩低位确定脚点，应优先踩低位点提升高度与稳定性"
+    ]
+  },
+  {
+    "timestamp": "2026-04-28T15:40:50+08:00",
+    "module": "backend/core/a_star_solver.py",
+    "changes": [
+      "将新增岩点的配额判定从软惩罚改为硬约束：当某类型剩余配额<=0时直接跳过该子节点",
+      "新增完攀返回前的最终配额兜底校验：若最终路线任一类型超额则丢弃该完攀状态并继续搜索",
+      "抽取 get_quota_violations 统一统计逻辑，避免成功/部分成功分支口径不一致"
+    ],
+    "reason": [
+      "此前实现允许“超额但加罚分”的路径继续扩展，导致最终返回路线可能超出配方数量",
+      "业务要求为“岩点数绝对不能超额”，因此配额必须是不可绕过的硬性约束",
+      "在返回前增加兜底可防止边界路径漏检，保证输出路线严格合法"
+    ]
+  },
+  {
+    "timestamp": "2026-04-28T15:59:40+08:00",
+    "module": "backend/agent/controller.py, backend/core/a_star_solver.py",
+    "changes": [
+      "新增候选路线签名去重逻辑，避免同一条候选被重复包装成两条最终路线",
+      "新增候选路线差异化筛选（Jaccard 重叠率阈值），优先返回动作结构差异明显的第二条路线",
+      "当不存在足够差异的第二候选时，降级为仅返回1条，避免重复输出",
+      "新增手脚过近软惩罚，抑制手脚抱团导致的压缩姿态",
+      "新增同侧手脚堆叠惩罚（LH-LF / RH-RF），减少局部拥挤影响蹬伸",
+      "新增双脚过窄站位惩罚，降低不利于发力的窄站姿"
+    ],
+    "reason": [
+      "用户反馈最终返回的两块岩板完全一致，根因是结果选择阶段未做去重与差异性约束",
+      "用户反馈手脚过近不利于发力，需要在代价函数中显式惩罚压缩位形",
+      "通过差异化输出与姿态惩罚，可同时提升路线多样性与可攀性"
+    ]
+  },
+  {
+    "timestamp": "2026-04-28T17:50:00+08:00",
+    "module": "backend/core/a_star_solver.py, backend/core/validator.py, backend/agent/controller.py",
+    "changes": [
+      "新增脚步对侧高踩强拦截（含同列/近列上方高踩）以阻断身体过横动作",
+      "升级低位脚点优先策略：引入身体中线与左右脚自然站位偏好，优先中线稳定过渡脚点",
+      "新增身体扭转惩罚（手脚中轴偏移、脚点近列高差）并并入稳定性代价函数",
+      "新增后验 Beta 平衡校验 validate_beta_balance，并在候选入池前执行过滤"
+    ],
+    "reason": [
+      "用户反馈左脚存在更优中间踩点时，算法仍会踩向右脚上方点，导致骨盆偏转与发力变差",
+      "仅靠脚点高低优先不足以约束身体朝向，需要引入中线与同侧脚步规则",
+      "在求解与后验两层同时加约束，可降低漏检并稳定抑制过横姿态"
+    ]
+  },
+  {
+    "timestamp": "2026-04-28T18:16:00+08:00",
+    "module": "backend/core/a_star_solver.py",
+    "changes": [
+      "新增两点压缩姿态识别：仅在 LH==RH 且 LF==RF（且手脚分离）时判定为双双 match",
+      "新增两点压缩软惩罚：对中段双双 match 高额加罚，起步阶段仅轻惩罚，顶点双手 match 免罚",
+      "新增脱离两点压缩态奖励：若动作使状态从双双 match 恢复到>=3点支撑则给予奖励"
+    ],
+    "reason": [
+      "用户反馈双手双脚总共只占两个点会导致站不稳，需要精准压制该姿态",
+      "不能一刀切禁止双手同点或双脚同点，否则会误伤正常动作并降低完攀成功率",
+      "采用中段强惩罚+恢复奖励的软引导方式，可在保持成线率的同时降低不稳定姿态出现概率"
+    ]
+  },
+  {
+    "timestamp": "2026-04-28T19:17:00+08:00",
+    "module": "backend/core/a_star_solver.py",
+    "changes": [
+      "新增 MAX_FOOT_MOVE_VERTICAL_DELTA=4 动作级硬约束",
+      "在 A* 子节点扩展阶段新增脚步单次上提拦截：当 target_y-current_y > 4 时直接跳过该候选"
+    ],
+    "reason": [
+      "用户要求脚在移动时垂直跨度不能超过4格",
+      "通过搜索阶段硬拦截可避免产生超跨度脚步动作，同时保留多步连续提脚的可行上升路径"
+    ]
+  },
+  {
+    "timestamp": "2026-07-08T17:45:00+08:00",
+    "module": "backend/core/standard_board.py, frontend/src/components/BoardCanvas.vue",
+    "changes": [
+      "Separated fixed 11x18 board setup from route overlay for the standard-board module",
+      "Loaded backend/data/mock_holds.json as the 198-hold board_setup instead of synthesizing route-only holds",
+      "Made default standard-board queries return only valid_for_climb routes",
+      "Updated standard-board validation to require explicit start roles, at least two starts, at least one high end, 6-12 holds, Y1-Y5 starts, and no narrow ladder routes",
+      "Constrained generation to valid routes and mid-hold mutation while preserving start and end holds"
+    ],
+    "reason": [
+      "The standard board should render as a full fixed setup with only selected route coordinates highlighted",
+      "Imported raw routes without explicit starts or with impossible geometry were polluting the default library and generated results",
+      "Start holds at Y5 should remain valid when the source role is explicit"
+    ]
+  },
+  {
+    "timestamp": "2026-07-08T18:10:00+08:00",
+    "module": "backend/core/standard_board.py, backend/core/models.py, frontend/src/components/BoardCanvas.vue, frontend/src/style.css",
+    "changes": [
+      "Replaced mock_holds.json standard-board setup generation with the 8 user-recorded hold variants from holds_mapping.json",
+      "Added imageUrl/svgPath fields to Hold so the standard-board API can return recorded hold images directly",
+      "Standard-board setup now fills all A1-K18 coordinates with fixed scale 0.78 and deterministic rotations",
+      "BoardCanvas now prefers recorded PNG images over SVG paths when rendering holds",
+      "Standard-board preview constrains setup hold images to a uniform visual size and uses a wood-board background"
+    ],
+    "reason": [
+      "The user requested recorded hold assets instead of automatic SVG hold shapes",
+      "Uniform sizing and deterministic rotation make the board read like a real fixed training board without visual overlap",
+      "Using the recorded 8-hold pool keeps the setup visually consistent with the user's own asset library"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:00:00+08:00",
+    "module": "backend/core/hold_image_processing.py, backend/core/standard_board.py, backend/main.py",
+    "changes": [
+      "Added non-destructive processing for recorded hold PNGs by removing border-connected white background pixels into holds_images_processed",
+      "Mounted processed hold images at /processed-images and made standard-board setup prefer those URLs",
+      "Replaced the 0/90/180/270 setup rotation cycle with deterministic 0-359 degree coordinate-based rotations",
+      "Added tests for processed image transparency, processed image URL usage, and broad rotation coverage"
+    ],
+    "reason": [
+      "Recorded hold images had opaque white border/background pixels that looked poor on the wood board",
+      "The original assets should remain untouched so the processed transparent images are reversible cache artifacts",
+      "A real fixed training board should show varied orientations, not only quarter-turn rotations"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:25:00+08:00",
+    "module": "backend/core/hold_image_processing.py, backend/test_standard_board.py",
+    "changes": [
+      "Replaced the previous semi-transparent border cleanup with GrabCut foreground extraction",
+      "Changed processed hold output to cutout_v3 files so the standard-board module no longer reuses damaged cached images",
+      "Cropped processed images to the foreground and added transparent safety padding around each hold",
+      "Strengthened tests so processed image borders must have zero non-transparent pixels"
+    ],
+    "reason": [
+      "The previous halo cleanup left semi-transparent rectangular image bounds that became visible after arbitrary rotation",
+      "Standard-board holds need fully transparent outer borders to avoid rotated square artifacts",
+      "Versioned processed images prevent stale broken cache files from remaining in use"
+    ]
+  },
+  {
+    "timestamp": "2026-07-09T00:45:00+08:00",
+    "module": "backend/core/standard_board.py, frontend/src/style.css, backend/test_standard_board.py",
+    "changes": [
+      "Changed standard-board setup image URLs back to original recorded /images assets",
+      "Stopped the standard-board preview from automatically using processed/cutout images as the primary hold source",
+      "Kept deterministic 0-359 degree setup rotations while applying them to intact original hold images",
+      "Added non-destructive CSS blending for standard-board setup images to reduce white-background visibility",
+      "Updated tests to assert standard-board setup uses original image URLs"
+    ],
+    "reason": [
+      "Processed cutout images could display as damaged or incomplete holds on the board",
+      "The first priority is complete, recognizable hold rendering; white-background cleanup must not damage the source visual",
+      "CSS blending is reversible and does not mutate uploaded hold assets"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T00:00:00+08:00",
+    "module": "backend/core/simulation.py, backend/core/simulation_solver.py, backend/core/simulation_physics.py, backend/core/models.py, frontend/src/components/SimulationLab.vue",
+    "changes": [
+      "Replaced the greedy mandatory-hold traversal with an independent four-limb contact-state A* search",
+      "Restricted every support contact to route-marked board holds while allowing Jug and Crimp holds to be used by feet",
+      "Added unclamped two-link IK, whole-contact static load solving, fatigue accumulation, three candidate Betas, and redundant-action deletion",
+      "Added static-first single-dynamic deadpoint, dyno, and cut-loose validation with 60 Hz trajectories and mandatory human review",
+      "Added motion-mode compatibility, action-purpose records, dynamic playback phases, contact loads, cache-version inputs, and batch solution labels"
+    ],
+    "reason": [
+      "Normal routes were being rejected because intermediate holds were mandatory, feet barely moved, reach used hold-to-hold distance, and impossible limbs were visually clamped",
+      "The user confirmed that the virtual climber must use real route holds, move like a human, and prefer direct purposeful Betas without unnecessary twisting or backtracking",
+      "Dynamic evidence is useful for triage but is not calibrated strongly enough to replace final human review"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T18:30:00+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation_solver.py, backend/core/simulation.py, backend/core/models.py, backend/data/simulation_defaults.json, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded the simulation engine and rule hash to the v1.2 coordinated-motion grammar",
+      "Made non-crossing left/right limb order, continuous body poses, wall depth, 30 Hz static transition replay, contact-anchor accuracy, and purposeful foot preparation part of validity",
+      "Added weight-shift, crouch, release, reach, place, push, catch, settle, and recovery keyframes with lower-body movement and locked support contacts",
+      "Added rotated hand, foot, and dynamic-recovery contact anchors with a local click-to-calibrate editor",
+      "Added a front-view torso and left/right limb treatment, moving-limb emphasis, anchor rings, timestamp-based 0.25x-2x playback, and a synchronized 40-degree side-view posture window",
+      "Fixed single-dynamic cut-loose recovery so the catch trajectory and subsequent foot recovery remain separate and always require human review"
+    ],
+    "reason": [
+      "The previous playback could advance only the hands, leave the pelvis and legs visually frozen, and place endpoints away from the actual hold center",
+      "The user requires a recognizable human climbing rhythm: establish useful feet, shift weight, crouch and drive with the legs, keep the body close to the wall, then catch and settle",
+      "Natural movement constraints must not be relaxed merely to increase route pass rate, and original route coordinates must remain unchanged"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T19:13:57+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation.py, backend/test_simulation.py, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded simulation reports to v1.3 with one stable visible frame for the start state and each completed action",
+      "Forced all hand, foot, and dynamic-recovery contacts to the fixed board-hole center while retaining deprecated anchor fields for API compatibility",
+      "Removed the side-view window, torso polygon, shoulder and hip bars, endpoint labels, contact-anchor rings, and anchor calibration editor",
+      "Replaced the playback figure with a single-color stick figure using two arm segments, two leg segments, a head, one spine, and one center-of-mass dot",
+      "Removed frontend pose interpolation so playback advances only between completed action states and highlights the limb that just moved",
+      "Matched the SVG coordinate system to the physical board dimensions and disabled aspect-ratio letterboxing so rendered limb endpoints align with hold-image centers"
+    ],
+    "reason": [
+      "The user requested a simpler review view without in-motion frames, side-view debugging, or a block-shaped torso",
+      "Every visible supporting limb endpoint must coincide with the center of the corresponding hold image",
+      "Internal 30 Hz static and 60 Hz dynamic validation remains unchanged so visual simplification does not weaken climbing feasibility checks"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T22:00:00+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation_solver.py, backend/core/simulation.py, backend/test_simulation.py, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded the simulation engine and rule hash to v1.4 fixed anthropometry",
+      "Made torso, head, shoulder and hip width, upper and lower arms, thighs, and shins immutable within each climber run with a one-millimeter validation tolerance",
+      "Rebuilt continuous transition poses from fixed body dimensions instead of linearly stretching elbow and knee coordinates",
+      "Made normal arm poses bend downward and normal leg poses bend upward, while labeling backstep, drop-knee, and rock-over as explicit technique exceptions",
+      "Changed the stick-figure renderer to connect limbs from the true hidden left and right shoulder and hip roots",
+      "Added a compact current-action explanation showing the moving limb, source and target holds, purpose, technique, and remaining supports"
+    ],
+    "reason": [
+      "The previous renderer connected elbows and knees to body center points, making visible upper limbs change length by roughly 29 to 33 centimeters even though backend IK lengths were fixed",
+      "The climber must never become taller or change body proportions to reach a hold",
+      "Discrete playback needs a clear textual explanation because users cannot infer every hand and foot change from the highlighted stick figure alone"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T09:30:00+08:00",
+    "module": "backend/core/board_readiness.py, backend/core/models.py, backend/core/validator.py, backend/core/standard_board.py, backend/agent/experiments.py, backend/main.py, backend/data/saved_boards.json, frontend/src/App.vue, frontend/src/components/AppShell.vue, frontend/src/components/BoardCanvas.vue",
+    "changes": [
+      "Defined recoverable draft, ready-for-review, AI-eligible, and archived lifecycle states with one shared readiness rule set",
+      "Required a name, 6–14 in-range holds, low hand and foot starts, a non-foot top in the final three rows, and a reconstructable Beta that references only route holds",
+      "Made V0–V2 spray-wall routes require Jug holds in both the start area and finish, while keeping the same condition advisory for V3 and above",
+      "Restricted AI compose and review to 11×18 boards, separated full Beta review from layout-only review, and replaced free-text promises with deterministic generation and review options",
+      "Corrected the Font-to-V approximation through V12, preserved original Font grades, added source/setter search and 24-item pagination, and regenerated the standard-board review queue",
+      "Soft-archived the four legacy duplicate local samples without deleting their records, and added recoverable archive/restore behavior for boards and holds",
+      "Added three source-backed dashboard recommendations: 170190, 171108, and 50106; every standard, repair, or AI copy now enters Studio as an unsaved copy",
+      "Changed local JSON writes to use locks and atomic replacement, restricted the demo server to loopback origins, and retained Supabase code without connecting or migrating it",
+      "Improved keyboard focus, accessible coordinate/role names, 44×44px hole hit targets, responsive standard-board layouts, and page scroll restoration",
+      "Registered only used UI components and lazy-loaded the simulation page, reducing the main JavaScript bundle from about 1.10MB to about 584KB without changing simulation business logic"
+    ],
+    "reason": [
+      "The client demonstration must describe only capabilities that the local single-machine product actually performs",
+      "Draft saving must be forgiving while AI eligibility and safety-related review claims remain strict and explainable",
+      "Original data provenance and Font grades must remain authoritative; V grades are approximate display values only",
+      "All sample cleanup and asset removal must remain recoverable and historical routes must keep their hold visuals",
+      "Verification completed with 55 passing non-simulation backend tests, 3 passing frontend contract tests, valid JSON parsing, Python compilation, and a successful frontend production build"
+    ]
+  }
+]

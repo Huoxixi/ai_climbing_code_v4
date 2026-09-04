@@ -1,0 +1,95 @@
+name: release-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - "pilot-v*"
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install locked backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-production.lock
+      - name: Verify backend
+        working-directory: backend
+        env:
+          LOCAL_ONLY: "true"
+          DISABLE_SUPABASE: "true"
+          ENABLE_SIMULATION: "false"
+        run: |
+          pip check
+          python -m unittest \
+            test_ai_lab_experiments \
+            test_hold_image_processing \
+            test_local_only_mode \
+            test_photo_route_benchmark \
+            test_photo_route_drafts \
+            test_photo_route_processing \
+            test_photo_wall_processing \
+            test_pilot_access \
+            test_release_hardening \
+            test_release_readiness \
+            test_standard_board \
+            test_standard_board_activity \
+            test_standard_board_difficulty \
+            test_standard_board_local_first \
+            test_standard_board_tags
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify frontend
+        working-directory: frontend
+        env:
+          VITE_ENABLE_SIMULATION: "false"
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Check repository for committed secret files
+        shell: bash
+        run: |
+          tracked_env_files="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.example$' || true)"
+          test -z "${tracked_env_files}" || {
+            echo "A non-example environment file is tracked."
+            exit 1
+          }
+      - name: Verify production server configuration
+        shell: bash
+        run: |
+          test -x deploy/scripts/server_preflight.sh
+          test -x deploy/scripts/install_server_assets.sh
+          test -x deploy/scripts/deploy_release.sh
+          test -x deploy/scripts/rollback_release.sh
+          test -x deploy/scripts/backup_data.sh
+          test -x deploy/scripts/restore_data.sh
+          test -x deploy/scripts/create_tunnel_user.sh
+          test -x deploy/scripts/run_quick_tunnel.sh
+          bash -n deploy/scripts/*.sh
+          sudo apt-get update
+          sudo apt-get install --yes nginx openssh-server
+          sudo groupadd --force ai-climbing-operators
+          sudo groupadd --force ai-climbing-viewers
+          sudo install -d -m 0755 /run/sshd /etc/ssh/sshd_config.d
+          sudo install -m 0644 \
+            deploy/ssh/60-ai-climbing-pilot.conf \
+            /etc/ssh/sshd_config.d/60-ai-climbing-pilot.conf
+          sudo sshd -t
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo install -m 0644 \
+            deploy/nginx/ai_climbing.conf \
+            /etc/nginx/sites-available/ai_climbing.conf
+          sudo ln -sfn \
+            /etc/nginx/sites-available/ai_climbing.conf \
+            /etc/nginx/sites-enabled/ai_climbing.conf
+          sudo nginx -t

@@ -1,0 +1,11 @@
+[Unit]
+Description=Record AI Climbing availability every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=ai-climbing-health.service
+
+[Install]
+WantedBy=timers.target

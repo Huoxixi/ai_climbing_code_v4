@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 import main
+from core.supabase_repo import is_local_only_mode
 
 
 AUTH_HEADERS = {"Authorization": "Bearer expired.jwt.token"}
@@ -15,7 +16,7 @@ AUTH_HEADERS = {"Authorization": "Bearer expired.jwt.token"}
 def sample_board_payload(route_name: str = "Local only board"):
     return {
         "route_name": route_name,
-        "difficulty": "V3",
+        "difficulty": "6B+",
         "placed_holds": [
             {"id": "E3", "x": "E", "y": 3, "hold_type": "Jug", "is_start": True},
             {"id": "G3", "x": "G", "y": 3, "hold_type": "Crimp", "is_start": True},
@@ -36,11 +37,15 @@ class LocalOnlyModeTest(unittest.TestCase):
     def tearDown(self):
         main.active_tasks.clear()
 
+    def test_local_only_is_the_default_without_an_override(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(is_local_only_mode())
+
     def test_generate_uses_memory_task_without_supabase_auth_or_task_create(self):
         payload = {
             "mode": "review_route",
             "board": sample_board_payload(),
-            "target_difficulty": "V3",
+            "target_difficulty": "6B+",
         }
 
         with (

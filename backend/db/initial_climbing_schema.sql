@@ -64,7 +64,7 @@ create table if not exists public.board_assets (
   setter_commentary text not null default '',
   source_type text not null default 'manual' check (source_type in ('manual', 'ai-generated', 'imported')),
   visibility text not null default 'private' check (visibility in ('private', 'unlisted', 'public')),
-  difficulty text not null default 'V3',
+  difficulty text not null default '未定级',
   board_template_id text references public.board_templates(id) on delete set null,
   board_spec jsonb,
   tags text[] not null default '{}',
@@ -214,10 +214,10 @@ create trigger on_auth_user_created_create_profile after insert on auth.users fo
 
 insert into public.board_templates (id, template_key, label, columns, rows, hole_spacing_x_mm, hole_spacing_y_mm, board_width_mm, board_height_mm, margins, angle_degrees, material, skin_class, description, is_system)
 values
-  ('classic-11x18', 'spray-small', 'MoonBoard 风格标准板', 11, 18, 200, 200, 2440, 3660, '{"left":220,"right":220,"bottom":130,"top":130}', 40, '深色木纹复合板', 'skin-wood-classic', '以 200mm 孔距和 11 x 18 坐标作为 AI 生成默认规格，兼容现有路线算法。', true),
-  ('studio-14x20', 'spray-medium', 'Studio 扩展喷点板', 14, 20, 200, 200, 3040, 4060, '{"left":220,"right":220,"bottom":130,"top":130}', 10, '桦木纹理 + 密集孔位', 'skin-birch-studio', '系统扩展规格，适合中等规模手动布点和自由组合岩点。', true),
-  ('commercial-16x24', 'spray-large', 'Commercial 大型喷点板', 16, 24, 200, 200, 3440, 4860, '{"left":220,"right":220,"bottom":130,"top":130}', 15, '灰黑防滑板面', 'skin-commercial-dark', '系统扩展规格，提供更多横向移动空间和更高的路线容量。', true),
-  ('competition-18x22', 'competition-wide', 'Competition 宽体训练板', 18, 22, 200, 200, 3840, 4460, '{"left":220,"right":220,"bottom":130,"top":130}', 20, '蓝灰竞赛板面', 'skin-competition-blue', '系统扩展规格，适合大跨度横移、协调动作和复杂组合模拟。', true)
+  ('classic-11x18', 'spray-small', '11×18 标准训练板', 11, 18, 200, 200, 2440, 3660, '{"left":220,"right":220,"bottom":130,"top":130}', 40, null, null, '支持手工定线、完整性检查、AI 组合与审核。', true),
+  ('studio-14x20', 'spray-medium', '14×20 扩展训练板', 14, 20, 200, 200, 3040, 4060, '{"left":220,"right":220,"bottom":130,"top":130}', 10, null, null, '支持手工定线与保存；当前不进入 AI 实验。', true),
+  ('commercial-16x24', 'spray-large', '16×24 大型训练板', 16, 24, 200, 200, 3440, 4860, '{"left":220,"right":220,"bottom":130,"top":130}', 15, null, null, '支持手工定线与保存；当前不进入 AI 实验。', true),
+  ('competition-18x22', 'competition-wide', '18×22 宽体训练板', 18, 22, 200, 200, 3840, 4460, '{"left":220,"right":220,"bottom":130,"top":130}', 20, null, null, '支持手工定线与保存；当前不进入 AI 实验。', true)
 on conflict (id) do update set
   template_key = excluded.template_key,
   label = excluded.label,

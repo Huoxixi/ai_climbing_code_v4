@@ -16,6 +16,9 @@ backend/.venv/
 backend/.env
 frontend/.env
 !.env.example
+!frontend/.env.production.example
+!deploy/env/
+!deploy/env/*.example
 
 # Node
 node_modules/
@@ -30,5 +33,14 @@ build/
 # Logs
 *.log
 
+# Local handoff files containing temporary credentials
+.private/
+
 # Generated hold image cache
 backend/data/holds_images_processed/
+
+# Local simulation reports and human feedback
+backend/data/local_simulation/
+
+# Private photo-route drafts and content-addressed source assets
+backend/data/photo_routes/

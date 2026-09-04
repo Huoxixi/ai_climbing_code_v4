@@ -5,6 +5,7 @@ aiosignal
 altair
 annotated-doc
 annotated-types
+bcrypt
 anyio
 asttokens
 attrs

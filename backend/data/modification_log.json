@@ -164,5 +164,239 @@
       "The first priority is complete, recognizable hold rendering; white-background cleanup must not damage the source visual",
       "CSS blending is reversible and does not mutate uploaded hold assets"
     ]
+  },
+  {
+    "timestamp": "2026-07-17T00:00:00+08:00",
+    "module": "backend/core/simulation.py, backend/core/simulation_solver.py, backend/core/simulation_physics.py, backend/core/models.py, frontend/src/components/SimulationLab.vue",
+    "changes": [
+      "Replaced the greedy mandatory-hold traversal with an independent four-limb contact-state A* search",
+      "Restricted every support contact to route-marked board holds while allowing Jug and Crimp holds to be used by feet",
+      "Added unclamped two-link IK, whole-contact static load solving, fatigue accumulation, three candidate Betas, and redundant-action deletion",
+      "Added static-first single-dynamic deadpoint, dyno, and cut-loose validation with 60 Hz trajectories and mandatory human review",
+      "Added motion-mode compatibility, action-purpose records, dynamic playback phases, contact loads, cache-version inputs, and batch solution labels"
+    ],
+    "reason": [
+      "Normal routes were being rejected because intermediate holds were mandatory, feet barely moved, reach used hold-to-hold distance, and impossible limbs were visually clamped",
+      "The user confirmed that the virtual climber must use real route holds, move like a human, and prefer direct purposeful Betas without unnecessary twisting or backtracking",
+      "Dynamic evidence is useful for triage but is not calibrated strongly enough to replace final human review"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T18:30:00+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation_solver.py, backend/core/simulation.py, backend/core/models.py, backend/data/simulation_defaults.json, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded the simulation engine and rule hash to the v1.2 coordinated-motion grammar",
+      "Made non-crossing left/right limb order, continuous body poses, wall depth, 30 Hz static transition replay, contact-anchor accuracy, and purposeful foot preparation part of validity",
+      "Added weight-shift, crouch, release, reach, place, push, catch, settle, and recovery keyframes with lower-body movement and locked support contacts",
+      "Added rotated hand, foot, and dynamic-recovery contact anchors with a local click-to-calibrate editor",
+      "Added a front-view torso and left/right limb treatment, moving-limb emphasis, anchor rings, timestamp-based 0.25x-2x playback, and a synchronized 40-degree side-view posture window",
+      "Fixed single-dynamic cut-loose recovery so the catch trajectory and subsequent foot recovery remain separate and always require human review"
+    ],
+    "reason": [
+      "The previous playback could advance only the hands, leave the pelvis and legs visually frozen, and place endpoints away from the actual hold center",
+      "The user requires a recognizable human climbing rhythm: establish useful feet, shift weight, crouch and drive with the legs, keep the body close to the wall, then catch and settle",
+      "Natural movement constraints must not be relaxed merely to increase route pass rate, and original route coordinates must remain unchanged"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T19:13:57+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation.py, backend/test_simulation.py, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded simulation reports to v1.3 with one stable visible frame for the start state and each completed action",
+      "Forced all hand, foot, and dynamic-recovery contacts to the fixed board-hole center while retaining deprecated anchor fields for API compatibility",
+      "Removed the side-view window, torso polygon, shoulder and hip bars, endpoint labels, contact-anchor rings, and anchor calibration editor",
+      "Replaced the playback figure with a single-color stick figure using two arm segments, two leg segments, a head, one spine, and one center-of-mass dot",
+      "Removed frontend pose interpolation so playback advances only between completed action states and highlights the limb that just moved",
+      "Matched the SVG coordinate system to the physical board dimensions and disabled aspect-ratio letterboxing so rendered limb endpoints align with hold-image centers"
+    ],
+    "reason": [
+      "The user requested a simpler review view without in-motion frames, side-view debugging, or a block-shaped torso",
+      "Every visible supporting limb endpoint must coincide with the center of the corresponding hold image",
+      "Internal 30 Hz static and 60 Hz dynamic validation remains unchanged so visual simplification does not weaken climbing feasibility checks"
+    ]
+  },
+  {
+    "timestamp": "2026-07-17T22:00:00+08:00",
+    "module": "backend/core/simulation_physics.py, backend/core/simulation_solver.py, backend/core/simulation.py, backend/test_simulation.py, frontend/src/components/BoardCanvas.vue, frontend/src/components/SimulationLab.vue, frontend/src/style.css",
+    "changes": [
+      "Upgraded the simulation engine and rule hash to v1.4 fixed anthropometry",
+      "Made torso, head, shoulder and hip width, upper and lower arms, thighs, and shins immutable within each climber run with a one-millimeter validation tolerance",
+      "Rebuilt continuous transition poses from fixed body dimensions instead of linearly stretching elbow and knee coordinates",
+      "Made normal arm poses bend downward and normal leg poses bend upward, while labeling backstep, drop-knee, and rock-over as explicit technique exceptions",
+      "Changed the stick-figure renderer to connect limbs from the true hidden left and right shoulder and hip roots",
+      "Added a compact current-action explanation showing the moving limb, source and target holds, purpose, technique, and remaining supports"
+    ],
+    "reason": [
+      "The previous renderer connected elbows and knees to body center points, making visible upper limbs change length by roughly 29 to 33 centimeters even though backend IK lengths were fixed",
+      "The climber must never become taller or change body proportions to reach a hold",
+      "Discrete playback needs a clear textual explanation because users cannot infer every hand and foot change from the highlighted stick figure alone"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T09:30:00+08:00",
+    "module": "backend/core/board_readiness.py, backend/core/models.py, backend/core/validator.py, backend/core/standard_board.py, backend/agent/experiments.py, backend/main.py, backend/data/saved_boards.json, frontend/src/App.vue, frontend/src/components/AppShell.vue, frontend/src/components/BoardCanvas.vue",
+    "changes": [
+      "Defined recoverable draft, ready-for-review, AI-eligible, and archived lifecycle states with one shared readiness rule set",
+      "Required a name, 6–14 in-range holds, low hand and foot starts, a non-foot top in the final three rows, and a reconstructable Beta that references only route holds",
+      "Made V0–V2 spray-wall routes require Jug holds in both the start area and finish, while keeping the same condition advisory for V3 and above",
+      "Restricted AI compose and review to 11×18 boards, separated full Beta review from layout-only review, and replaced free-text promises with deterministic generation and review options",
+      "Corrected the Font-to-V approximation through V12, preserved original Font grades, added source/setter search and 24-item pagination, and regenerated the standard-board review queue",
+      "Soft-archived the four legacy duplicate local samples without deleting their records, and added recoverable archive/restore behavior for boards and holds",
+      "Added three source-backed dashboard recommendations: 170190, 171108, and 50106; every standard, repair, or AI copy now enters Studio as an unsaved copy",
+      "Changed local JSON writes to use locks and atomic replacement, restricted the demo server to loopback origins, and retained Supabase code without connecting or migrating it",
+      "Improved keyboard focus, accessible coordinate/role names, 44×44px hole hit targets, responsive standard-board layouts, and page scroll restoration",
+      "Registered only used UI components and lazy-loaded the simulation page, reducing the main JavaScript bundle from about 1.10MB to about 584KB without changing simulation business logic"
+    ],
+    "reason": [
+      "The client demonstration must describe only capabilities that the local single-machine product actually performs",
+      "Draft saving must be forgiving while AI eligibility and safety-related review claims remain strict and explainable",
+      "Original data provenance and Font grades must remain authoritative; V grades are approximate display values only",
+      "All sample cleanup and asset removal must remain recoverable and historical routes must keep their hold visuals",
+      "Verification completed with 55 passing non-simulation backend tests, 3 passing frontend contract tests, valid JSON parsing, Python compilation, and a successful frontend production build"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T12:30:00+08:00",
+    "module": "frontend/src/constants/boardTemplates.js, frontend/src/App.vue, frontend/src/components/AppShell.vue, frontend/src/components/SimulationLab.vue, backend/core/standard_board.py, backend/agent/experiments.py, backend/main.py, backend/db/initial_climbing_schema.sql, backend/db/sql_editor_parts/02_seed_storage.sql, docs",
+    "changes": [
+      "Removed unsupported material and visual-skin claims including dark wood composite, birch texture, anti-slip dark panel, and blue-gray competition panel",
+      "Renamed the four active templates to neutral specification-based Chinese names without changing their confirmed grid dimensions or compatibility identifiers",
+      "Stopped normalized legacy board records from reintroducing material or skin values into the current interface",
+      "Unified customer-facing workspace and section names in Chinese, including 定线工作台, AI 实验室, route details, training logs, and repair candidates; replaced virtual-lighting wording with accurate coordinate-preview wording",
+      "Updated the local standard-board API metadata, future database seed files, release contracts, presentation material, and current product documentation",
+      "Marked obsolete design and work-log documents as historical instead of rewriting their audit history"
+    ],
+    "reason": [
+      "No authoritative current material configuration exists, so presenting a replacement material would be another unsupported promise",
+      "Customers should see only verified dimensions, spacing, AI eligibility, and manual-editing capability",
+      "Historical simulation reports and backup files were intentionally left unchanged because they are immutable evidence and simulation business remains outside this cleanup",
+      "No route coordinates, hold assets, remote database records, or Supabase project state were changed",
+      "Verification completed with 55 passing non-simulation backend tests, 5 passing frontend release contracts, Python compilation, valid JSON parsing, and a successful production build"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T13:00:00+08:00",
+    "module": "backend/agent/experiments.py, backend/test_ai_lab_experiments.py, frontend/src/App.vue, frontend/test/release-contracts.test.mjs",
+    "changes": [
+      "Changed AI experiment model prompts to require short, plain Simplified Chinese route names, explanations, and review summaries",
+      "Added a language guard that rejects English model copy and keeps the deterministic Chinese fallback instead of exposing English answers",
+      "Mapped generation goals and review focuses to Chinese before sending them to the model or displaying them as applied rules",
+      "Reworded visible algorithm constraints in customer language and changed raw low, medium, and high risk values to Chinese labels",
+      "Added regression coverage for English compose names, English review summaries, Chinese technical-token allowances, and frontend Chinese status rendering"
+    ],
+    "reason": [
+      "The user requires AI experiment answers to be understandable to non-technical Chinese-speaking customers",
+      "Prompt instructions alone cannot guarantee language, so model output must be validated before it replaces deterministic copy",
+      "V grades, Beta, AI, limb abbreviations, and hold coordinates remain allowed because they are necessary route-setting identifiers",
+      "No route coordinates, hold types, difficulty decisions, sorting rules, or simulation business logic were changed",
+      "Verification completed with 58 passing non-simulation backend tests, 6 passing frontend release contracts, Python compilation, valid JSON parsing, and a successful production build"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T13:31:00+08:00",
+    "module": "backend/agent/experiments.py, backend/main.py, backend/test_ai_lab_experiments.py, frontend/src/App.vue, frontend/src/components/BoardCanvas.vue, frontend/src/components/BoardComparisonPanel.vue, frontend/src/utils/boardComparison.js, frontend/src/style.css, frontend/test/board-comparison.test.mjs, docs",
+    "changes": [
+      "Added a page-local 2-to-4 board comparison mode for active assets with the first selection as the reference board",
+      "Added a truly read-only board canvas with disabled non-focusable holes and holds, view-oriented accessible names, Beta step badges, and text-plus-color difference markers",
+      "Added deterministic comparison of retained, added, removed, and changed holds, start and top roles, Beta sequence, and board-spec mismatch warnings",
+      "Applied the route-expert reuse thresholds: at least 70 percent is optimal, at least 40 percent is pass, and lower reuse is labeled as a large change",
+      "Changed AI recomposition to return at most two validated layouts that are mutually distinct and also different from the source layout; no candidate is duplicated to fill the result",
+      "Rendered the original board and up to two candidates with concrete coordinates, full Beta sequences, quality, predicted grade, Chinese risk, reuse tier, and unsaved-copy status",
+      "Moved CPU-heavy AI route search off the API event loop so task submission and polling no longer time out while generation runs",
+      "Normalized legacy saved-board specification labels at display time so old English material-era labels do not reappear",
+      "Added responsive two-, three-, and four-board desktop layouts plus narrow-screen horizontal scrolling without page-level overflow"
+    ],
+    "reason": [
+      "Business reviewers need to compare actual board layouts rather than infer changes from numeric scores",
+      "A recomposition that is identical to the source board is a false result and must be rejected",
+      "When only one valid distinct candidate exists, showing one honest result is preferable to fabricating a second",
+      "Different board specifications may be viewed together, but coordinate-name equality must not be presented as physical-position equality",
+      "No route source coordinates, Supabase data, database schema, or simulation business logic were changed",
+      "Verification completed with 59 passing non-simulation backend tests, 9 passing frontend tests, a successful production build, and browser checks at 1440, 1024, and 390 pixels"
+    ]
+  },
+  {
+    "timestamp": "2026-07-18T18:00:00+08:00",
+    "module": "backend/core/moonboard_grading.py, backend/scripts/build_moonboard_grade_model.py, backend/core/standard_board.py, backend/agent/experiments.py, backend/core/simulation.py, backend/main.py, frontend/src, backend/data/saved_boards.json, backend/data/optimal_patterns.json",
+    "changes": [
+      "建立 6B 至 8B+ 共 14 档的统一 Font 等级合同，停止在正常接口与界面公开 V 等级",
+      "基于真实 11×18、40° MoonBoard 数据使用稳定 80/20 划分训练确定性模型，并保存数据版本、参数、样本摘要与验证指标",
+      "Benchmark 样本使用 4 倍权重，普通线路按重复次数增权，并修正等级分布不平衡",
+      "标准线路保留权威 MoonBoard 原始等级，自有线路输出 MoonBoard 等效难度、可信度与校准状态",
+      "自有岩点修正限制为相邻一档；任何未人工复核的岩点都会把可信度上限降为中可信",
+      "真人训练与仿真反馈默认进入待审核队列，只有已审核数量和体型覆盖满足门槛后才具备下一版本重建资格",
+      "移除 11×18 流程中 V0 至 V2 的 Jug 难度规则，保留起步、终点、可攀性和岩点适用性检查",
+      "迁移 3 条活跃历史线路并在隐藏审计字段保留原 V 值；4 条归档线路延迟到恢复时迁移",
+      "更新人工定线、AI 生成与审核、仿真、训练记录、筛选、标签、能力档位、数据库未来默认值及界面文案"
+    ],
+    "reason": [
+      "产品评级需要与真实 MoonBoard 11×18、40° 线路的 Font 等级保持同一业务语义",
+      "标准线路的原始等级属于权威来源，不能被结构模型覆盖；自有线路只能声明为等效难度",
+      "未复核岩点和稀疏等级存在额外不确定性，必须通过可信度与校准状态向用户明确呈现",
+      "运行时不随机训练，确保同一模型版本对同一线路产生可重复结果",
+      "反馈先审核、后版本化重建，避免单条主观体感立即改变所有线路预测",
+      "仅固定 11×18、40° 岩板有真实参照，其他规格不能套用该标尺",
+      "没有连接或修改远程 Supabase，没有更改任何线路坐标和岩点角色"
+    ]
+  },
+  {
+    "timestamp": "2026-07-30T22:15:00+08:00",
+    "module": "backend/agent/experiments.py, backend/core/models.py, frontend/src/App.vue, frontend/src/components/AIExperimentExplanation.vue, frontend/src/components/BoardComparisonPanel.vue",
+    "changes": [
+      "为 AI 组合与审核结果增加版本化解释合同，包括输入指纹、六项质量分解、风险分构成、完整规则检查、候选筛选轨迹和不确定性",
+      "补充难度模型已经计算但此前未展示的可信度原因，并明确大模型只润色名称和说明，不参与评分、风险、难度或候选排序",
+      "将标准线路平均结构改为仅作结果对照，不再错误显示为已参与候选评分或排序的约束",
+      "在结果页按结论、必须处理问题、评分与检查、候选轨迹、版本信息的顺序展示证据，并为候选显示入选原因",
+      "任务运行期间只显示服务端真实状态和耗时，Beta 不完整时将动作检查明确标为未检查",
+      "修复 390px AI 结果页被候选对照网格撑宽的问题，页面宽度与视口保持一致"
+    ],
+    "reason": [
+      "定线员需要复核每个评分、风险和候选选择依据，而不能只看到最终数字或文字总结",
+      "可解释性必须展示结构化可验证证据，不能暴露或伪造大模型内部推理",
+      "当前标准线路平均结构没有实际参与算法决策，因此必须纠正客户可见表述",
+      "本次没有调整评分权重、风险阈值、生成坐标、岩点类型或候选排序逻辑，也没有连接 Supabase"
+    ]
+  },
+  {
+    "timestamp": "2026-07-30T23:15:12+08:00",
+    "module": "backend/agent/experiments.py, backend/core/models.py, backend/test_ai_lab_experiments.py, frontend/src/App.vue, frontend/src/components/AIExperimentExplanation.vue, frontend/src/components/BoardComparisonPanel.vue, frontend/src/style.css, frontend/test/release-contracts.test.mjs, docs/AI实验室算法与工作流说明.md",
+    "changes": [
+      "将 AI 实验室的客户承诺收敛为定线讨论辅助、明显问题初审、不覆盖原线的结构草案和可复核证据，不再暗示可以替代试爬或最终定线判断",
+      "为重组候选增加请求目标命中、固定回退、第二备选三种选择状态，并返回回退原因、岩点保留与移除依据、前后量化指标和动作未评估状态",
+      "把候选风险明确限定为结构风险，动作草案未完成身体平衡检查时显示风险未完整评估",
+      "让综合、脚点、难度和动作顺序四种审核重点实际执行不同专项规则，未执行规则统一显示未检查",
+      "把 Beta 身体平衡、连续手部动作和引用失效纳入审核风险，并为每条建议返回观测值、阈值、预计改善、相关岩点和 Beta 步骤",
+      "在审核结果中展示原岩板，在候选结果中展示重组依据、原线与候选指标及动作草案边界",
+      "新增中文算法说明文档，记录工作流、评分公式、风险规则、回退策略、大模型权限边界和已知限制"
+    ],
+    "reason": [
+      "定线者需要知道系统执行了哪些规则、为什么选择或回退候选，以及建议对应的可核验数据",
+      "结构风险为零不能代表尚未执行的动作检查安全，风险范围必须和已执行证据一致",
+      "审核重点必须改变实际算法行为，不能只改变界面标签或大模型说明",
+      "量化建议必须能定位到岩点和 Beta 步骤，并说明修改后希望改善的指标",
+      "没有修改任何已保存线路坐标、岩点类型、Supabase 数据或数据库结构"
+    ]
+  },
+  {
+    "timestamp": "2026-07-31T12:00:00+08:00",
+    "module": "backend/core/a_star_solver.py, backend/agent/experiments.py, backend/core/models.py, frontend/src/App.vue, frontend/src/components/BoardComparisonPanel.vue, frontend/src/style.css, backend/data/optimal_patterns.json, docs/AI实验室算法与工作流说明.md",
+    "changes": [
+      "删除本地重组策略按岩点高度生成左右手交替动作的旁路，原生候选和三种本地布局统一重新执行完整 A* 动作搜索",
+      "将交叉手脚、脚手高度、身高臂展触达、身体展开、高踩、稳定接触、移动顺序和双手登顶设为候选入选前的静态硬门禁",
+      "统一终点为 Y16 至 Y18 非脚点，禁止未完攀路径作为回退候选；全部失败时明确建议保留原线路",
+      "每次最多返回一个最佳新岩板，公共候选与审核修复板不再返回内部 Beta",
+      "审核自动修复板执行相同动作门禁，无合格修复板时只返回量化文字建议",
+      "新增 optimized 或 keep_original 推荐合同，并把解释结构和规则版本升级到 v3",
+      "结果页首屏只展示建议结论和唯一新岩板或文字建议，原板对比、评分、阈值、规则与轨迹默认折叠",
+      "新增用户报告动作序列、固定失败原因码、全部候选失败和本地策略必须执行动作搜索的回归测试"
+    ],
+    "reason": [
+      "旧旁路可以让未经人体工学检查的反人类动作参与排名并显示给定线者",
+      "动作验证必须是候选入选的前置条件，不能用结构分或回退逻辑绕过",
+      "无解时保留原线路比展示不可靠的新岩板更符合定线工作流",
+      "内部验证 Beta 不应被客户误认为推荐动作或自动载入工作台",
+      "量化证据保留可核验性，但首屏需要优先呈现定线结论和可操作结果",
+      "没有修改已保存线路、数据库或 Supabase"
+    ]
   }
 ]

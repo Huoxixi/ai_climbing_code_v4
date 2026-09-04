@@ -3,6 +3,7 @@ from collections import Counter
 from unittest.mock import patch
 
 from core import standard_board
+from core.moonboard_grading import FONT_GRADES, grade_number
 from core.standard_board import (
     detail_for,
     evaluate_route_difficulty,
@@ -12,21 +13,21 @@ from core.standard_board import (
 )
 
 
-def difficulty_for(roles, v_grade="V3"):
+def difficulty_for(roles, grade="6B+"):
     validation = validate_standard_roles(roles)
     assert validation["valid_for_climb"], validation
-    return evaluate_route_difficulty(v_grade, 0, False, validation["effective_roles"], validation["marker_summary"], validation)
+    return evaluate_route_difficulty(grade, 0, False, validation["effective_roles"], validation["marker_summary"], validation)
 
 
 class StandardBoardDifficultyTest(unittest.TestCase):
     def test_difficulty_is_stable_and_does_not_change_quality_score(self):
-        response = query_standard_routes(difficulty="V3", limit=1)
+        response = query_standard_routes(difficulty="7A", limit=1)
         route = find_standard_route(response.routes[0].source_id)
         first = detail_for(route)
         second = detail_for(route)
 
         self.assertEqual(first.difficulty_score, second.difficulty_score)
-        self.assertEqual(first.predicted_v_grade, second.predicted_v_grade)
+        self.assertEqual(first.predicted_grade, second.predicted_grade)
         self.assertEqual(first.quality_score, second.quality_score)
         self.assertEqual(first.quality_score, route.quality_score)
 
@@ -52,12 +53,23 @@ class StandardBoardDifficultyTest(unittest.TestCase):
         self.assertGreater(hard_start["difficulty_breakdown"]["start_finish_pressure"], base["difficulty_breakdown"]["start_finish_pressure"])
         self.assertGreater(hard_finish["difficulty_breakdown"]["start_finish_pressure"], base["difficulty_breakdown"]["start_finish_pressure"])
 
-    def test_grade_mismatch_warning_for_undergraded_route(self):
-        hard_v3 = difficulty_for({"start": ["A1", "K1"], "mid": ["A7", "K10", "A13"], "end": ["K17"]}, v_grade="V3")
+    def test_grade_mismatch_warning_uses_font_grade_distance(self):
+        assessment = {
+            "predicted_grade": "8A",
+            "grade_delta": 10,
+            "difficulty_confidence": 0.64,
+            "confidence_tier": "medium",
+            "calibration_status": "ready",
+        }
+        with patch("core.standard_board.assess_source_route", return_value=assessment):
+            mismatch = difficulty_for(
+                {"start": ["A1", "K1"], "mid": ["A7", "K10", "A13"], "end": ["K17"]},
+                grade="6B",
+            )
 
-        self.assertGreaterEqual(hard_v3["grade_delta"], 3)
-        self.assertEqual(hard_v3["grade_warning"], "hard")
-        self.assertEqual(hard_v3["predicted_v_grade"], "V9")
+        self.assertEqual(mismatch["grade_delta"], 10)
+        self.assertEqual(mismatch["grade_warning"], "hard")
+        self.assertEqual(mismatch["predicted_grade"], "8A")
 
     def test_missing_hold_type_lowers_confidence_without_blocking_score(self):
         normal = difficulty_for({"start": ["E3", "G3"], "mid": ["F7", "F10", "F13"], "end": ["F17"]})
@@ -73,9 +85,10 @@ class StandardBoardDifficultyTest(unittest.TestCase):
         self.assertLess(with_missing_type["difficulty_confidence"], normal["difficulty_confidence"])
 
     def test_query_filters_and_sorts_by_difficulty_fields(self):
-        filtered = query_standard_routes(predicted_v_grade="V5", limit=10)
+        reference = query_standard_routes(limit=1).routes[0].predicted_grade
+        filtered = query_standard_routes(predicted_grade=reference, limit=10)
         self.assertGreater(filtered.total, 0)
-        self.assertTrue(all(route.predicted_v_grade == "V5" for route in filtered.routes))
+        self.assertTrue(all(route.predicted_grade == reference for route in filtered.routes))
 
         mismatches = query_standard_routes(grade_warning="hard", sort="grade_mismatch_desc", limit=10)
         self.assertGreater(mismatches.total, 0)
@@ -84,10 +97,10 @@ class StandardBoardDifficultyTest(unittest.TestCase):
 
     def test_calibrated_predictions_cover_high_grades(self):
         routes = query_standard_routes(valid_only=True, limit=100, sort="difficulty_score_desc").routes
-        predicted = Counter(route.predicted_v_grade for route in routes)
+        predicted = Counter(route.predicted_grade for route in routes)
 
-        self.assertTrue(any(grade in predicted for grade in {"V5", "V6", "V7", "V8", "V9", "V10"}))
-        self.assertGreater(max(int(route.predicted_v_grade[1:]) for route in routes if route.predicted_v_grade), 4)
+        self.assertTrue(any(grade in predicted for grade in FONT_GRADES))
+        self.assertGreater(max(grade_number(route.predicted_grade) for route in routes if route.predicted_grade), 0)
 
 
 if __name__ == "__main__":

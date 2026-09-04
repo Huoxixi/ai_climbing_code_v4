@@ -2,7 +2,12 @@ import apiClient from './apiClient'
 
 export const standardBoardService = {
   listRoutes(params) {
-    return apiClient.get('/api/standard-board/routes', { params })
+    return apiClient.get('/api/standard-board/routes', {
+      params: {
+        ...params,
+        tag_ids: Array.isArray(params?.tag_ids) ? params.tag_ids.join(',') : params?.tag_ids || undefined,
+      },
+    })
   },
 
   getRoute(sourceId) {

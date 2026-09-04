@@ -1,83 +1,27 @@
-<template>
-  <main v-if="!currentUser" class="auth-page">
-    <section class="auth-layout" aria-label="Climbing Board Studio 登录">
-      <div class="auth-brand">
-        <span class="auth-kicker">Climbing Board Studio</span>
-        <h1>攀岩定线工作台</h1>
-        <p>管理岩板、岩点资产、Beta 序列与实验任务。</p>
-        <dl class="auth-summary">
-          <div><dt>Board</dt><dd>岩板规格与线路资产</dd></div>
-          <div><dt>Holds</dt><dd>岩点库存与放置</dd></div>
-          <div><dt>AI Lab</dt><dd>实验任务入口</dd></div>
-        </dl>
-      </div>
-
-      <section class="auth-panel">
-        <div class="auth-panel-heading">
-          <p class="eyebrow">Secure Access</p>
-          <h2>{{ authMode === 'login' ? '登录账号' : '创建账号' }}</h2>
-          <span>{{ authMode === 'login' ? '进入工作台继续管理线路资产。' : '注册后即可保存和同步定线数据。' }}</span>
-        </div>
-        <el-alert
-          class="local-mode-alert"
-          type="info"
-          :closable="false"
-          show-icon
-          title="本地模式：跳过登录后数据保存在本机，不同步云端。"
-        />
-        <el-form class="auth-form" @submit.prevent>
-          <el-input v-model="authForm.email" type="email" placeholder="邮箱" autocomplete="email" :prefix-icon="Message" />
-          <el-input
-            v-model="authForm.password"
-            type="password"
-            show-password
-            placeholder="密码"
-            autocomplete="current-password"
-            :prefix-icon="Lock"
-            @keyup.enter="submitAuth"
-          />
-          <el-input v-if="authMode === 'register'" v-model="authForm.name" placeholder="显示名" autocomplete="name" :prefix-icon="User" />
-          <el-alert v-if="authSuccess" type="success" :closable="false" :title="authSuccess" />
-          <el-alert v-if="authError" type="error" :closable="false" :title="authError" />
-          <div class="auth-actions">
-            <el-button type="primary" :loading="authLoading" :icon="Right" @click="submitAuth">
-              {{ authMode === 'login' ? '登录' : '注册' }}
-            </el-button>
-            <el-button :loading="authLoading" :icon="Right" @click="skipAuth">
-              跳过登录
-            </el-button>
-            <el-button text @click="toggleAuthMode">
-              {{ authMode === 'login' ? '创建账号' : '返回登录' }}
-            </el-button>
-          </div>
-        </el-form>
-        <p class="auth-footnote">跳过登录会进入本地体验模式，数据保存在本机 fallback 存储中。</p>
-      </section>
-    </section>
-  </main>
-
+﻿<template>
   <AppShell
-    v-else
-    v-model:active="activePage"
+    :active="activePage"
+    @update:active="changePage"
     :title="pageTitle"
-    :board-label="studio.currentBoardSpec.label"
-    :hold-count="studio.placedHolds.length"
-    :dirty="studio.unsavedChanges"
-    :user-email="currentUser.email"
-    @logout="handleLogout"
+    :board-label="activePage === 'photo-routes' ? '30×20 照片线路岩板' : studio.currentBoardSpec.label"
+    :hold-count="activePage === 'photo-routes' ? photoStatus.count : studio.placedHolds.length"
+    :dirty="activePage === 'photo-routes' ? photoStatus.dirty : studio.unsavedChanges"
+    :save-label="activePage === 'photo-routes' ? photoStatus.state : ''"
+    :simulation-enabled="simulationEnabled"
   >
     <section v-if="activePage === 'dashboard'" class="page dashboard-page">
       <div class="workbench-hero">
         <div>
-          <p class="eyebrow">Operations Dashboard</p>
+          <p class="eyebrow">本地工作台</p>
           <h2>工作台总览</h2>
-          <p>选择岩板规格、查看资产状态，并进入 Studio 或 AI Lab。</p>
+          <p>选择岩板规格、查看资产状态，并进入定线工作台或 AI 实验室。</p>
         </div>
         <div class="command-row">
           <el-button type="primary" :icon="Plus" @click="startBlankStudio">新建岩板</el-button>
           <el-button :icon="Collection" @click="activePage = 'library'">管理岩点</el-button>
           <el-button :icon="Grid" @click="activePage = 'standard-board'">标准板库</el-button>
-          <el-button :icon="Histogram" @click="activePage = 'ai-lab'">进入 AI Lab</el-button>
+          <el-button v-if="simulationEnabled" :icon="Histogram" @click="activePage = 'simulation'">仿真审核</el-button>
+          <el-button :icon="Histogram" @click="activePage = 'ai-lab'">进入 AI 实验室</el-button>
         </div>
       </div>
 
@@ -91,7 +35,7 @@
       <section class="section-block">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Board Templates</p>
+            <p class="eyebrow">规格选择</p>
             <h3>选择岩板规格</h3>
           </div>
           <el-button type="primary" plain :icon="DocumentChecked" @click="createFromTemplate(selectedDashboardTemplateId)">确认使用</el-button>
@@ -107,6 +51,7 @@
             <span>{{ template.cellLabel }}</span>
             <strong>{{ template.label }}</strong>
             <small>{{ template.physicalLabel || template.angleLabel }}</small>
+            <small>{{ template.ai_supported ? '支持 AI 组合与审核' : '仅支持手工定线' }}</small>
           </button>
         </div>
         <div class="template-detail-panel">
@@ -116,8 +61,9 @@
           </div>
           <div class="template-detail-meta">
             <span>{{ selectedDashboardTemplate.cellLabel }}</span>
-            <span>{{ selectedDashboardTemplate.angleLabel }}</span>
-            <span>{{ selectedDashboardTemplate.material }}</span>
+            <span>{{ selectedDashboardTemplate.physicalLabel }}</span>
+            <span>孔距 {{ selectedDashboardTemplate.spacingLabel }}</span>
+            <span>{{ selectedDashboardTemplate.ai_supported ? 'AI 可用' : '仅手工定线' }}</span>
           </div>
         </div>
       </section>
@@ -126,7 +72,7 @@
         <section class="section-block">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Recent Boards</p>
+              <p class="eyebrow">最近编辑</p>
               <h3>最近岩板</h3>
             </div>
             <el-button text @click="activePage = 'boards'">查看全部</el-button>
@@ -137,26 +83,28 @@
           </div>
           <button v-for="board in boards.savedBoards.slice(0, 5)" :key="board.saved_id || board.route_name" class="asset-row" @click="loadBoardIntoStudio(board)">
             <span>{{ board.route_name || '未命名岩板' }}</span>
-            <small>{{ board.beta_sequence?.length || 0 }} Beta / {{ board.placed_holds?.length || 0 }} 岩点</small>
+            <small>{{ board.beta_sequence?.length || 0 }} Beta / {{ board.placed_holds?.length || 0 }} 岩点 / {{ workflowLabel(board) }}</small>
           </button>
         </section>
 
         <section class="section-block">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Current State</p>
+              <p class="eyebrow">当前编辑状态</p>
               <h3>当前状态</h3>
             </div>
             <span class="state-badge">{{ studio.unsavedChanges ? '未保存' : '已同步' }}</span>
           </div>
           <div class="state-list">
             <span>岩板：{{ studio.currentBoardSpec.cellLabel }}</span>
-            <span>材质：{{ studio.currentBoardSpec.material }}</span>
-            <span>模式：手动模拟建板</span>
+            <span>规格尺寸：{{ studio.currentBoardSpec.physicalLabel }}</span>
+            <span>模式：{{ studio.currentBoardSpec.ai_supported ? '手工定线 + AI 辅助' : '仅手工定线' }}</span>
           </div>
         </section>
       </div>
     </section>
+
+    <PhotoRoutesPage v-else-if="activePage === 'photo-routes'" ref="photoPage" @status="photoStatus = $event" />
 
     <section v-else-if="activePage === 'studio'" class="studio-page">
       <div class="command-bar">
@@ -173,10 +121,13 @@
           <section class="section-block">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Hold Palette</p>
+                <p class="eyebrow">岩点选择</p>
                 <h3>岩点选择</h3>
               </div>
-              <el-segmented v-model="library.previewMode" :options="['vector', 'image']" />
+              <el-segmented
+                v-model="library.previewMode"
+                :options="[{ label: '轮廓', value: 'vector' }, { label: '图片', value: 'image' }]"
+              />
             </div>
             <el-input v-model="library.search" placeholder="搜索类型或变体" clearable :prefix-icon="Search" />
             <el-select v-model="library.typeFilter">
@@ -232,7 +183,7 @@
     <section v-else-if="activePage === 'library'" class="page">
       <div class="page-header">
         <div>
-          <p class="eyebrow">Hold Library</p>
+          <p class="eyebrow">本地岩点资产</p>
           <h2>岩点资源库</h2>
         </div>
         <el-button :icon="Refresh" :loading="library.loading" @click="library.fetchAllHoldData">刷新资源库</el-button>
@@ -240,14 +191,15 @@
       <div class="library-grid">
         <section class="section-block upload-panel">
           <div>
-            <p class="eyebrow">Upload</p>
+            <p class="eyebrow">录入新岩点</p>
             <h3>上传岩点</h3>
           </div>
           <el-select v-model="library.uploadInfo.hold_type">
             <el-option v-for="type in library.holdTypes" :key="type" :label="type" :value="type" />
           </el-select>
           <el-input v-model="library.uploadInfo.variant" placeholder="变体名称，例如 large_crimp_01" />
-          <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :on-change="onUploadFile" :on-remove="removeUploadFile">
+          <small class="upload-help">支持 PNG、JPEG、WebP；白底图片上传后会自动去除背景。</small>
+          <el-upload accept="image/png,image/jpeg,image/webp" :auto-upload="false" :show-file-list="true" :limit="1" :on-change="onUploadFile" :on-remove="removeUploadFile">
             <el-button :icon="Upload">选择图片</el-button>
           </el-upload>
           <el-button type="primary" :loading="library.loading" @click="library.uploadImage">上传</el-button>
@@ -256,10 +208,13 @@
         <section class="section-block">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Inventory</p>
-              <h3>已录入岩点</h3>
+              <p class="eyebrow">岩点清单</p>
+              <h3>{{ library.showArchived ? '归档箱' : '已启用岩点' }}</h3>
             </div>
-            <span class="state-badge">{{ library.filteredHolds.length }} / {{ library.managedHolds.length }}</span>
+            <el-segmented
+              v-model="library.showArchived"
+              :options="[{ label: '已启用', value: false }, { label: '归档箱', value: true }]"
+            />
           </div>
           <div class="filter-row">
             <el-input v-model="library.search" placeholder="搜索岩点" clearable :prefix-icon="Search" />
@@ -267,19 +222,31 @@
               <el-option label="全部类型" value="All" />
               <el-option v-for="type in library.holdTypes" :key="type" :label="type" :value="type" />
             </el-select>
-            <el-segmented v-model="library.previewMode" :options="['vector', 'image']" />
+            <el-segmented
+              v-model="library.previewMode"
+              :options="[{ label: '轮廓', value: 'vector' }, { label: '图片', value: 'image' }]"
+            />
           </div>
           <div class="asset-grid">
             <article v-for="hold in library.filteredHolds" :key="hold.key" class="hold-card">
               <HoldPreview :hold="hold" :mode="library.previewMode" />
               <strong>{{ hold.hold_type }}</strong>
               <span>{{ hold.variant }}</span>
-              <el-button text type="danger" :icon="Delete" @click="library.deleteHold(hold.hold_type, hold.variant)">删除</el-button>
+              <el-button
+                v-if="!library.showArchived"
+                text
+                type="danger"
+                :icon="Delete"
+                @click="library.archiveHold(hold.hold_type, hold.variant)"
+              >
+                归档
+              </el-button>
+              <el-button v-else text type="primary" @click="library.restoreHold(hold.hold_type, hold.variant)">恢复使用</el-button>
             </article>
           </div>
           <div v-if="!library.filteredHolds.length" class="empty-state">
-            <strong>暂无岩点资源</strong>
-            <span>上传岩点后可在 Studio 中使用。</span>
+            <strong>{{ library.showArchived ? '归档箱为空' : '暂无岩点资源' }}</strong>
+            <span>{{ library.showArchived ? '归档后的岩点会显示在这里。' : '上传岩点后可在定线工作台中使用。' }}</span>
           </div>
         </section>
       </div>
@@ -288,7 +255,7 @@
     <section v-else-if="activePage === 'boards'" class="page">
       <div class="page-header">
         <div>
-          <p class="eyebrow">Board Assets</p>
+          <p class="eyebrow">本地线路资产</p>
           <h2>岩板资产</h2>
         </div>
         <div class="command-row">
@@ -296,34 +263,125 @@
           <el-button type="primary" :icon="Plus" @click="startBlankStudio">新建岩板</el-button>
         </div>
       </div>
-      <div class="board-assets">
-        <article v-for="board in boards.savedBoards" :key="board.saved_id || board.route_name" class="board-card">
-          <div>
-            <strong>{{ board.route_name || '未命名岩板' }}</strong>
-            <span>{{ board.board_spec?.label || '岩板' }} / {{ board.placed_holds?.length || 0 }} 岩点 / {{ board.beta_sequence?.length || 0 }} Beta</span>
+      <el-segmented
+        v-model="boardAssetMode"
+        class="board-mode-switch"
+        :options="[{ label: '资产列表', value: 'list' }, { label: '岩板对照', value: 'compare' }]"
+      />
+
+      <template v-if="boardAssetMode === 'list'">
+        <el-segmented
+          v-model="savedBoardView"
+          :options="[
+            { label: `已启用 ${boards.savedBoards.length}`, value: 'active' },
+            { label: `归档箱 ${boards.archivedBoards.length}`, value: 'archived' },
+          ]"
+        />
+        <section class="section-block board-tag-filter-panel">
+          <div class="section-heading">
+            <div>
+              <h3>按标签筛选</h3>
+              <span>已匹配 {{ filteredSavedBoards.length }} / {{ visibleSavedBoards.length }} 个岩板资产</span>
+            </div>
+            <el-button text :disabled="!savedBoardFilters.tagIds.length" @click="clearSavedBoardTags">清除标签</el-button>
           </div>
-          <div class="card-actions">
-            <el-button :icon="Edit" @click="loadBoardIntoStudio(board)">载入编辑</el-button>
-            <el-button :icon="EditPen" @click="renameBoard(board)">重命名</el-button>
-            <el-button type="danger" plain :icon="Delete" @click="deleteBoard(board)">删除</el-button>
+          <div class="tag-filter-controls">
+            <el-select v-model="savedBoardFilters.tagIds" multiple clearable collapse-tags collapse-tags-tooltip placeholder="选择标签">
+              <el-option-group v-for="group in savedBoardTagGroups" :key="group.key" :label="group.label">
+                <el-option v-for="tag in group.tags" :key="tag.id" :label="tag.label" :value="tag.id" />
+              </el-option-group>
+            </el-select>
+            <el-segmented
+              v-model="savedBoardFilters.match"
+              :options="[{ label: '全部满足', value: 'all' }, { label: '满足任一', value: 'any' }]"
+            />
           </div>
-        </article>
-        <div v-if="!boards.savedBoards.length" class="empty-state">
-          <strong>暂无保存的岩板资产</strong>
-          <span>完成保存后会在这里显示。</span>
+        </section>
+        <div class="board-assets">
+          <article v-for="board in filteredSavedBoards" :key="board.saved_id || board.route_name" class="board-card">
+            <div>
+              <strong>{{ board.route_name || '未命名岩板' }}</strong>
+              <span>{{ boardSpecDisplayLabel(board) }} / {{ board.placed_holds?.length || 0 }} 岩点 / {{ board.beta_sequence?.length || 0 }} Beta</span>
+              <div class="board-readiness">
+                <span class="state-badge" :class="{ ready: board.workflow_status === 'ready_for_review' }">{{ workflowLabel(board) }}</span>
+                <span v-if="board.ai_eligible && !board.archived_at" class="state-badge ready">AI 可用</span>
+                <span v-else-if="!board.archived_at" class="state-badge">AI 不可用</span>
+              </div>
+              <small v-if="board.readiness_issues?.length" class="readiness-note">{{ board.readiness_issues.slice(0, 2).join('；') }}</small>
+              <div class="route-tag-list" aria-label="岩板标签">
+                <span v-for="tag in resolvedBoardTags(board)" :key="tag" class="route-tag">{{ tagLabel(tag) }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <template v-if="!board.archived_at">
+                <el-button :icon="Edit" @click="loadBoardIntoStudio(board)">载入编辑</el-button>
+                <el-button :icon="EditPen" @click="renameBoard(board)">重命名</el-button>
+                <el-button type="danger" plain :icon="Delete" @click="archiveBoard(board)">归档</el-button>
+              </template>
+              <el-button v-else type="primary" plain @click="restoreBoard(board)">恢复岩板</el-button>
+            </div>
+          </article>
+          <div v-if="!visibleSavedBoards.length" class="empty-state">
+            <strong>{{ savedBoardView === 'archived' ? '归档箱为空' : '暂无保存的岩板资产' }}</strong>
+            <span>{{ savedBoardView === 'archived' ? '归档资产可以在这里恢复。' : '完成保存后会在这里显示。' }}</span>
+          </div>
+          <div v-else-if="!filteredSavedBoards.length" class="empty-state">
+            <strong>没有匹配的岩板资产</strong>
+            <span>清除或调整标签条件后再试。</span>
+          </div>
         </div>
-      </div>
+      </template>
+
+      <template v-else>
+        <section class="section-block board-compare-picker">
+          <div class="section-heading">
+            <div>
+              <h3>选择 2–4 块已启用岩板</h3>
+              <span>第一块自动作为基准；对照仅在当前页面保留，不会修改或保存岩板。</span>
+            </div>
+            <el-button text :disabled="!compareBoardIds.length" @click="clearBoardComparison">清空对照</el-button>
+          </div>
+          <el-checkbox-group v-model="compareBoardIds" :max="4" class="board-compare-options">
+            <el-checkbox
+              v-for="board in boards.savedBoards"
+              :key="board.saved_id"
+              :value="board.saved_id"
+              border
+            >
+              {{ board.route_name || '未命名岩板' }} · {{ board.board_spec?.cellLabel || `${board.board_spec?.columns || board.board_spec?.cols || 11} × ${board.board_spec?.rows || 18}` }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <p v-if="boards.savedBoards.length < 2" class="control-help">至少需要两块已启用岩板。归档岩板恢复后才可加入对照。</p>
+          <p v-else-if="compareBoardIds.length < 2" class="control-help">还需选择 {{ 2 - compareBoardIds.length }} 块岩板才能开始对照。</p>
+        </section>
+
+        <div v-if="comparedBoards.length >= 2" :class="['board-comparison-grid', `count-${comparedBoards.length}`]">
+          <BoardComparisonPanel
+            v-for="(board, index) in comparedBoards"
+            :key="board.saved_id"
+            :board="board"
+            :reference="index === 0 ? null : comparedBoards[0]"
+            :label="index === 0 ? '基准岩板' : `对照岩板 ${index}`"
+            :baseline="index === 0"
+            :can-set-baseline="index > 0"
+            removable
+            :resolve-hold-visual="library.resolveHoldVisual"
+            @set-baseline="setComparisonBaseline(board.saved_id)"
+            @remove="removeComparedBoard(board.saved_id)"
+          />
+        </div>
+      </template>
     </section>
 
     <section v-else-if="activePage === 'standard-board'" class="page standard-board-page">
       <div class="page-header">
         <div>
-          <p class="eyebrow">Standard Board Dataset</p>
-          <h2>标准训练板线路库</h2>
+          <p class="eyebrow">标准线路数据</p>
+          <h2>标准线路库</h2>
         </div>
         <div class="command-row">
           <el-button :icon="Refresh" :loading="standardBoard.loading" @click="fetchStandardRoutes">刷新</el-button>
-          <el-button type="primary" :loading="standardBoard.generating" @click="generateStandardRoute">生成验证线路</el-button>
+          <el-button type="primary" :loading="standardBoard.generating" @click="generateStandardRoute">生成候选线路</el-button>
         </div>
       </div>
 
@@ -337,6 +395,14 @@
       />
 
       <section class="section-block standard-filters">
+        <el-input
+          v-if="standardBoard.mode === 'routes'"
+          v-model="standardBoard.filters.q"
+          clearable
+          placeholder="搜索名称、来源 ID 或定线者"
+          :prefix-icon="Search"
+          @keyup.enter="applyStandardFilters"
+        />
         <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.difficulty" placeholder="难度">
           <el-option v-for="grade in standardBoard.difficulties" :key="grade" :label="grade" :value="grade" />
         </el-select>
@@ -349,7 +415,7 @@
           <el-option label="横向跨度优先" value="span_desc" />
           <el-option label="岩点更少优先" value="holds_asc" />
         </el-select>
-        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.predicted_v_grade" clearable placeholder="预测难度">
+        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.predicted_grade" clearable placeholder="模型复核等级">
           <el-option v-for="grade in standardBoard.difficulties" :key="`predicted-${grade}`" :label="grade" :value="grade" />
         </el-select>
         <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.grade_warning" clearable placeholder="难度复核">
@@ -358,16 +424,42 @@
           <el-option label="可信度不足" value="uncertain" />
         </el-select>
         <el-checkbox v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.benchmark_only">只看标杆线</el-checkbox>
+        <el-select
+          v-if="standardBoard.mode === 'routes'"
+          v-model="standardBoard.filters.tag_ids"
+          multiple
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="路线标签"
+        >
+          <el-option-group v-for="group in standardRouteTagGroups" :key="group.key" :label="group.label">
+            <el-option v-for="tag in group.tags" :key="tag.id" :label="tag.label" :value="tag.id" />
+          </el-option-group>
+        </el-select>
+        <el-segmented
+          v-if="standardBoard.mode === 'routes'"
+          v-model="standardBoard.filters.tag_match"
+          :options="[{ label: '全部满足', value: 'all' }, { label: '满足任一', value: 'any' }]"
+        />
         <el-select v-if="standardBoard.mode === 'repairs'" v-model="standardBoard.repairFilters.status" placeholder="修复状态">
           <el-option label="已生成修复候选" value="repaired" />
           <el-option label="可尝试但未通过" value="repairable" />
           <el-option label="不可修复" value="unrepairable" />
         </el-select>
+        <el-input
+          v-if="standardBoard.mode === 'repairs'"
+          v-model="standardBoard.repairFilters.q"
+          clearable
+          placeholder="搜索名称、来源 ID 或定线者"
+          :prefix-icon="Search"
+          @keyup.enter="applyRepairFilters"
+        />
         <el-button
           type="primary"
           plain
           :loading="standardBoard.mode === 'routes' ? standardBoard.loading : standardBoard.repairLoading"
-          @click="standardBoard.mode === 'routes' ? fetchStandardRoutes() : fetchRepairRoutes()"
+          @click="standardBoard.mode === 'routes' ? applyStandardFilters() : applyRepairFilters()"
         >
           应用筛选
         </el-button>
@@ -378,24 +470,26 @@
         v-if="standardBoard.generatedMeta"
         type="success"
         :closable="false"
-        :title="`已生成标准板线路：重用率 ${(standardBoard.generatedMeta.reuse_rate * 100).toFixed(1)}%，${standardBoard.generatedMeta.reuse_quality}`"
+        :title="`已生成标准板线路：重用率 ${(standardBoard.generatedMeta.reuse_rate * 100).toFixed(1)}%，${reuseQualityLabel(standardBoard.generatedMeta.reuse_quality)}`"
       />
 
       <div v-if="standardBoard.mode === 'routes'" class="standard-board-layout">
         <section class="section-block route-list-panel">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Routes</p>
+              <p class="eyebrow">线路列表</p>
               <h3>{{ standardBoard.total }} 条匹配线路</h3>
             </div>
-            <span class="state-badge">虚拟点亮</span>
+            <span class="state-badge">坐标预览</span>
           </div>
-          <div v-if="!standardBoard.routes.length" class="empty-state">
+          <el-skeleton v-if="standardBoard.loading" :rows="8" animated />
+          <div v-else-if="!standardBoard.routes.length" class="empty-state">
             <strong>暂无匹配线路</strong>
             <span>调整难度或标杆线条件后再试。</span>
           </div>
           <button
             v-for="route in standardBoard.routes"
+            v-show="!standardBoard.loading"
             :key="route.source_id"
             class="standard-route-row"
             :class="{ active: standardBoard.selected?.source_id === route.source_id }"
@@ -403,16 +497,31 @@
           >
             <span>
               <strong>{{ route.display_name }}</strong>
-              <small>标称 {{ route.v_grade }} / 预测 {{ route.predicted_v_grade || '-' }} / {{ route.features.hold_count }} 点 / {{ tierLabel(route.quality_tier) }}</small>
+              <small>MoonBoard 原始 {{ route.grade }} / 模型复核 {{ route.predicted_grade || '-' }} / {{ route.features.hold_count }} 点</small>
+              <small>{{ confidenceLabel(route.confidence_tier) }} · {{ calibrationLabel(route.calibration_status) }}</small>
+              <small>{{ route.setter_name }} · {{ route.is_benchmark ? 'Benchmark' : '普通线路' }}</small>
               <small>{{ gradeWarningLabel(route) }}</small>
+              <span class="route-tag-list">
+                <span v-for="tag in route.tags || []" :key="tag" class="route-tag">{{ tagLabel(tag) }}</span>
+              </span>
             </span>
             <span>
               <em>{{ route.quality_score ?? Math.round(route.score) }}</em>
               <small class="quality-tier">{{ tierLabel(route.quality_tier) }}</small>
               <small>难度 {{ route.difficulty_score ?? '-' }}</small>
-              <small>{{ route.repeats }} repeats</small>
+              <small>{{ route.repeats }} 次重复</small>
             </span>
           </button>
+          <el-pagination
+            v-if="standardBoard.total > standardBoard.filters.limit"
+            class="route-pagination"
+            background
+            layout="prev, pager, next"
+            :page-size="standardBoard.filters.limit"
+            :total="standardBoard.total"
+            :current-page="Math.floor(standardBoard.filters.offset / standardBoard.filters.limit) + 1"
+            @current-change="changeStandardPage"
+          />
         </section>
 
         <section class="standard-preview-column">
@@ -438,19 +547,25 @@
             <template v-if="standardBoard.selected">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Selected Route</p>
+                  <p class="eyebrow">当前线路</p>
                   <h3>{{ standardBoard.selected.display_name }}</h3>
+                  <p class="route-source-line">
+                    {{ standardBoard.selected.setter_name }} · MoonBoard 原始等级 {{ standardBoard.selected.grade }}
+                  </p>
                 </div>
                 <div class="command-row">
                   <el-button :type="standardBoard.activity?.favorite ? 'warning' : 'default'" plain @click="toggleStandardFavorite">
                     {{ standardBoard.activity?.favorite ? '取消收藏' : '收藏' }}
                   </el-button>
-                  <el-button type="primary" plain @click="loadStandardIntoStudio">载入 Studio</el-button>
+                  <el-button v-if="simulationEnabled" plain @click="openSelectedRouteSimulation">仿真审核</el-button>
+                  <el-button type="primary" plain @click="loadStandardIntoStudio">载入定线工作台</el-button>
                 </div>
               </div>
               <div class="standard-stats">
-                <span>标称 {{ standardBoard.selected.v_grade }}</span>
-                <span>预测 {{ standardBoard.selected.predicted_v_grade || '-' }}</span>
+                <span>原始 {{ standardBoard.selected.grade }}</span>
+                <span>模型复核 {{ standardBoard.selected.predicted_grade || '-' }}</span>
+                <span>{{ confidenceLabel(standardBoard.selected.confidence_tier) }}</span>
+                <span>{{ calibrationLabel(standardBoard.selected.calibration_status) }}</span>
                 <span>难度 {{ standardBoard.selected.difficulty_score ?? '-' }}</span>
                 <span>{{ gradeWarningLabel(standardBoard.selected) }}</span>
                 <span>{{ standardBoard.selected.quality_score ?? 0 }} 分</span>
@@ -458,6 +573,18 @@
                 <span>{{ standardBoard.selected.features.x_span }} 列跨度</span>
                 <span>{{ standardBoard.selected.features.y_span }} 行高度</span>
                 <span>{{ standardBoard.selected.validation?.valid_for_climb ? '可攀路线' : '需复核' }}</span>
+              </div>
+              <a
+                v-if="standardBoard.selected.source_url"
+                class="source-link"
+                :href="standardBoard.selected.source_url"
+                target="_blank"
+                rel="noreferrer"
+              >
+                查看原始线路来源
+              </a>
+              <div class="route-tag-list" aria-label="路线标签">
+                <span v-for="tag in standardBoard.selected.tags || []" :key="tag" class="route-tag">{{ tagLabel(tag) }}</span>
               </div>
               <div class="score-breakdown">
                 <span v-for="item in scoreBreakdownItems(standardBoard.selected.score_breakdown)" :key="item.key">
@@ -467,7 +594,7 @@
               <section class="difficulty-panel">
                 <div class="section-heading">
                   <div>
-                    <p class="eyebrow">Difficulty</p>
+                    <p class="eyebrow">难度说明</p>
                     <h3>难度评估</h3>
                   </div>
                   <span class="state-badge">可信度 {{ percentLabel(standardBoard.selected.difficulty_confidence) }}</span>
@@ -493,7 +620,7 @@
               <section class="standard-activity-panel">
                 <div class="section-heading">
                   <div>
-                    <p class="eyebrow">Training Log</p>
+                    <p class="eyebrow">训练记录</p>
                     <h3>我的训练记录</h3>
                   </div>
                   <span class="state-badge">{{ standardBoard.activity?.stats?.attempts_total || 0 }} 次尝试</span>
@@ -533,7 +660,7 @@
             </template>
             <div v-else class="empty-state">
               <strong>选择一条线路</strong>
-              <span>系统会在网页画布中进行虚拟点亮，不连接任何真实控制器。</span>
+              <span>系统只在网页画布中标记线路坐标，不连接任何真实控制器。</span>
             </div>
           </section>
         </section>
@@ -543,7 +670,7 @@
         <section class="section-block route-list-panel">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">Repair Queue</p>
+              <p class="eyebrow">修复队列</p>
               <h3>{{ standardBoard.repairTotal }} 条待修复线路</h3>
             </div>
             <span class="state-badge">候选修复</span>
@@ -567,12 +694,14 @@
               放入线路库
             </el-button>
           </div>
-          <div v-if="!standardBoard.repairs.length" class="empty-state">
+          <el-skeleton v-if="standardBoard.repairLoading" :rows="8" animated />
+          <div v-else-if="!standardBoard.repairs.length" class="empty-state">
             <strong>暂无待修复候选</strong>
             <span>切换状态或刷新队列后再试。</span>
           </div>
           <button
             v-for="repair in standardBoard.repairs"
+            v-show="!standardBoard.repairLoading"
             :key="repair.source_id"
             class="standard-route-row"
             :class="{ active: standardBoard.selectedRepair?.source_id === repair.source_id }"
@@ -585,9 +714,9 @@
               @change="toggleRepairSelection(repair.source_id, $event)"
             />
             <span>
-              <strong>Standard route {{ repair.source_id }}</strong>
-              <small>{{ repair.review_reasons?.join(' / ') || repair.repair_status }}</small>
-              <small>预测 {{ repair.predicted_v_grade || '-' }} / {{ gradeWarningLabel(repair) }}</small>
+              <strong>{{ repair.source_name || `标准线路 ${repair.source_id}` }}</strong>
+              <small>{{ repair.setter_name }} · MoonBoard 原始等级 {{ repair.original_grade }}</small>
+              <small>{{ repair.review_reasons?.join(' / ') || repairStatusLabel(repair.repair_status) }}</small>
             </span>
             <span>
               <em>{{ repair.quality_score ?? '-' }}</em>
@@ -595,14 +724,27 @@
               <small>难度 {{ repair.difficulty_score ?? '-' }}</small>
             </span>
           </button>
+          <el-pagination
+            v-if="standardBoard.repairTotal > standardBoard.repairFilters.limit"
+            class="route-pagination"
+            background
+            layout="prev, pager, next"
+            :page-size="standardBoard.repairFilters.limit"
+            :total="standardBoard.repairTotal"
+            :current-page="Math.floor(standardBoard.repairFilters.offset / standardBoard.repairFilters.limit) + 1"
+            @current-change="changeRepairPage"
+          />
         </section>
 
-        <section class="standard-preview-column repair-preview-column">
+        <section v-if="standardBoard.repairLoading" class="section-block standard-preview-column repair-preview-column">
+          <el-skeleton :rows="12" animated />
+        </section>
+        <section v-else-if="standardBoard.repairs.length" class="standard-preview-column repair-preview-column">
           <div class="repair-comparison-grid">
             <article class="repair-preview-panel">
               <div class="preview-panel-heading">
                 <span>修复前</span>
-                <small>{{ standardBoard.repairComparison?.original?.predicted_v_grade || '-' }}</small>
+                <small>{{ standardBoard.repairComparison?.original?.predicted_grade || '-' }}</small>
               </div>
               <div class="standard-preview-canvas">
                 <BoardCanvas
@@ -625,7 +767,7 @@
             <article class="repair-preview-panel">
               <div class="preview-panel-heading">
                 <span>修复后</span>
-                <small>{{ standardBoard.repairComparison?.repaired?.predicted_v_grade || '-' }}</small>
+                <small>{{ standardBoard.repairComparison?.repaired?.predicted_grade || '-' }}</small>
               </div>
               <div v-if="standardBoard.repairComparison?.repaired" class="standard-preview-canvas">
                 <BoardCanvas
@@ -655,12 +797,12 @@
             <template v-if="standardBoard.selectedRepair">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Repair Candidate</p>
-                  <h3>Standard route {{ standardBoard.selectedRepair.source_id }}</h3>
+                  <p class="eyebrow">修复候选</p>
+                  <h3>{{ standardBoard.selectedRepair.source_name || `标准线路 ${standardBoard.selectedRepair.source_id}` }}</h3>
                 </div>
                 <div class="command-row">
                   <el-button :disabled="standardBoard.selectedRepair.repair_status !== 'repaired'" @click="previewRepairRoute(standardBoard.selectedRepair.source_id)">预览修复</el-button>
-                  <el-button type="primary" plain :disabled="!standardBoard.repairPreview?.board_asset" @click="loadRepairIntoStudio">载入 Studio</el-button>
+                  <el-button type="primary" plain :disabled="!standardBoard.repairPreview?.board_asset" @click="loadRepairIntoStudio">载入定线工作台</el-button>
                 </div>
               </div>
               <div class="standard-stats">
@@ -668,7 +810,7 @@
                 <span>补手点 {{ standardBoard.selectedRepair.added_start_hands?.join(', ') || '无' }}</span>
                 <span>派生脚点 {{ standardBoard.selectedRepair.derived_start_feet?.join(', ') || '无' }}</span>
                 <span>评分 {{ standardBoard.selectedRepair.quality_score ?? '-' }}</span>
-                <span>预测 {{ standardBoard.selectedRepair.predicted_v_grade || '-' }}</span>
+                <span>预测 {{ standardBoard.selectedRepair.predicted_grade || '-' }}</span>
                 <span>难度 {{ standardBoard.selectedRepair.difficulty_score ?? '-' }}</span>
                 <span>{{ gradeWarningLabel(standardBoard.selectedRepair) }}</span>
               </div>
@@ -690,30 +832,45 @@
             </div>
           </section>
         </section>
+        <section v-else class="section-block empty-state">
+          <strong>当前筛选下没有修复候选</strong>
+          <span>原始线路不会被修改；可以切换修复状态或稍后重新生成审核队列。</span>
+        </section>
       </div>
     </section>
+
+    <SimulationLab
+      v-else-if="simulationEnabled && activePage === 'simulation'"
+      :initial-source-id="simulationSourceId"
+      :resolve-hold-visual="library.resolveHoldVisual"
+      @load-candidate="loadSimulationCandidate"
+    />
 
     <section v-else class="page ai-page">
       <div class="lab-panel">
         <div class="lab-heading">
           <div>
-            <p class="eyebrow">AI Lab</p>
+            <p class="eyebrow">规则辅助实验</p>
             <h2>实验任务</h2>
           </div>
           <el-button :icon="Refresh" :loading="boards.loading" @click="boards.fetchMyBoards">刷新岩板</el-button>
+        </div>
+        <div class="ai-lab-scope" role="note" aria-label="AI 实验室功能定位">
+          <strong>辅助定线，不替代试爬</strong>
+          <span>用于讨论候选、发现明显结构问题、生成不覆盖原线路的草案，并保留可复核的评分和规则证据。</span>
         </div>
         <section class="ai-board-picker">
           <div class="panel-heading">
             <div>
               <h3>选择岩板资产</h3>
-              <span>AI Lab 会基于这里选中的岩板执行任务。</span>
+              <span>AI 实验室会基于这里选中的岩板执行任务。</span>
             </div>
-            <el-button v-if="selectedAiBoard" plain @click="loadSelectedAiBoardIntoStudio">载入 Studio</el-button>
+            <el-button v-if="selectedAiBoard" plain @click="loadSelectedAiBoardIntoStudio">载入定线工作台</el-button>
           </div>
-          <template v-if="boards.savedBoards.length">
+          <template v-if="aiAvailableBoards.length">
             <el-select v-model="aiExperiment.selectedBoardId" placeholder="选择岩板资产">
               <el-option
-                v-for="board in boards.savedBoards"
+                v-for="board in aiAvailableBoards"
                 :key="board.saved_id || board.route_name"
                 :label="board.route_name || '未命名岩板'"
                 :value="board.saved_id"
@@ -721,7 +878,7 @@
             </el-select>
             <div class="ai-board-list">
               <button
-                v-for="board in boards.savedBoards"
+                v-for="board in aiAvailableBoards"
                 :key="board.saved_id || board.route_name"
                 type="button"
                 class="ai-board-option"
@@ -729,16 +886,17 @@
                 @click="selectAiBoard(board)"
               >
                 <strong>{{ board.route_name || '未命名岩板' }}</strong>
-                <span>{{ board.board_spec?.label || '岩板' }} / {{ board.placed_holds?.length || 0 }} 岩点 / {{ board.beta_sequence?.length || 0 }} Beta</span>
+                <span>{{ boardSpecDisplayLabel(board) }} / {{ board.placed_holds?.length || 0 }} 岩点 / {{ board.beta_sequence?.length || 0 }} Beta</span>
+                <span>{{ workflowLabel(board) }}{{ board.ai_eligible ? ' / AI 可用' : ' / 布局初审' }}</span>
               </button>
             </div>
           </template>
           <div v-else class="empty-state">
-            <strong>还没有可用于 AI Lab 的岩板资产</strong>
-            <span>先在 Studio 保存岩板，或到岩板资产页确认已有数据。</span>
+            <strong>{{ aiExperiment.mode === 'compose_route' ? '没有可用于 AI 组合的完整线路' : '没有可用于布局初审的 11×18 岩板' }}</strong>
+            <span>{{ aiExperiment.mode === 'compose_route' ? '先在定线工作台按提示补全 Beta 和起终点，再保存线路。' : '先保存一块 11×18 岩板。' }}</span>
             <div class="command-row">
               <el-button type="primary" plain @click="activePage = 'boards'">查看岩板资产</el-button>
-              <el-button @click="activePage = 'studio'">进入 Studio</el-button>
+              <el-button @click="activePage = 'studio'">进入定线工作台</el-button>
             </div>
           </div>
           <div v-if="selectedAiBoard" class="selected-board-summary">
@@ -747,6 +905,7 @@
             <span>{{ selectedAiBoardStats.holds }} 岩点</span>
             <span>{{ selectedAiBoardStats.beta }} Beta</span>
             <span>{{ selectedAiBoardStats.difficulty }}</span>
+            <span>{{ workflowLabel(selectedAiBoard) }}</span>
           </div>
           <el-alert
             v-if="aiBoardBlockingMessage"
@@ -772,37 +931,60 @@
               { label: '提出修改建议', value: 'review_route' },
             ]"
           />
-          <el-input
-            v-model="aiExperiment.user_requirements"
-            type="textarea"
-            :rows="3"
-            placeholder="输入本次实验要求，例如：增加动态动作，或检查脚点是否过高"
-          />
+          <el-select
+            v-if="aiExperiment.mode === 'compose_route'"
+            v-model="aiExperiment.generation_goal"
+            aria-label="AI 组合目标"
+            placeholder="选择组合目标"
+          >
+            <el-option label="质量优先" value="quality_first" />
+            <el-option label="目标难度优先" value="grade_match" />
+            <el-option label="动作风格多样" value="style_variation" />
+          </el-select>
+          <el-select
+            v-else
+            v-model="aiExperiment.review_focus"
+            aria-label="AI 审核重点"
+            placeholder="选择审核重点"
+          >
+            <el-option label="综合检查" value="overall" />
+            <el-option label="脚点检查" value="footholds" />
+            <el-option label="难度检查" value="difficulty" />
+            <el-option label="动作顺序检查" value="beta_sequence" />
+          </el-select>
+          <p class="control-help">
+            {{ aiExperiment.mode === 'compose_route'
+              ? '只有通过完整静态人体工学门禁的岩板才会返回；无合格路径时建议保留原线路。'
+              : '所选重点会改变专项检查；自动修复岩板同样必须通过完整静态门禁。' }}
+          </p>
         </div>
         <div class="command-row">
           <el-button type="primary" :disabled="!canRunAiExperiment" :loading="routeGen.loading" @click="runAiExperiment">提交所选岩板</el-button>
           <el-button v-if="routeGen.loading" @click="routeGen.cancelGeneration">取消任务</el-button>
-          <el-button @click="activePage = 'studio'">返回 Studio</el-button>
+          <el-button @click="activePage = 'studio'">返回定线工作台</el-button>
         </div>
-        <el-alert v-if="routeGen.taskId" type="info" :closable="false" :title="`任务 ID：${routeGen.taskId}`" />
+        <el-alert
+          v-if="routeGen.taskId"
+          type="info"
+          :closable="false"
+          :title="`任务 ${routeGen.taskId} · ${aiTaskStatusLabel(routeGen.status)} · ${routeGen.elapsedSeconds} 秒`"
+        />
         <el-alert v-if="routeGen.error" type="error" :closable="false" :title="routeGen.error" />
         <section v-if="routeGen.result" class="experiment-result">
-          <div class="result-context">
-            <span>分析岩板：{{ selectedAiBoard?.route_name || '所选岩板' }}</span>
-            <span>{{ selectedAiBoardStats.holds }} 岩点 / {{ selectedAiBoardStats.beta }} Beta / {{ selectedAiBoardStats.difficulty }}</span>
-            <span>{{ routeGen.result.llm_enriched ? 'LLM 已润色' : '本地算法结果' }}</span>
-          </div>
-          <div class="result-metrics">
-            <span v-if="routeGen.result.analysis_summary">{{ routeGen.result.analysis_summary }}</span>
-            <span v-if="routeGen.result.metrics?.target_v_grade">目标 {{ routeGen.result.metrics.target_v_grade }}</span>
-            <span v-if="routeGen.result.metrics?.quality_score !== undefined">质量 {{ routeGen.result.metrics.quality_score }}</span>
-            <span v-if="routeGen.result.metrics?.predicted_v_grade">预测 {{ routeGen.result.metrics.predicted_v_grade }}</span>
-            <span v-if="routeGen.result.metrics?.risk_score !== undefined">风险 {{ routeGen.result.metrics.risk_score }}</span>
-            <span v-if="routeGen.result.risk_level">等级 {{ riskLevelLabel(routeGen.result.risk_level) }}</span>
-          </div>
-          <div v-if="routeGen.result.applied_constraints?.length" class="result-metrics">
-            <span v-for="constraint in routeGen.result.applied_constraints" :key="constraint">{{ constraint }}</span>
-          </div>
+          <header class="experiment-verdict">
+            <div>
+              <span>{{ routeGen.result.mode === 'review_route' ? '定线建议' : '重组建议' }}</span>
+              <strong>{{ routeGen.result.recommendation?.title || routeGen.result.review_summary || routeGen.result.analysis_summary }}</strong>
+              <p>{{ routeGen.result.recommendation?.summary || routeGen.result.review_summary }}</p>
+            </div>
+            <span
+              v-if="routeGen.result.risk_level"
+              :class="['verdict-risk', `is-${routeGen.result.metrics?.risk_assessment_status === 'partial' ? 'partial' : routeGen.result.risk_level}`]"
+            >
+              {{ riskAssessmentLabel(routeGen.result) }}
+            </span>
+          </header>
+
           <template v-if="routeGen.result.mode === 'compose_route'">
             <el-alert
               v-if="routeGen.result.failure_suggestion"
@@ -811,38 +993,119 @@
               :title="routeGen.result.failure_suggestion"
               show-icon
             />
-            <article v-for="(route, index) in routeGen.result.selected_routes" :key="route.route_name" class="result-card">
-              <span>{{ candidateMeta(index).label_text || '候选路线' }}</span>
-              <strong>{{ route.route_name }}</strong>
-              <p>{{ route.setter_commentary }}</p>
-              <span>
-                {{ route.placed_holds?.length || 0 }} 岩点 / {{ route.beta_sequence?.length || 0 }} Beta
-                / 质量 {{ candidateMeta(index).quality_score ?? '-' }}
-                / 预测 {{ candidateMeta(index).predicted_v_grade || '-' }}
-              </span>
-              <small v-if="candidateMeta(index).notes?.length">{{ candidateMeta(index).notes.join(' / ') }}</small>
-              <el-button @click="loadBoardIntoStudio(route)">载入 Studio</el-button>
-            </article>
+            <div v-if="routeGen.result.selected_routes?.[0]" class="ai-primary-board">
+              <BoardComparisonPanel
+                :board="routeGen.result.selected_routes[0]"
+                label="最佳新岩板"
+                loadable
+                :show-beta="false"
+                :show-movement-count="false"
+                :show-details="false"
+                :resolve-hold-visual="library.resolveHoldVisual"
+                @load="loadAiCandidateIntoStudio(routeGen.result.selected_routes[0])"
+              />
+            </div>
           </template>
+
           <template v-else>
-            <strong>{{ routeGen.result.review_summary }}</strong>
-            <p>风险等级：{{ routeGen.result.risk_level }}</p>
             <article v-for="violation in routeGen.result.violations" :key="violation.code" class="result-card result-card-critical">
-              <span>必须修</span>
+              <span>必须处理</span>
               <strong>{{ violation.message }}</strong>
-              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join(', ') }}</small>
+              <small v-if="violation.hold_ids?.length">相关岩点：{{ violation.hold_ids.join('、') }}</small>
             </article>
             <article v-for="suggestion in routeGen.result.suggestions" :key="suggestion.title" class="result-card">
               <span>{{ suggestionGroupLabel(suggestion) }}</span>
               <strong>{{ suggestion.title }}</strong>
               <p>{{ suggestion.detail }}</p>
-              <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join(', ') }}</span>
-              <el-button v-if="suggestion.candidate_route" type="primary" plain @click="loadBoardIntoStudio(suggestion.candidate_route)">载入修复候选</el-button>
             </article>
+            <div v-if="reviewRepairCandidate" class="ai-primary-board">
+              <BoardComparisonPanel
+                :board="reviewRepairCandidate"
+                label="通过门禁的修复岩板"
+                loadable
+                :show-beta="false"
+                :show-movement-count="false"
+                :show-details="false"
+                :resolve-hold-visual="library.resolveHoldVisual"
+                @load="loadAiCandidateIntoStudio(reviewRepairCandidate)"
+              />
+            </div>
           </template>
-          <div v-if="routeGen.result.algorithm_notes?.length" class="result-metrics">
-            <span v-for="note in routeGen.result.algorithm_notes" :key="note">{{ note }}</span>
-          </div>
+
+          <el-collapse class="ai-analysis-collapse">
+            <el-collapse-item title="查看分析依据" name="analysis">
+              <div class="result-context">
+                <span>分析岩板：{{ selectedAiBoard?.route_name || '所选岩板' }}</span>
+                <span>{{ selectedAiBoardStats.holds }} 岩点 / {{ selectedAiBoardStats.difficulty }}</span>
+                <span>{{ routeGen.result.llm_enriched ? 'AI 已用中文润色' : '本地中文结果' }}</span>
+              </div>
+              <div class="result-metrics">
+                <span v-if="routeGen.result.metrics?.target_grade">目标 {{ routeGen.result.metrics.target_grade }}</span>
+                <span v-if="routeGen.result.metrics?.quality_score !== undefined">结构质量 {{ routeGen.result.metrics.quality_score }}</span>
+                <span v-if="routeGen.result.metrics?.predicted_grade">MoonBoard 等效难度 {{ routeGen.result.metrics.predicted_grade }}</span>
+                <span v-if="routeGen.result.metrics?.risk_score !== undefined">{{ riskMetricLabel(routeGen.result.metrics) }}</span>
+                <span v-if="routeGen.result.risk_level">等级 {{ riskLevelLabel(routeGen.result.risk_level) }}</span>
+                <span v-if="routeGen.result.metrics?.review_scope">{{ reviewScopeLabel(routeGen.result.metrics.review_scope) }}</span>
+              </div>
+              <div v-if="routeGen.result.applied_constraints?.length" class="result-metrics">
+                <span v-for="constraint in routeGen.result.applied_constraints" :key="constraint">{{ constraint }}</span>
+              </div>
+
+              <div v-if="routeGen.result.mode === 'compose_route' && aiComparisonReference" class="ai-comparison-grid count-2">
+                <BoardComparisonPanel
+                  :board="aiComparisonReference"
+                  label="原岩板"
+                  baseline
+                  :show-beta="false"
+                  :show-movement-count="false"
+                  :resolve-hold-visual="library.resolveHoldVisual"
+                />
+                <BoardComparisonPanel
+                  v-if="routeGen.result.selected_routes?.[0]"
+                  :board="routeGen.result.selected_routes[0]"
+                  :reference="aiComparisonReference"
+                  :label="candidateMeta(0).label_text || '最佳新岩板'"
+                  :meta="candidateMeta(0)"
+                  :show-beta="false"
+                  :show-movement-count="false"
+                  :resolve-hold-visual="library.resolveHoldVisual"
+                />
+              </div>
+
+              <template v-if="routeGen.result.mode === 'review_route'">
+                <div v-if="routeGen.result.board" class="review-board-preview">
+                  <BoardComparisonPanel
+                    :board="routeGen.result.board"
+                    label="审核对象"
+                    baseline
+                    :show-movement-count="false"
+                    :resolve-hold-visual="library.resolveHoldVisual"
+                  />
+                </div>
+                <article v-for="suggestion in routeGen.result.suggestions" :key="`evidence-${suggestion.title}`" class="result-card">
+                  <strong>{{ suggestion.title }}</strong>
+                  <dl class="suggestion-evidence">
+                    <div><dt>本次观测</dt><dd>{{ suggestion.observed || '暂无量化观测' }}</dd></div>
+                    <div><dt>判定阈值</dt><dd>{{ suggestion.threshold || '未设置阈值' }}</dd></div>
+                    <div><dt>预计改善</dt><dd>{{ suggestion.expected_effect || '需要定线者复核' }}</dd></div>
+                  </dl>
+                  <div class="suggestion-locators">
+                    <span v-if="suggestion.hold_ids?.length">相关岩点：{{ suggestion.hold_ids.join('、') }}</span>
+                    <span v-if="suggestion.beta_steps?.length">原线路 Beta 步骤：{{ suggestion.beta_steps.join('、') }}</span>
+                    <span>证据{{ evidenceStatusLabel(suggestion.evidence_status) }} · {{ confidenceLabel(suggestion.confidence) }}</span>
+                  </div>
+                </article>
+              </template>
+
+              <AIExperimentExplanation
+                v-if="routeGen.result.explanation"
+                :explanation="routeGen.result.explanation"
+              />
+              <div v-if="routeGen.result.algorithm_notes?.length" class="result-metrics">
+                <span v-for="note in routeGen.result.algorithm_notes" :key="note">{{ note }}</span>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
         </section>
       </div>
     </section>
@@ -850,39 +1113,53 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue'
-import { Collection, Delete, DocumentChecked, Edit, EditPen, Grid, Histogram, Lock, Message, Plus, Refresh, Right, Search, Upload, User } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { computed, defineAsyncComponent, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { Collection, Delete, DocumentChecked, Edit, EditPen, Grid, Histogram, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import AIExperimentExplanation from './components/AIExperimentExplanation.vue'
 import AppShell from './components/AppShell.vue'
 import BoardCanvas from './components/BoardCanvas.vue'
+import PhotoRoutesPage from './components/PhotoRoutesPage.vue'
+import BoardComparisonPanel from './components/BoardComparisonPanel.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
-import { useAuth } from './composables/useAuth'
 import { useBoardPersistence } from './composables/useBoardPersistence'
 import { useHoldLibrary } from './composables/useHoldLibrary'
 import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
+import { DEFAULT_FONT_GRADE, FONT_GRADES, UNGRADED, calibrationLabel, confidenceLabel } from './constants/gradeSystem'
+import { ROUTE_TAG_GROUPS, boardSystemTags, boardTags, matchesTags, tagLabel } from './constants/routeTags'
 import standardBoardService from './services/standardBoardService'
 
 const activePage = ref('dashboard')
-const { currentUser, login, register, skipLogin, logout } = useAuth()
-const authMode = ref('login')
-const authLoading = ref(false)
-const authError = ref('')
-const authSuccess = ref('')
-const authForm = reactive({ email: '', password: '', name: '' })
+const simulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION === 'true'
+const SimulationLab = simulationEnabled
+  ? defineAsyncComponent(() => import('./components/SimulationLab.vue'))
+  : null
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
+const photoPage = ref(null)
+const photoStatus = ref({ count: 0, dirty: false, state: '' })
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
-const aiExperiment = reactive({ mode: 'compose_route', user_requirements: '', selectedBoardId: '' })
+const aiExperiment = reactive({
+  mode: 'compose_route',
+  generation_goal: 'quality_first',
+  review_focus: 'overall',
+  selectedBoardId: '',
+})
+const simulationSourceId = ref('')
+const boardAssetMode = ref('list')
+const savedBoardView = ref('active')
+const compareBoardIds = ref([])
+const savedBoardFilters = reactive({ tagIds: [], match: 'all' })
 const standardBoardColumns = Array.from({ length: 11 }, (_, index) => String.fromCharCode(65 + index))
 const standardBoardRows = Array.from({ length: 18 }, (_, index) => index + 1)
 const standardBoardSpec = {
   preset_id: 'classic-11x18',
   template_key: 'spray-small',
-  label: 'Standard training board 11x18',
-  name: 'Standard training board 11x18',
+  label: '11×18 标准训练板',
+  name: '11×18 标准训练板',
   columns: 11,
   cols: 11,
   rows: 18,
@@ -903,9 +1180,9 @@ const standardBoardSpec = {
   cellLabel: '11 x 18',
   physicalLabel: '2440 x 3660 mm',
   spacingLabel: '200 x 200 mm',
-  angleLabel: '40 deg',
-  material: 'wood composite',
-  skinClass: 'skin-wood-classic',
+  angleLabel: '40°',
+  material: null,
+  skinClass: null,
 }
 const standardBoard = reactive({
   mode: 'routes',
@@ -926,17 +1203,21 @@ const standardBoard = reactive({
   generatedMeta: null,
   total: 0,
   repairTotal: 0,
-  difficulties: ['V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'],
+  difficulties: FONT_GRADES,
   filters: {
-    difficulty: 'V3',
-    predicted_v_grade: '',
+    q: '',
+    difficulty: DEFAULT_FONT_GRADE,
+    predicted_grade: '',
     grade_warning: '',
     benchmark_only: false,
+    tag_ids: [],
+    tag_match: 'all',
     sort: 'score_desc',
     limit: 24,
     offset: 0,
   },
   repairFilters: {
+    q: '',
     status: '',
     limit: 24,
     offset: 0,
@@ -951,20 +1232,29 @@ const standardBoard = reactive({
 
 const pageTitle = computed(() => ({
   dashboard: '总览',
-  studio: 'Studio 工作台',
+  studio: '定线工作台',
+  'photo-routes': '照片线路',
   library: '岩点库',
   boards: '岩板资产',
   'standard-board': '标准板库',
-  'ai-lab': 'AI Lab',
-}[activePage.value] || 'Climbing Board Studio'))
+  simulation: '仿真审核',
+  'ai-lab': 'AI 实验室',
+}[activePage.value] || '攀岩定线辅助系统'))
 
 const selectedDashboardTemplate = computed(() => (
   studio.boardPresets.find((template) => template.id === selectedDashboardTemplateId.value) || studio.boardPresets[0]
 ))
 
+const aiAvailableBoards = computed(() => boards.savedBoards.filter((board) => {
+  const columns = Number(board.board_spec?.columns || board.board_spec?.cols || 11)
+  const rows = Number(board.board_spec?.rows || 18)
+  if (columns !== 11 || rows !== 18) return false
+  return aiExperiment.mode === 'review_route' || board.ai_eligible
+}))
+
 const selectedAiBoard = computed(() => {
-  if (!boards.savedBoards.length) return null
-  return boards.savedBoards.find((board) => board.saved_id === aiExperiment.selectedBoardId) || boards.savedBoards[0]
+  if (!aiAvailableBoards.value.length) return null
+  return aiAvailableBoards.value.find((board) => board.saved_id === aiExperiment.selectedBoardId) || aiAvailableBoards.value[0]
 })
 
 const selectedAiBoardStats = computed(() => {
@@ -972,8 +1262,8 @@ const selectedAiBoardStats = computed(() => {
   return {
     holds: board?.placed_holds?.length || 0,
     beta: board?.beta_sequence?.length || 0,
-    difficulty: board?.difficulty || 'V3',
-    spec: board?.board_spec?.label || board?.board_spec?.name || '岩板',
+    difficulty: board?.difficulty || UNGRADED,
+    spec: boardSpecDisplayLabel(board),
   }
 })
 
@@ -981,22 +1271,7 @@ const aiBoardWarnings = computed(() => {
   const board = selectedAiBoard.value
   if (!board) return ['请先从岩板资产中选择一块岩板。']
 
-  const holds = board.placed_holds || []
-  if (!holds.length) return ['所选岩板没有岩点，无法提交 AI Lab。']
-
-  const warnings = []
-  const startZoneCount = holds.filter((hold) => hold.y >= 1 && hold.y <= 4).length
-  const topZoneCount = holds.filter((hold) => hold.y >= 16 && hold.y <= 18).length
-  const hasStartJug = holds.some((hold) => hold.y >= 1 && hold.y <= 4 && hold.hold_type === 'Jug')
-  const hasTopJug = holds.some((hold) => hold.y >= 16 && hold.y <= 18 && hold.hold_type === 'Jug')
-
-  if (startZoneCount < 2) warnings.push('起步区岩点少于 2 个。')
-  if (topZoneCount < 1) warnings.push('完攀区缺少岩点。')
-  if (!hasStartJug) warnings.push('起步区缺少 Jug，重组成功率会降低。')
-  if (!hasTopJug) warnings.push('完攀区缺少 Jug，重组成功率会降低。')
-  if (!board.beta_sequence?.length) warnings.push('没有 Beta 序列，修改建议会偏向结构检查。')
-
-  return warnings
+  return board.readiness_warnings || []
 })
 
 const aiBoardBlockingMessage = computed(() => {
@@ -1005,13 +1280,13 @@ const aiBoardBlockingMessage = computed(() => {
 
   const holds = board.placed_holds || []
   if (!holds.length) return '所选岩板没有岩点，无法提交。'
-  if (aiExperiment.mode !== 'compose_route') return ''
-
-  const startZoneCount = holds.filter((hold) => hold.y >= 1 && hold.y <= 4).length
-  const topZoneCount = holds.filter((hold) => hold.y >= 16 && hold.y <= 18).length
-  if (holds.length < 6) return '重新组合路线至少需要 6 个岩点。'
-  if (startZoneCount < 2) return '重新组合路线需要至少 2 个起步区岩点。'
-  if (topZoneCount < 1) return '重新组合路线需要至少 1 个完攀区岩点。'
+  const columns = Number(board.board_spec?.columns || board.board_spec?.cols || 11)
+  const rows = Number(board.board_spec?.rows || 18)
+  const angle = Number(board.board_spec?.angle_degrees || 40)
+  if (columns !== 11 || rows !== 18 || angle !== 40) return 'AI 实验目前只支持 11×18、40° 岩板，其他规格可以继续手工编辑。'
+  if (aiExperiment.mode === 'compose_route' && !board.ai_eligible) {
+    return board.readiness_issues?.[0] || 'AI 组合只接受通过完整性检查的线路。'
+  }
   return ''
 })
 
@@ -1024,6 +1299,28 @@ const visibleRepairedIds = computed(() => standardBoard.repairs
 const allVisibleRepairedSelected = computed(() => (
   visibleRepairedIds.value.length > 0
   && visibleRepairedIds.value.every((sourceId) => standardBoard.selectedRepairIds.includes(sourceId))
+))
+
+const standardRouteTagGroups = computed(() => ROUTE_TAG_GROUPS.filter((group) => group.key !== 'source'))
+const savedBoardTagGroups = computed(() => {
+  const known = ROUTE_TAG_GROUPS.map((group) => ({ ...group, tags: [...group.tags] }))
+  const knownIds = new Set(known.flatMap((group) => group.tags.map((tag) => tag.id)))
+  const legacyTags = [...new Set(boards.savedBoards.flatMap((board) => board.tags || []))]
+    .filter((tag) => !knownIds.has(tag))
+    .map((id) => ({ id, label: tagLabel(id) }))
+  if (legacyTags.length) known.push({ key: 'legacy', label: '已有标签', tags: legacyTags })
+  return known
+})
+const visibleSavedBoards = computed(() => savedBoardView.value === 'archived' ? boards.archivedBoards : boards.savedBoards)
+const filteredSavedBoards = computed(() => visibleSavedBoards.value.filter((board) => (
+  matchesTags(boardTags(board), savedBoardFilters.tagIds, savedBoardFilters.match)
+)))
+const comparedBoards = computed(() => compareBoardIds.value
+  .map((savedId) => boards.savedBoards.find((board) => board.saved_id === savedId))
+  .filter(Boolean))
+const aiComparisonReference = computed(() => routeGen.result?.board || selectedAiBoard.value)
+const reviewRepairCandidate = computed(() => (
+  routeGen.result?.suggestions?.find((suggestion) => suggestion.candidate_route)?.candidate_route || null
 ))
 
 const someVisibleRepairedSelected = computed(() => (
@@ -1062,79 +1359,65 @@ const HoldPreview = defineComponent({
   },
 })
 
+function warnBeforeUnload(event) {
+  if (!studio.unsavedChanges) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 onMounted(async () => {
-  if (currentUser.value) await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
+  window.addEventListener('beforeunload', warnBeforeUnload)
+  await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnBeforeUnload)
 })
 
 watch(
-  () => boards.savedBoards,
-  (savedBoards) => {
-    if (!savedBoards.length) {
+  [() => boards.savedBoards, () => aiExperiment.mode],
+  () => {
+    const availableBoards = aiAvailableBoards.value
+    if (!availableBoards.length) {
       aiExperiment.selectedBoardId = ''
       return
     }
-    if (!savedBoards.some((board) => board.saved_id === aiExperiment.selectedBoardId)) {
-      aiExperiment.selectedBoardId = savedBoards[0].saved_id || ''
+    if (!availableBoards.some((board) => board.saved_id === aiExperiment.selectedBoardId)) {
+      aiExperiment.selectedBoardId = availableBoards[0].saved_id || ''
     }
   },
   { immediate: true }
 )
 
-async function submitAuth() {
-  authError.value = ''
-  authSuccess.value = ''
-  authLoading.value = true
-  try {
-    if (authMode.value === 'register') {
-      const user = await register(authForm)
-      if (!user) {
-        authSuccess.value = '注册已提交。请先打开邮箱完成确认，然后返回登录。'
-        authForm.password = ''
-        return
-      }
-    } else {
-      await login(authForm)
+watch(
+  () => boards.savedBoards,
+  (activeBoards) => {
+    const activeIds = new Set(activeBoards.map((board) => board.saved_id))
+    compareBoardIds.value = compareBoardIds.value.filter((savedId) => activeIds.has(savedId)).slice(0, 4)
+  },
+  { deep: true }
+)
+
+watch(activePage, () => {
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
+})
+
+async function changePage(nextPage) {
+  if (nextPage === 'simulation' && !simulationEnabled) return
+  if (nextPage === activePage.value) return
+  if (activePage.value === 'photo-routes' && !(await photoPage.value?.beforeLeave())) return
+  if (activePage.value === 'studio' && studio.unsavedChanges) {
+    try {
+      await ElMessageBox.confirm('当前修改仍会保留在本次工作区，但尚未写入本地岩板库。是否切换页面？', '未保存的草稿', {
+        confirmButtonText: '离开并保留草稿',
+        cancelButtonText: '继续编辑',
+        type: 'warning',
+      })
+    } catch {
+      return
     }
-    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
-  } catch (error) {
-    authError.value = normalizeAuthError(error)
-  } finally {
-    authLoading.value = false
   }
-}
-
-async function skipAuth() {
-  authError.value = ''
-  authSuccess.value = ''
-  authLoading.value = true
-  try {
-    await skipLogin()
-    await Promise.all([library.fetchAllHoldData(), boards.fetchMyBoards(), fetchStandardRoutes()])
-    ElMessage.success('已进入本地体验模式')
-  } catch (error) {
-    authError.value = error?.message || '跳过登录失败'
-  } finally {
-    authLoading.value = false
-  }
-}
-
-function toggleAuthMode() {
-  authMode.value = authMode.value === 'login' ? 'register' : 'login'
-  authError.value = ''
-  authSuccess.value = ''
-}
-
-function normalizeAuthError(error) {
-  const message = error?.message || ''
-  if (message.toLowerCase().includes('email not confirmed')) {
-    return '邮箱尚未确认。请先点击 Supabase 发送的确认邮件，再返回登录。'
-  }
-  return message || '登录失败'
-}
-
-async function handleLogout() {
-  await logout()
-  activePage.value = 'dashboard'
+  activePage.value = nextPage
 }
 
 function startBlankStudio() {
@@ -1155,9 +1438,49 @@ function selectPlacedHold(hold) {
 }
 
 async function saveCurrentBoard() {
-  const saved = await boards.saveBoard(studio.currentBoard)
+  const boardToSave = {
+    ...studio.currentBoard,
+    tags: [...new Set([...(studio.currentBoard.tags || []), ...boardSystemTags(studio.currentBoard)])],
+  }
+  const saved = await boards.saveBoard(boardToSave)
   if (!saved) return
-  studio.loadBoard({ ...studio.currentBoard, ...saved })
+  studio.loadBoard({ ...boardToSave, ...saved })
+  if (saved.workflow_status === 'draft') {
+    ElMessage.warning(`已保存为草稿：${saved.readiness_issues?.[0] || '线路尚未通过完整性检查'}`)
+  } else {
+    ElMessage.success(saved.ai_eligible ? '线路已保存，可进入 AI 实验' : '线路已保存，可进行人工检查')
+  }
+}
+
+function resolvedBoardTags(board) {
+  return boardTags(board)
+}
+
+function boardSpecDisplayLabel(board = {}) {
+  const columns = Number(board.board_spec?.columns || board.board_spec?.cols || 11)
+  const rows = Number(board.board_spec?.rows || 18)
+  return {
+    '11x18': '11×18 标准训练板',
+    '14x20': '14×20 扩展训练板',
+    '16x24': '16×24 大型训练板',
+    '18x22': '18×22 宽体训练板',
+  }[`${columns}x${rows}`] || `${columns}×${rows} 岩板`
+}
+
+function clearSavedBoardTags() {
+  savedBoardFilters.tagIds = []
+}
+
+function clearBoardComparison() {
+  compareBoardIds.value = []
+}
+
+function setComparisonBaseline(savedId) {
+  compareBoardIds.value = [savedId, ...compareBoardIds.value.filter((id) => id !== savedId)]
+}
+
+function removeComparedBoard(savedId) {
+  compareBoardIds.value = compareBoardIds.value.filter((id) => id !== savedId)
 }
 
 function loadBoardIntoStudio(board) {
@@ -1165,14 +1488,29 @@ function loadBoardIntoStudio(board) {
   activePage.value = 'studio'
 }
 
+function loadAiCandidateIntoStudio(route) {
+  studio.loadBoard(route, { markUnsaved: true })
+  activePage.value = 'studio'
+  ElMessage.info('候选路线已载入定线工作台；保存后才会写入本地岩板库。')
+}
+
 async function renameBoard(board) {
   const renamed = await boards.renameSavedBoard(board)
   if (renamed && studio.currentBoard.saved_id === renamed.saved_id) studio.loadBoard(renamed)
 }
 
-async function deleteBoard(board) {
-  const deleted = await boards.deleteSavedBoard(board)
-  if (deleted && studio.currentBoard.saved_id === board.saved_id) await studio.newBlankBoard()
+async function archiveBoard(board) {
+  const archived = await boards.archiveSavedBoard(board)
+  if (archived && studio.currentBoard.saved_id === board.saved_id) await studio.newBlankBoard()
+}
+
+async function restoreBoard(board) {
+  await boards.restoreSavedBoard(board)
+}
+
+function workflowLabel(board = {}) {
+  if (board.archived_at) return '已归档'
+  return board.workflow_status === 'ready_for_review' ? '可检查' : '草稿'
 }
 
 async function fetchStandardRoutes() {
@@ -1191,6 +1529,16 @@ async function fetchStandardRoutes() {
   } finally {
     standardBoard.loading = false
   }
+}
+
+function applyStandardFilters() {
+  standardBoard.filters.offset = 0
+  fetchStandardRoutes()
+}
+
+function changeStandardPage(page) {
+  standardBoard.filters.offset = (page - 1) * standardBoard.filters.limit
+  fetchStandardRoutes()
 }
 
 async function loadStandardRoute(sourceId) {
@@ -1217,7 +1565,7 @@ async function fetchStandardActivity(sourceId = standardBoard.selected?.source_i
       logs: [],
       stats: { attempts_total: 0, sends_total: 0, flashes_total: 0, last_result: null },
     }
-    console.warn('Standard-board activity unavailable', error)
+    standardBoard.error = error.response?.data?.detail || '训练记录暂时不可用'
   } finally {
     standardBoard.activityLoading = false
   }
@@ -1291,6 +1639,16 @@ async function fetchRepairRoutes() {
   }
 }
 
+function applyRepairFilters() {
+  standardBoard.repairFilters.offset = 0
+  fetchRepairRoutes()
+}
+
+function changeRepairPage(page) {
+  standardBoard.repairFilters.offset = (page - 1) * standardBoard.repairFilters.limit
+  fetchRepairRoutes()
+}
+
 async function loadRepairRoute(sourceId) {
   standardBoard.error = ''
   try {
@@ -1318,8 +1676,9 @@ async function previewRepairRoute(sourceId) {
 function loadRepairIntoStudio() {
   const boardAsset = standardBoard.repairComparison?.repaired?.board_asset || standardBoard.repairPreview?.board_asset
   if (!boardAsset) return
-  studio.loadBoard(boardAsset)
+  studio.loadBoard(boardAsset, { markUnsaved: true })
   activePage.value = 'studio'
+  ElMessage.info('修复副本已载入定线工作台；保存后才会写入本地岩板库。')
 }
 
 function isRepairSelected(sourceId) {
@@ -1399,7 +1758,7 @@ async function generateStandardRoute() {
       reuse_rate: response.data?.reuse_rate || 0,
       reuse_quality: response.data?.reuse_quality || 'below_pass',
     }
-    ElMessage.success('标准板线路已生成并完成虚拟点亮')
+    ElMessage.success('候选线路已生成并加载坐标预览')
   } catch (error) {
     standardBoard.error = error.response?.data?.detail || error.message || '标准板线路生成失败'
   } finally {
@@ -1409,8 +1768,23 @@ async function generateStandardRoute() {
 
 function loadStandardIntoStudio() {
   if (!standardBoard.selected?.board_asset) return
-  studio.loadBoard(standardBoard.selected.board_asset)
+  studio.loadBoard(standardBoard.selected.board_asset, { markUnsaved: true })
   activePage.value = 'studio'
+  ElMessage.info('标准线路副本已载入定线工作台；原始线路不会被覆盖。')
+}
+
+function openSelectedRouteSimulation() {
+  if (!simulationEnabled) return
+  if (!standardBoard.selected?.source_id) return
+  simulationSourceId.value = standardBoard.selected.source_id
+  activePage.value = 'simulation'
+}
+
+function loadSimulationCandidate(board) {
+  if (!board) return
+  studio.loadBoard(board, { markUnsaved: true })
+  activePage.value = 'studio'
+  ElMessage.success('修复副本已载入定线工作台，原线路未被覆盖')
 }
 
 function tierLabel(tier) {
@@ -1521,12 +1895,62 @@ function suggestionGroupLabel(suggestion) {
   return '建议优化'
 }
 
+function reuseQualityLabel(value) {
+  return {
+    below_pass: '低于通过标准',
+    pass: '达到通过标准',
+    optimal: '达到最优标准',
+  }[value] || '待复核'
+}
+
 function riskLevelLabel(level) {
   return {
     low: '低',
     medium: '中',
     high: '高',
   }[level] || level
+}
+
+function riskAssessmentLabel(result) {
+  if (result?.metrics?.risk_assessment_status === 'partial') return '风险未完整评估'
+  return `风险${riskLevelLabel(result?.risk_level)}`
+}
+
+function riskMetricLabel(metrics = {}) {
+  const scope = metrics.risk_scope
+  if (metrics.risk_assessment_status === 'partial') {
+    return `结构风险 ${metrics.risk_score} / 动作未完整评估`
+  }
+  if (scope === 'structure_and_action') return `结构与动作风险 ${metrics.risk_score}`
+  if (scope === 'structure_and_difficulty') return `结构与难度风险 ${metrics.risk_score}`
+  return `结构风险 ${metrics.risk_score}`
+}
+
+function reviewScopeLabel(scope) {
+  return {
+    full_beta: '已执行完整 Beta 检查',
+    layout_and_difficulty: '结构与难度专项检查',
+    layout_only: '岩点布局初审',
+  }[scope] || scope
+}
+
+function evidenceStatusLabel(status) {
+  return {
+    measured: '已量化',
+    estimated: '为模型估算',
+    not_measured: '尚未量化',
+  }[status] || '待复核'
+}
+
+function aiTaskStatusLabel(status) {
+  return {
+    idle: '尚未提交',
+    pending: '等待执行',
+    running: '正在计算',
+    completed: '已完成',
+    failed: '执行失败',
+    cancelled: '已取消',
+  }[status] || status
 }
 
 function candidateMeta(index) {
@@ -1540,12 +1964,13 @@ function runAiExperiment() {
   }
 
   const board = cloneBoardForAi(selectedAiBoard.value)
-  ElMessage.info(`已提交“${board.route_name || '未命名岩板'}”，AI Lab 将返回可查询任务结果。`)
+  ElMessage.info(`已提交“${board.route_name || '未命名岩板'}”，AI 实验室将返回可查询任务结果。`)
   routeGen.generateRoute({
     mode: aiExperiment.mode,
     board,
-    user_requirements: aiExperiment.user_requirements,
-    target_difficulty: board.difficulty || 'V3',
+    generation_goal: aiExperiment.generation_goal,
+    review_focus: aiExperiment.review_focus,
+    target_difficulty: FONT_GRADES.includes(board.difficulty) ? board.difficulty : DEFAULT_FONT_GRADE,
   })
 }
 </script>

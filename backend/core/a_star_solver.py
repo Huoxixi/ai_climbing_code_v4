@@ -462,7 +462,171 @@ class AStarSolver:
         return [h for h in holds if 1 <= h.y <= 8]
 
     def _get_top_holds(self, holds: List[Hold]) -> List[Hold]:
-        return [h for h in holds if h.y == 18]
+        return [h for h in holds if 16 <= h.y <= 18 and h.hold_type != HoldType.FOOT]
+
+    def _within_reach(
+        self,
+        limbs: Dict[Limb, Optional[Hold]],
+        moving_limb: Limb,
+        target_hold: Hold,
+    ) -> bool:
+        """Apply the product's fixed body-size reach gate before expanding a state."""
+        center = self._get_center_of_gravity(limbs)
+        if center is None:
+            return False
+        target_x, target_y = self._coord_to_meters(target_hold.x, target_hold.y)
+        limit = self.span_m * 0.8 if moving_limb in (Limb.LH, Limb.RH) else self.height_m * 0.45
+        return math.hypot(target_x - center[0], target_y - center[1]) <= limit
+
+    @staticmethod
+    def _reason_code(reason: Optional[str]) -> str:
+        return {
+            "交叉手": "crossed_hands",
+            "交叉脚": "crossed_feet",
+            "脚不能等于或高于手": "foot_not_below_hands",
+            "身体过度伸展": "body_extension_exceeded",
+            "身体过度蜷缩": "body_compression_exceeded",
+            "双脚离地": "unstable_support",
+            "手脚同点": "shared_hand_foot_hold",
+            "手部横向跨度过大": "hand_span_exceeded",
+            "脚部横向跨度过大": "foot_span_exceeded",
+            "脚部上下跨度过大": "foot_vertical_span_exceeded",
+        }.get(reason or "", "static_kinematics_failed")
+
+    def validate_static_beta(self, beta_sequence: List[BetaStep], holds: List[Hold]) -> Tuple[bool, Dict]:
+        """Replay a Beta using the same hard gates used by A*.
+
+        The returned report is safe for the public explanation layer: it contains
+        rule outcomes and evidence codes, but never exposes hidden model reasoning.
+        """
+        holds_by_id = {hold.id: hold for hold in holds}
+        ordered = sorted(enumerate(beta_sequence), key=lambda item: (item[1].step, item[0]))
+        start_steps = [step for _, step in ordered if step.step == 0]
+        move_steps = [step for _, step in ordered if step.step > 0]
+        limbs: Dict[Limb, Optional[Hold]] = {limb: None for limb in Limb}
+
+        for step in start_steps:
+            target = holds_by_id.get(step.hold_id)
+            if target is None:
+                return False, {
+                    "reason_code": "missing_hold_reference",
+                    "reason": f"动作引用了不存在的岩点 {step.hold_id}。",
+                }
+            limbs[step.limb] = target
+            for limb, hold_id in (
+                (Limb.LH, step.lh),
+                (Limb.RH, step.rh),
+                (Limb.LF, step.lf),
+                (Limb.RF, step.rf),
+            ):
+                if hold_id and hold_id in holds_by_id:
+                    limbs[limb] = holds_by_id[hold_id]
+
+        active_hands = [limbs[Limb.LH], limbs[Limb.RH]]
+        active_feet = [limbs[Limb.LF], limbs[Limb.RF]]
+        if not all(active_hands) or not any(active_feet):
+            return False, {
+                "reason_code": "unstable_support",
+                "reason": "起步状态必须有两手和至少一脚稳定接触。",
+            }
+        valid, reason = self._check_kinematics(limbs)
+        if not valid:
+            return False, {
+                "reason_code": self._reason_code(reason),
+                "reason": f"起步状态未通过静态门禁：{reason}。",
+            }
+
+        last_moved_limb: Optional[Limb] = None
+        consecutive_hand_moves = 0
+        evaluated_states = 1
+        for step in move_steps:
+            target = holds_by_id.get(step.hold_id)
+            if target is None:
+                return False, {
+                    "reason_code": "missing_hold_reference",
+                    "reason": f"动作引用了不存在的岩点 {step.hold_id}。",
+                }
+            if step.limb == last_moved_limb:
+                return False, {
+                    "reason_code": "repeated_limb_move",
+                    "reason": "同一肢体不得连续重复移动。",
+                }
+
+            is_hand_move = step.limb in (Limb.LH, Limb.RH)
+            consecutive_hand_moves = consecutive_hand_moves + 1 if is_hand_move else 0
+            if consecutive_hand_moves > 2:
+                return False, {
+                    "reason_code": "too_many_hand_moves",
+                    "reason": "连续手部动作超过 2 次，缺少有效脚步推进。",
+                }
+            if not self._within_reach(limbs, step.limb, target):
+                return False, {
+                    "reason_code": "reach_exceeded",
+                    "reason": "目标岩点超过当前身高或臂展对应的静态触达范围。",
+                }
+
+            previous = limbs.get(step.limb)
+            if (
+                not is_hand_move
+                and previous
+                and target.y - previous.y > self.MAX_FOOT_MOVE_VERTICAL_DELTA
+            ):
+                return False, {
+                    "reason_code": "high_step_exceeded",
+                    "reason": "单次抬脚超过 3 排。",
+                }
+            if not is_hand_move and self._is_contralateral_high_step(limbs, step.limb, target):
+                return False, {
+                    "reason_code": "contralateral_high_step",
+                    "reason": "检测到禁止的对侧上方高踩。",
+                }
+
+            limbs[step.limb] = target
+            valid, reason = self._check_kinematics(limbs)
+            if not valid:
+                return False, {
+                    "reason_code": self._reason_code(reason),
+                    "reason": f"第 {step.step} 步未通过静态门禁：{reason}。",
+                }
+            last_moved_limb = step.limb
+            evaluated_states += 1
+
+        top_ids = {hold.id for hold in self._get_top_holds(holds)}
+        left_hand = limbs.get(Limb.LH)
+        right_hand = limbs.get(Limb.RH)
+        if not (
+            left_hand
+            and right_hand
+            and left_hand.id == right_hand.id
+            and left_hand.id in top_ids
+        ):
+            return False, {
+                "reason_code": "no_static_top_path",
+                "reason": "动作路径没有在 Y16–Y18 的非脚点完成双手登顶。",
+            }
+
+        return True, {
+            "reason_code": "static_movement_passed",
+            "reason": "完整动作路径通过静态人体工学门禁。",
+            "evaluated_states": evaluated_states,
+            "passed_rules": [
+                "no_crossed_hands",
+                "no_crossed_feet",
+                "feet_below_hands",
+                "body_size_reach",
+                "body_extension",
+                "foot_step_height",
+                "stable_support",
+                "movement_sequence",
+                "double_hand_top",
+            ],
+            "body_profile": {
+                "height_cm": round(self.height_m * 100),
+                "span_cm": round(self.span_m * 100),
+                "hand_reach_limit_m": round(self.span_m * 0.8, 2),
+                "foot_reach_limit_m": round(self.height_m * 0.45, 2),
+            },
+        }
 
     def _check_kinematics(self, limbs: Dict[Limb, Optional[Hold]]) -> Tuple[bool, Optional[str]]:
         """
@@ -505,18 +669,8 @@ class AStarSolver:
         body_span = max_hand_y - min_foot_y
         max_extension_units = (self.height_m * 1.25) / self.GRID_SPACING
 
-        if body_span < 3:
-            return False, "身体过度蜷缩"
-        
-        # 动态放宽过度伸展拦截：如果有另一只脚在更高位提供支撑，允许极度伸展而不拦截
         if body_span > max_extension_units:
-            other_foot_y = max(active_feet_y)
-            # 如果最高脚比最低脚高出 3 格以上，认为有高位支撑，放宽到 1.5 倍身高
-            if other_foot_y > min_foot_y + 3:
-                if body_span > max_extension_units * 1.5:
-                    return False, "身体过度伸展(极限)"
-            else:
-                return False, "身体过度伸展"
+            return False, "身体过度伸展"
 
         if lh and rh and abs(get_x_idx(Limb.LH) - get_x_idx(Limb.RH)) > 6: 
             return False, "手部横向跨度过大"
@@ -597,7 +751,8 @@ class AStarSolver:
             if len(active_limbs) >= 3:
                 # V7 逻辑：在 A* 开始前，预先扣除起步点所消耗的配额
                 initial_inventory = inventory_budget.copy()
-                for hold in active_limbs.values():
+                unique_start_holds = {hold.id: hold for hold in active_limbs.values()}.values()
+                for hold in unique_start_holds:
                     initial_inventory[hold.hold_type] = initial_inventory.get(hold.hold_type, 0) - 1
                 
                 # 如果任何岩点类型的配额变为负数，则这是一个无效的起步姿态
@@ -694,7 +849,7 @@ class AStarSolver:
                     flow_score=100.0 / (current.g_cost + 1.0),
                     crux_step=f"最大动作代价: {max_single_step_cost:.1f}",
                     quota_violations=quota_violations,
-                ), {"reason": "成功", "max_y": 18, "rule_violation": None}
+                ), {"reason": "成功", "max_y": lh_hold.y, "rule_violation": None}
 
             # --- V9: 弹簧蓄力驱动的子节点生成 ---
             current_cg = self._get_center_of_gravity(current.limbs)
@@ -705,8 +860,8 @@ class AStarSolver:
                 is_hand_move = limb in [Limb.LH, Limb.RH]
                 current_limb_hold = current.limbs.get(limb)
                 
-                if is_hand_move and current.consecutive_hand_moves >= 1 and current.last_moved_limb == limb:
-                    continue 
+                if current.last_moved_limb == limb:
+                    continue
                 # V12 动态核心：以重心 (CG) 为锚点进行大范围扫描，物理判定后置
                 max_reach = self.span_m * 1.5 # 设定一个极大的扫描半径
                 cg_x_m, cg_y_m = current_cg
@@ -720,10 +875,14 @@ class AStarSolver:
                     potential_holds.append(h)
 
                 for target_hold in potential_holds:
-                    # 判定后置：不再需要硬性的距离检查
-                    
                     if current_limb_hold and current_limb_hold.id == target_hold.id: continue
                     if target_hold.hold_type == HoldType.FOOT and is_hand_move: continue
+                    if not self._within_reach(current.limbs, limb, target_hold):
+                        kinematic_failure_counts["触达超限"] = kinematic_failure_counts.get("触达超限", 0) + 1
+                        continue
+                    if is_hand_move and current.consecutive_hand_moves >= 2:
+                        kinematic_failure_counts["连续手部动作过多"] = kinematic_failure_counts.get("连续手部动作过多", 0) + 1
+                        continue
 
                     # 单次脚步上提硬限制：脚在一次移动中，垂直上升不能超过 4 格
                     if (
@@ -763,10 +922,6 @@ class AStarSolver:
                     # 脱离“两点压缩态”奖励：鼓励尽快恢复到 >=3 点支撑结构
                     if current_is_two_point and not new_is_two_point:
                         total_penalty -= 35.0
-                    
-                    # V12 修正：将连续手部动作的硬剪枝，改为高额软惩罚
-                    if is_hand_move and current.y_progress_since_foot_move <= 0 and current.consecutive_hand_moves >= 2:
-                        total_penalty += 80.0
                     
                     is_new_hold = not any(h and h.id == target_hold.id for h in current.limbs.values())
                     new_inventory = current.inventory_left.copy()
@@ -915,27 +1070,7 @@ class AStarSolver:
                     ))
 
         if best_state_so_far and max_y_reached >= 16:
-            # 如果是因为迭代耗尽而退出，但我们找到了一个不错的未完成路径
-            best_sequence = best_state_so_far.sequence
-            used_hold_ids = {step.hold_id for step in best_sequence}
-            final_holds = [h for h in board_holds if h.id in used_hold_ids]
-
-            # 部分成功也需要计算配额
-            quota_violations = get_quota_violations(final_holds)
-
-            partial_candidate = RouteCandidate(
-                placed_holds=final_holds,
-                beta_sequence=best_sequence,
-                total_cost=best_state_so_far.g_cost,
-                flow_score=0,  # 未完攀，没有 flow score
-                crux_step=f"最高点: Y={max_y_reached}",
-                quota_violations=quota_violations,
-            )
-            return partial_candidate, {
-                "reason": "未完攀，显示已知最高路径",
-                "max_y": max_y_reached,
-                "rule_violation": None,
-            }
+            return failure_report("没有找到完整静态完攀路径", "无静态完攀路径")
 
         most_common_violation = max(kinematic_failure_counts, key=kinematic_failure_counts.get) if kinematic_failure_counts else "无"
         return failure_report(f"A* 搜索超时 ({max_iterations} 次迭代)", most_common_violation)

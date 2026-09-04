@@ -52,7 +52,7 @@ class StandardBoardLocalFirstTest(unittest.TestCase):
         with patch("main.resolve_supabase_user", AsyncMock(side_effect=AssertionError("Supabase auth should not run"))):
             mapping_response = self.client.get("/api/holds/mapping")
             vectors_response = self.client.get("/api/holds/vectors")
-            boards_response = self.client.get("/api/my-boards")
+            boards_response = self.client.get("/api/my-boards", params={"include_archived": True})
 
         self.assertEqual(mapping_response.status_code, 200)
         self.assertEqual(vectors_response.status_code, 200)

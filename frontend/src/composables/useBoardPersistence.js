@@ -4,13 +4,16 @@ import boardService from '../services/boardService'
 
 export function useBoardPersistence() {
   const savedBoards = ref([])
+  const archivedBoards = ref([])
   const loading = ref(false)
 
   async function fetchMyBoards() {
     loading.value = true
     try {
-      const response = await boardService.listBoards()
-      savedBoards.value = Array.isArray(response.data) ? response.data : []
+      const response = await boardService.listBoards(true)
+      const allBoards = Array.isArray(response.data) ? response.data : []
+      savedBoards.value = allBoards.filter((board) => !board.archived_at)
+      archivedBoards.value = allBoards.filter((board) => board.archived_at)
     } catch (error) {
       ElMessage.error(`岩板资产加载失败：${error.response?.data?.detail || error.message}`)
     } finally {
@@ -28,7 +31,6 @@ export function useBoardPersistence() {
       const response = payload.saved_id
         ? await boardService.updateBoard(payload.saved_id, payload)
         : await boardService.createBoard(payload)
-      ElMessage.success(payload.saved_id ? '岩板已更新' : '岩板已保存')
       await fetchMyBoards()
       return response.data
     } catch (error) {
@@ -64,35 +66,53 @@ export function useBoardPersistence() {
     }
   }
 
-  async function deleteSavedBoard(board) {
+  async function archiveSavedBoard(board) {
     if (!board.saved_id) {
-      ElMessage.warning('该岩板缺少 saved_id，无法删除')
+      ElMessage.warning('该岩板缺少 saved_id，无法归档')
       return false
     }
 
     try {
-      await ElMessageBox.confirm(`确定删除岩板“${board.route_name || board.saved_id}”？此操作会归档该资产。`, '删除岩板资产', {
-        confirmButtonText: '删除',
+      await ElMessageBox.confirm(`确定归档岩板“${board.route_name || board.saved_id}”？之后可以从归档箱恢复。`, '归档岩板资产', {
+        confirmButtonText: '归档岩板',
         cancelButtonText: '取消',
         type: 'warning',
       })
       await boardService.deleteBoard(board.saved_id)
-      ElMessage.success('岩板已删除')
+      ElMessage.success('岩板已归档')
       await fetchMyBoards()
       return true
     } catch (error) {
       if (error === 'cancel' || error === 'close') return false
-      ElMessage.error(`删除失败：${error.response?.data?.detail || error.message}`)
+      ElMessage.error(`归档失败：${error.response?.data?.detail || error.message}`)
       return false
+    }
+  }
+
+  async function restoreSavedBoard(board) {
+    if (!board.saved_id) return false
+    loading.value = true
+    try {
+      await boardService.restoreBoard(board.saved_id)
+      ElMessage.success('岩板已恢复')
+      await fetchMyBoards()
+      return true
+    } catch (error) {
+      ElMessage.error(`恢复失败：${error.response?.data?.detail || error.message}`)
+      return false
+    } finally {
+      loading.value = false
     }
   }
 
   return {
     savedBoards,
+    archivedBoards,
     loading,
     fetchMyBoards,
     saveBoard,
     renameSavedBoard,
-    deleteSavedBoard,
+    archiveSavedBoard,
+    restoreSavedBoard,
   }
 }

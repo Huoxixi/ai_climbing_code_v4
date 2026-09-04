@@ -1,0 +1,27 @@
+{
+  "source_sha256": "796c7fead767022b996e0b074e31d46e944bf4d7ab002c018f451da89394dd68",
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "python": "3.12.13"
+  },
+  "torch_threads": 2,
+  "batch_size": 2,
+  "runs": [
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 49.281,
+      "timeout_seconds": 180,
+      "peak_resident_mib": 1412.4,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "report_sha256": "cc4026dc2f08727d9bd9932619dcd2ae11f69eb99745a262fe6c777a79902742",
+      "candidate_count": 10,
+      "result_sha256": "73bcc87ea4fc2343a57c343e32c1b99eef0b4a18119b4bbefc2dc45526bbfa07"
+    }
+  ],
+  "timing_scope": "cold child startup + imports + decode + model + extraction + evidence encoding; excludes upload",
+  "deployment_hardware_verified": false,
+  "acceptance": "Diagnostic only; this machine is not automatically the deployment hardware"
+}

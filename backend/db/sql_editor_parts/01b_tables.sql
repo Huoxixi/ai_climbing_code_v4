@@ -49,7 +49,7 @@ create table if not exists public.board_assets (
   setter_commentary text not null default '',
   source_type text not null default 'manual' check (source_type in ('manual', 'ai-generated', 'imported')),
   visibility text not null default 'private' check (visibility in ('private', 'unlisted', 'public')),
-  difficulty text not null default 'V3',
+  difficulty text not null default '未定级',
   board_template_id text references public.board_templates(id) on delete set null,
   board_spec jsonb,
   tags text[] not null default '{}',

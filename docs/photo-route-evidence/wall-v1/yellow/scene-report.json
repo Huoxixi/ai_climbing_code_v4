@@ -1,0 +1,1038 @@
+{
+  "source_sha256": "ac150779cf13f04639de045a2fa8f300ad4b9fb7f5546cf14858a0ee14bf931f",
+  "source_dimensions": [
+    810,
+    1440
+  ],
+  "working_dimensions": [
+    720,
+    1280
+  ],
+  "objects": [
+    {
+      "id": "scene-001",
+      "bbox": [
+        0,
+        0,
+        35,
+        69
+      ],
+      "area": 2198,
+      "mask_sha256": "2447501e2aa35472cc2b345be6b2529ead5d9ab6f9d4ee5301786f36c795316b",
+      "predicted_iou": 0.9854122400283813
+    },
+    {
+      "id": "scene-002",
+      "bbox": [
+        32,
+        0,
+        162,
+        34
+      ],
+      "area": 3368,
+      "mask_sha256": "f51c4f53a09efdf27715ff75358097d225bf97dd185b749d34ee01b034ba3d67",
+      "predicted_iou": 0.9585925936698914
+    },
+    {
+      "id": "scene-003",
+      "bbox": [
+        40,
+        0,
+        491,
+        89
+      ],
+      "area": 23815,
+      "mask_sha256": "e8bbe8ceaa78c7dcc56e7c671d54272814bfeffe79dbfd2926e4b6a6e3c78137",
+      "predicted_iou": 0.9932218790054321
+    },
+    {
+      "id": "scene-004",
+      "bbox": [
+        168,
+        0,
+        642,
+        126
+      ],
+      "area": 32226,
+      "mask_sha256": "5a8f06a10e47642f638bd72a4a3a6244b59a38ae2b827ed74676b8dd64d12ec6",
+      "predicted_iou": 0.9310414791107178
+    },
+    {
+      "id": "scene-005",
+      "bbox": [
+        201,
+        0,
+        330,
+        89
+      ],
+      "area": 20266,
+      "mask_sha256": "a32fa9f9d53d399ba438c2d77353472ae9d40faf40120e1667fc4f551dd27438",
+      "predicted_iou": 1.003251075744629
+    },
+    {
+      "id": "scene-006",
+      "bbox": [
+        218,
+        0,
+        315,
+        47
+      ],
+      "area": 9799,
+      "mask_sha256": "56f5e5c08230245f9279401f69d1e1829e79ce783c3a265e3400c88725152675",
+      "predicted_iou": 0.9388807415962219
+    },
+    {
+      "id": "scene-007",
+      "bbox": [
+        512,
+        0,
+        298,
+        126
+      ],
+      "area": 32116,
+      "mask_sha256": "bf79f1ccb6b766f3ff8dbc5bd222c5874c434b15d2ec9300b74e4344bd52f297",
+      "predicted_iou": 0.9772648811340332
+    },
+    {
+      "id": "scene-008",
+      "bbox": [
+        533,
+        0,
+        277,
+        83
+      ],
+      "area": 14174,
+      "mask_sha256": "a38b8701a4ac23032fe56f4234c1e293ad1382e74bbca188fdec1b99a6b8e0a2",
+      "predicted_iou": 0.9684830904006958
+    },
+    {
+      "id": "scene-009",
+      "bbox": [
+        536,
+        0,
+        223,
+        54
+      ],
+      "area": 7842,
+      "mask_sha256": "f019fac34ca8343f5cc709d1110e17619680c505c781930d120857300111e90d",
+      "predicted_iou": 0.9808570742607117
+    },
+    {
+      "id": "scene-010",
+      "bbox": [
+        758,
+        0,
+        52,
+        83
+      ],
+      "area": 3803,
+      "mask_sha256": "39f578f665f3f80305a73178126901cc5a60d94570e51f36c17b0d14998af728",
+      "predicted_iou": 0.9730672240257263
+    },
+    {
+      "id": "scene-011",
+      "bbox": [
+        0,
+        13,
+        809,
+        1327
+      ],
+      "area": 698995,
+      "mask_sha256": "4149b14551a8d57dacd52e3def824bfa9f595ae2a99843c66f0eb16a3baf5e1b",
+      "predicted_iou": 1.0028225183486938
+    },
+    {
+      "id": "scene-012",
+      "bbox": [
+        513,
+        25,
+        97,
+        81
+      ],
+      "area": 6233,
+      "mask_sha256": "419d860eab0d5f46168f417c816721158003180acb87a3effa8956206dd4453b",
+      "predicted_iou": 0.9773699641227722
+    },
+    {
+      "id": "scene-013",
+      "bbox": [
+        626,
+        65,
+        43,
+        43
+      ],
+      "area": 1405,
+      "mask_sha256": "82403349e334a6b52ddbf8223050e3c2e26f4c598e49903275617c69a793f42d",
+      "predicted_iou": 0.929590106010437
+    },
+    {
+      "id": "scene-014",
+      "bbox": [
+        645,
+        66,
+        24,
+        31
+      ],
+      "area": 585,
+      "mask_sha256": "0e2a7378aea23092fddc3ae85023c5bc70108edbd95e0411c8af444590903147",
+      "predicted_iou": 0.8481985926628113
+    },
+    {
+      "id": "scene-015",
+      "bbox": [
+        491,
+        189,
+        96,
+        155
+      ],
+      "area": 7258,
+      "mask_sha256": "b468599ab8b057fe67879bfce73934bf89653c81e76ba7f31f421b5b787ea7a7",
+      "predicted_iou": 0.9756160378456116
+    },
+    {
+      "id": "scene-016",
+      "bbox": [
+        409,
+        191,
+        206,
+        362
+      ],
+      "area": 30191,
+      "mask_sha256": "d6dc9d62c3485aa0531ecd289a51b88b89ef1cd3365321f9c5b58c8296b515a4",
+      "predicted_iou": 0.9019829034805298
+    },
+    {
+      "id": "scene-017",
+      "bbox": [
+        133,
+        200,
+        133,
+        117
+      ],
+      "area": 5017,
+      "mask_sha256": "5d2bad2f4fc3f8b84199e3ad363d5f8252d7f4aaa35ca790046bf99e525f8dca",
+      "predicted_iou": 0.9874483346939087
+    },
+    {
+      "id": "scene-018",
+      "bbox": [
+        713,
+        246,
+        52,
+        68
+      ],
+      "area": 2547,
+      "mask_sha256": "163de30976296e75fc0c753a97c86d82384947aa084a1c9679cc01a456cc817c",
+      "predicted_iou": 0.9568807482719421
+    },
+    {
+      "id": "scene-019",
+      "bbox": [
+        713,
+        246,
+        97,
+        68
+      ],
+      "area": 5287,
+      "mask_sha256": "a167df481927ecf7bd46940a255d08322895b7eadbcefef861bd5e24bcc05b98",
+      "predicted_iou": 0.9873820543289185
+    },
+    {
+      "id": "scene-020",
+      "bbox": [
+        750,
+        260,
+        60,
+        54
+      ],
+      "area": 2819,
+      "mask_sha256": "02e3d6b309ce08f07a61cf24703aeb694e32f364a3c125a273d0f9f98f327eb1",
+      "predicted_iou": 0.9689792394638062
+    },
+    {
+      "id": "scene-021",
+      "bbox": [
+        216,
+        267,
+        194,
+        282
+      ],
+      "area": 22025,
+      "mask_sha256": "985fc4e5f1f7c6109473610da3c3994ec2fa26f4a7c0961835ff4d31ac6dd6c4",
+      "predicted_iou": 0.9887208938598633
+    },
+    {
+      "id": "scene-022",
+      "bbox": [
+        265,
+        267,
+        145,
+        87
+      ],
+      "area": 5769,
+      "mask_sha256": "430d146095e9cb08176c0e3ade8d1b2bd2810f56461972180f497ceb542748f7",
+      "predicted_iou": 0.9909521341323853
+    },
+    {
+      "id": "scene-023",
+      "bbox": [
+        213,
+        305,
+        38,
+        41
+      ],
+      "area": 1258,
+      "mask_sha256": "5e6c2ed60cb1c1f59671a32e4b1d8dee662742be009bfc24c24edf149e5a9eed",
+      "predicted_iou": 0.96843022108078
+    },
+    {
+      "id": "scene-024",
+      "bbox": [
+        409,
+        328,
+        206,
+        125
+      ],
+      "area": 14652,
+      "mask_sha256": "5d8c84001d190b35f81d46c68dbf26850cb96d8939f523719360c751948b55fe",
+      "predicted_iou": 1.0056072473526
+    },
+    {
+      "id": "scene-025",
+      "bbox": [
+        409,
+        328,
+        206,
+        225
+      ],
+      "area": 23370,
+      "mask_sha256": "550326ee7e1c930797ae0568a17ad4b060ef463577681e7c1e04977ce0d58b52",
+      "predicted_iou": 0.9685184955596924
+    },
+    {
+      "id": "scene-026",
+      "bbox": [
+        216,
+        338,
+        160,
+        210
+      ],
+      "area": 16222,
+      "mask_sha256": "f784d8c63163318d297dea44744db29e34072445d72adeb78a9bd487c59e51af",
+      "predicted_iou": 0.9937403798103333
+    },
+    {
+      "id": "scene-027",
+      "bbox": [
+        72,
+        354,
+        309,
+        335
+      ],
+      "area": 29738,
+      "mask_sha256": "d19bf2015dbe623d7dc15da3c9f03da4022995581ae7dd72243b050974d7f7d4",
+      "predicted_iou": 0.9910948276519775
+    },
+    {
+      "id": "scene-028",
+      "bbox": [
+        192,
+        432,
+        56,
+        57
+      ],
+      "area": 2288,
+      "mask_sha256": "9f4ff82db8b4fde8c24e7f16f96c0ec47de8ea3e2f806ad4e5e0ff754361104d",
+      "predicted_iou": 0.9430105090141296
+    },
+    {
+      "id": "scene-029",
+      "bbox": [
+        411,
+        444,
+        144,
+        110
+      ],
+      "area": 8660,
+      "mask_sha256": "868eb9892295435bab3d949282628e40bf2b337b46a7cbf61884ec028ccb90e8",
+      "predicted_iou": 1.0072832107543945
+    },
+    {
+      "id": "scene-030",
+      "bbox": [
+        745,
+        493,
+        38,
+        36
+      ],
+      "area": 1139,
+      "mask_sha256": "379344efd7721ad9302c7c797b893ad4efc717d9223e19b2b09746f64989c605",
+      "predicted_iou": 0.9610243439674377
+    },
+    {
+      "id": "scene-031",
+      "bbox": [
+        629,
+        498,
+        169,
+        138
+      ],
+      "area": 13344,
+      "mask_sha256": "b819e6a47f8cc382f99252a9eeb4cc6037424a100dc071841ba075ace0204c94",
+      "predicted_iou": 0.9955963492393494
+    },
+    {
+      "id": "scene-032",
+      "bbox": [
+        629,
+        498,
+        169,
+        231
+      ],
+      "area": 17729,
+      "mask_sha256": "652bd5bdac635ca3a60f8424091049a81797fe0a96a3b28e92bb477c4bde7d31",
+      "predicted_iou": 0.9811892509460449
+    },
+    {
+      "id": "scene-033",
+      "bbox": [
+        432,
+        575,
+        38,
+        36
+      ],
+      "area": 1088,
+      "mask_sha256": "84269c127b08ef1f8c9dfb8358f109fd0ca0a986e167c8aeece7691f717467b0",
+      "predicted_iou": 0.9448306560516357
+    },
+    {
+      "id": "scene-034",
+      "bbox": [
+        378,
+        616,
+        132,
+        77
+      ],
+      "area": 4598,
+      "mask_sha256": "47eb821619bdaa457457a214c4d07739b32e6f2f85e613c26d037c3ada349175",
+      "predicted_iou": 0.9654839634895325
+    },
+    {
+      "id": "scene-035",
+      "bbox": [
+        657,
+        635,
+        87,
+        94
+      ],
+      "area": 4294,
+      "mask_sha256": "57f1301c42a3d7fabc3a715ed33fb5e6ffc91ce71c746b4fc5073bbcccd49668",
+      "predicted_iou": 0.9868903160095215
+    },
+    {
+      "id": "scene-036",
+      "bbox": [
+        494,
+        637,
+        249,
+        130
+      ],
+      "area": 14060,
+      "mask_sha256": "7213f10f6f8d255280c408d708201e30e6053bbacd5ac4850283048fa71c52fb",
+      "predicted_iou": 0.8252662420272827
+    },
+    {
+      "id": "scene-037",
+      "bbox": [
+        13,
+        648,
+        167,
+        134
+      ],
+      "area": 11139,
+      "mask_sha256": "ba4ec246003047ef089a7193cb36137a009fc1b6babf9eef887dbbcc6626f3f6",
+      "predicted_iou": 0.9499305486679077
+    },
+    {
+      "id": "scene-038",
+      "bbox": [
+        93,
+        650,
+        87,
+        91
+      ],
+      "area": 4010,
+      "mask_sha256": "4bb7659e1c2966962ce1230bc7115c3ed7bcc6c3cf810cd06195568ebbbfce2d",
+      "predicted_iou": 0.9780043959617615
+    },
+    {
+      "id": "scene-039",
+      "bbox": [
+        14,
+        665,
+        111,
+        117
+      ],
+      "area": 6596,
+      "mask_sha256": "97271d43e37043c7a23957686ea25bb08307fc8218a03cfbaaac40a513c806e8",
+      "predicted_iou": 0.9891886115074158
+    },
+    {
+      "id": "scene-040",
+      "bbox": [
+        459,
+        668,
+        49,
+        52
+      ],
+      "area": 1571,
+      "mask_sha256": "e8dfa7692b4d50fa5fa5621ded4170d664a17022ea8d88658c1c4defa8e2a1c9",
+      "predicted_iou": 0.9626675248146057
+    },
+    {
+      "id": "scene-041",
+      "bbox": [
+        493,
+        683,
+        176,
+        84
+      ],
+      "area": 9740,
+      "mask_sha256": "5db901f7afbc79f711b45e5b74424d9b24f6efb38fb77786cc81244e3d993a02",
+      "predicted_iou": 0.9930222034454346
+    },
+    {
+      "id": "scene-042",
+      "bbox": [
+        311,
+        687,
+        45,
+        28
+      ],
+      "area": 1015,
+      "mask_sha256": "f72ecfbe40723b6c6b67e4b865b9572e0420ede4e9004f5f5a12956c2e395a4f",
+      "predicted_iou": 0.9625881910324097
+    },
+    {
+      "id": "scene-043",
+      "bbox": [
+        194,
+        718,
+        378,
+        470
+      ],
+      "area": 56824,
+      "mask_sha256": "bafbf7ecd6bb00872263f15ad35dd2f47c68cebe1589e3b8b1f96e476db91bc5",
+      "predicted_iou": 0.873206377029419
+    },
+    {
+      "id": "scene-044",
+      "bbox": [
+        256,
+        718,
+        316,
+        146
+      ],
+      "area": 19965,
+      "mask_sha256": "8c5bf2ccef1d913bcb747dfbd376266f6ca9d4d13688e4c18f0aae6d8f261a19",
+      "predicted_iou": 0.999983549118042
+    },
+    {
+      "id": "scene-045",
+      "bbox": [
+        354,
+        718,
+        218,
+        146
+      ],
+      "area": 19813,
+      "mask_sha256": "47b42c3c0a4c96c4d568f0d9342427cea15f8cc4ca444a3b641a2c34773cd577",
+      "predicted_iou": 0.9982996582984924
+    },
+    {
+      "id": "scene-046",
+      "bbox": [
+        254,
+        728,
+        108,
+        53
+      ],
+      "area": 2531,
+      "mask_sha256": "4255758ad12a738d8133e0c737b3050268fc168f0127cc5402ee6869a44587ad",
+      "predicted_iou": 0.9668522477149963
+    },
+    {
+      "id": "scene-047",
+      "bbox": [
+        693,
+        747,
+        117,
+        47
+      ],
+      "area": 2675,
+      "mask_sha256": "079cab054848c234b80ca65771df2bd117e20f8edc0a2ec762a0dbaa4a5089f9",
+      "predicted_iou": 0.942767322063446
+    },
+    {
+      "id": "scene-048",
+      "bbox": [
+        576,
+        750,
+        234,
+        136
+      ],
+      "area": 18530,
+      "mask_sha256": "56ba9b86f947bccae99d35b6aff03652b0d8078dd76dca4b374c6d6c28cd2204",
+      "predicted_iou": 0.9152021408081055
+    },
+    {
+      "id": "scene-049",
+      "bbox": [
+        677,
+        750,
+        133,
+        136
+      ],
+      "area": 14623,
+      "mask_sha256": "5f3e0604147533ad8827cec3d5b501491c195b675db4f32b14a4517ecfa96b98",
+      "predicted_iou": 0.9917600750923157
+    },
+    {
+      "id": "scene-050",
+      "bbox": [
+        576,
+        756,
+        106,
+        63
+      ],
+      "area": 3757,
+      "mask_sha256": "e4a6b1c50b826bbb9bf264c2c391c9b14dab3b9a48cf98871f77c35d844c2464",
+      "predicted_iou": 0.9716802835464478
+    },
+    {
+      "id": "scene-051",
+      "bbox": [
+        50,
+        797,
+        253,
+        282
+      ],
+      "area": 23720,
+      "mask_sha256": "b4b709c30c131e49a1bbeff6d31c4ea3957907889c265b1dd02c38ae72fe0e58",
+      "predicted_iou": 0.9718103408813477
+    },
+    {
+      "id": "scene-052",
+      "bbox": [
+        51,
+        797,
+        162,
+        141
+      ],
+      "area": 12071,
+      "mask_sha256": "3078cd3cdd4ec5b4a3807d59b5859ef5314baed35363221707c25a1378e5f7e8",
+      "predicted_iou": 0.9877506494522095
+    },
+    {
+      "id": "scene-053",
+      "bbox": [
+        574,
+        801,
+        20,
+        23
+      ],
+      "area": 313,
+      "mask_sha256": "b81b01b953fa1e5351ab8634d4e0fdeaafed3a221127d3376e91ca1a6dca14c9",
+      "predicted_iou": 0.8526930212974548
+    },
+    {
+      "id": "scene-054",
+      "bbox": [
+        242,
+        808,
+        45,
+        51
+      ],
+      "area": 1626,
+      "mask_sha256": "90cff3722f63ce42da4f4acbc5209a6cbb8a31cdeefafe50188b77a2c818a06c",
+      "predicted_iou": 0.8978845477104187
+    },
+    {
+      "id": "scene-055",
+      "bbox": [
+        193,
+        809,
+        289,
+        379
+      ],
+      "area": 37744,
+      "mask_sha256": "abc1299f5c5e1577e4f100006572ef84f1707f8809c2f7f042587a345c6d18d4",
+      "predicted_iou": 0.9295203685760498
+    },
+    {
+      "id": "scene-056",
+      "bbox": [
+        193,
+        809,
+        128,
+        107
+      ],
+      "area": 6522,
+      "mask_sha256": "61c1c7d0d3b15689ebb5f675c0794e4c821dcbf2404f75a3f50d02cb55aff2bf",
+      "predicted_iou": 0.9071018695831299
+    },
+    {
+      "id": "scene-057",
+      "bbox": [
+        193,
+        809,
+        247,
+        107
+      ],
+      "area": 11942,
+      "mask_sha256": "85f17b3e77a6c0c62055fda13bf1326a6c5ee62639404cba7d4f2365d6f76fd2",
+      "predicted_iou": 0.893916130065918
+    },
+    {
+      "id": "scene-058",
+      "bbox": [
+        320,
+        812,
+        121,
+        84
+      ],
+      "area": 5327,
+      "mask_sha256": "920c5e4c86189f5690d83525876130289a48505a4f53e3cfa8498aaa3ca3c480",
+      "predicted_iou": 0.980506956577301
+    },
+    {
+      "id": "scene-059",
+      "bbox": [
+        535,
+        849,
+        110,
+        75
+      ],
+      "area": 4155,
+      "mask_sha256": "03f8c668455ddea569c4b525e54d2f23b9665ba79043dbd886d09a15fcb3f006",
+      "predicted_iou": 0.9819713234901428
+    },
+    {
+      "id": "scene-060",
+      "bbox": [
+        192,
+        851,
+        78,
+        48
+      ],
+      "area": 2894,
+      "mask_sha256": "33191e40a16730326e0626e7dd801ea8028ed75af81b1a5c1177d68c375ba201",
+      "predicted_iou": 0.9656932950019836
+    },
+    {
+      "id": "scene-061",
+      "bbox": [
+        269,
+        852,
+        51,
+        64
+      ],
+      "area": 2083,
+      "mask_sha256": "59edd7dfcd44884d9ef34821f9816337d78c1d8b86aaaa940a78164197e88bcd",
+      "predicted_iou": 0.9663487076759338
+    },
+    {
+      "id": "scene-062",
+      "bbox": [
+        467,
+        869,
+        24,
+        28
+      ],
+      "area": 534,
+      "mask_sha256": "e2b602b42ca3a36ea6055c5c4596e37f5ec21c881318f899529d3a97be788e00",
+      "predicted_iou": 0.9348430633544922
+    },
+    {
+      "id": "scene-063",
+      "bbox": [
+        25,
+        872,
+        33,
+        32
+      ],
+      "area": 448,
+      "mask_sha256": "26759917cca8e148d81a7d35733a05dcb78275032ac8084b51f671bb1bd8170c",
+      "predicted_iou": 0.8499391078948975
+    },
+    {
+      "id": "scene-064",
+      "bbox": [
+        279,
+        897,
+        203,
+        291
+      ],
+      "area": 25878,
+      "mask_sha256": "b29b1711a8730f22ef2e47d17461c84f921639d0c539e67248a9d8c909082760",
+      "predicted_iou": 0.9935595393180847
+    },
+    {
+      "id": "scene-065",
+      "bbox": [
+        715,
+        898,
+        94,
+        47
+      ],
+      "area": 2719,
+      "mask_sha256": "a7ab6c5054ddd735932cfd9b5deac568740250565b7ecd9a776ce28751e88baa",
+      "predicted_iou": 0.9702939987182617
+    },
+    {
+      "id": "scene-066",
+      "bbox": [
+        234,
+        909,
+        34,
+        39
+      ],
+      "area": 763,
+      "mask_sha256": "62a5d90d1e0ac5ed3ed0d647093473b0e5a4d83dbdfba57bd2919cad73b63d5c",
+      "predicted_iou": 0.9063349962234497
+    },
+    {
+      "id": "scene-067",
+      "bbox": [
+        441,
+        909,
+        108,
+        98
+      ],
+      "area": 3096,
+      "mask_sha256": "773668c3ed010d9d32deebce1ef23690663347de20e3431524a1ccfb97706190",
+      "predicted_iou": 0.9127954244613647
+    },
+    {
+      "id": "scene-068",
+      "bbox": [
+        476,
+        909,
+        71,
+        67
+      ],
+      "area": 2266,
+      "mask_sha256": "1641a6e6ffd80591ed84d505b2c79c80d656106d33b9bf023dc4ba341124afae",
+      "predicted_iou": 0.9418537020683289
+    },
+    {
+      "id": "scene-069",
+      "bbox": [
+        142,
+        932,
+        161,
+        147
+      ],
+      "area": 11324,
+      "mask_sha256": "eaabe85ead930f6819ad6246b8777fe7b01e341385a0a670b22683b77d572905",
+      "predicted_iou": 0.9839531183242798
+    },
+    {
+      "id": "scene-070",
+      "bbox": [
+        535,
+        962,
+        55,
+        49
+      ],
+      "area": 1024,
+      "mask_sha256": "7f54a28f14890c54f1d0c5b945845807fcbff477108bf495ea9d2f67340c22cc",
+      "predicted_iou": 0.9308615922927856
+    },
+    {
+      "id": "scene-071",
+      "bbox": [
+        551,
+        962,
+        132,
+        77
+      ],
+      "area": 4480,
+      "mask_sha256": "d45b536f3468a9e4433892cf8b35ef1c19b1d6d0f689c068ecd58c6f7d42ff32",
+      "predicted_iou": 0.9506111145019531
+    },
+    {
+      "id": "scene-072",
+      "bbox": [
+        313,
+        971,
+        65,
+        21
+      ],
+      "area": 910,
+      "mask_sha256": "4decd7a8597e728c90881426207a65d09579e2c193a2f40208a5a39ed45092e4",
+      "predicted_iou": 0.9273106455802917
+    },
+    {
+      "id": "scene-073",
+      "bbox": [
+        589,
+        984,
+        94,
+        55
+      ],
+      "area": 3433,
+      "mask_sha256": "d16c27ad9095e9360bf22023e2593b9fe5efd4b495e6ebf02994c214f45e68d3",
+      "predicted_iou": 0.9898978471755981
+    },
+    {
+      "id": "scene-074",
+      "bbox": [
+        664,
+        1102,
+        95,
+        56
+      ],
+      "area": 3400,
+      "mask_sha256": "0ff7d8d5cc87921df777c05b0cdfc18ea69a472b492f0bdb1774f89ba0fc872c",
+      "predicted_iou": 0.9903448224067688
+    },
+    {
+      "id": "scene-075",
+      "bbox": [
+        477,
+        1118,
+        101,
+        74
+      ],
+      "area": 2979,
+      "mask_sha256": "ae6859df6f21d349ca96dd5f654213cfce5e64cf196a3b510b1c761031fc3439",
+      "predicted_iou": 0.9621495604515076
+    },
+    {
+      "id": "scene-076",
+      "bbox": [
+        609,
+        1185,
+        122,
+        126
+      ],
+      "area": 8576,
+      "mask_sha256": "53e94db9682f514acf7a741d3a936ad10ad7db2acfd6f437e91f4985a388f607",
+      "predicted_iou": 0.9893773198127747
+    },
+    {
+      "id": "scene-077",
+      "bbox": [
+        435,
+        1188,
+        271,
+        144
+      ],
+      "area": 9061,
+      "mask_sha256": "c68dfef3b34bd86c2ccfa7984b52448d147686c309d1b0dca7e6226bb71c5079",
+      "predicted_iou": 0.9274123907089233
+    },
+    {
+      "id": "scene-078",
+      "bbox": [
+        435,
+        1226,
+        186,
+        108
+      ],
+      "area": 9116,
+      "mask_sha256": "02003148c9cdce479f59785d088ab144a28d3d96be027400d2da2f64952ea5c0",
+      "predicted_iou": 0.9339866638183594
+    },
+    {
+      "id": "scene-079",
+      "bbox": [
+        531,
+        1226,
+        92,
+        77
+      ],
+      "area": 3993,
+      "mask_sha256": "9251fc0102b3e909db3eaccb40224ab22ae295c6b3f147767a91512d919c1a20",
+      "predicted_iou": 0.9842754602432251
+    },
+    {
+      "id": "scene-080",
+      "bbox": [
+        435,
+        1256,
+        99,
+        78
+      ],
+      "area": 5003,
+      "mask_sha256": "b49ae7315f7fff932127dc10f15d5912a1f673cfcaa0a570243783f4f01060a1",
+      "predicted_iou": 0.981605589389801
+    },
+    {
+      "id": "scene-081",
+      "bbox": [
+        350,
+        1264,
+        113,
+        61
+      ],
+      "area": 3255,
+      "mask_sha256": "7566784a361a06ec423f56c3ac7ed38b9497bbf12eb306fae884b6bfd6ff3b5f",
+      "predicted_iou": 0.9619658589363098
+    },
+    {
+      "id": "scene-082",
+      "bbox": [
+        242,
+        1267,
+        43,
+        27
+      ],
+      "area": 917,
+      "mask_sha256": "d9b3baa30c4c9be4b84e3f1285e47e9d15be46cd8746baa56cb459d07bdf1b81",
+      "predicted_iou": 0.9632583260536194
+    },
+    {
+      "id": "scene-083",
+      "bbox": [
+        0,
+        1326,
+        808,
+        114
+      ],
+      "area": 88437,
+      "mask_sha256": "5b504fd12d3d967376ec0a77114e12e4872eb42b74de7c53c54e99a93b97628c",
+      "predicted_iou": 1.0025579929351807
+    },
+    {
+      "id": "scene-084",
+      "bbox": [
+        328,
+        1339,
+        480,
+        101
+      ],
+      "area": 40717,
+      "mask_sha256": "bfec2792179b5b8ca1d135604f6d30a05aada353d9d9b2e0db1bd72d104834e4",
+      "predicted_iou": 0.9314332008361816
+    },
+    {
+      "id": "scene-085",
+      "bbox": [
+        0,
+        1350,
+        344,
+        90
+      ],
+      "area": 29031,
+      "mask_sha256": "c2a69ad4685564b50c2b4d261caba4b1fd4a5f9e262e9786848cf4318a8515b2",
+      "predicted_iou": 0.9862267374992371
+    }
+  ],
+  "model_sha256": "6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
+  "algorithm": "mobilesam-scene-proposals-v1",
+  "elapsed_seconds": 101.406,
+  "review_required": true,
+  "note": "Segments may include wall, signs and people; no semantic removal decision is made"
+}

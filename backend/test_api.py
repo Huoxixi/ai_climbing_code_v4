@@ -1,17 +1,14 @@
-import json
-
 import requests
 
 
-url = "http://127.0.0.1:8000/api/generate"
-
-payload = {
+URL = "http://127.0.0.1:8000/api/generate"
+PAYLOAD = {
     "mode": "review_route",
-    "user_requirements": "检查当前路线是否存在明显动作风险，不要修改原路线。",
+    "review_focus": "overall",
     "board": {
         "route_name": "Local smoke test board",
         "setter_commentary": "",
-        "difficulty": "V3",
+        "difficulty": "6B+",
         "source_type": "manual",
         "visibility": "private",
         "tags": [],
@@ -32,6 +29,14 @@ payload = {
     },
 }
 
-response = requests.post(url, headers={"Content-Type": "application/json"}, data=json.dumps(payload))
-print(response.status_code)
-print(response.json())
+
+def run_manual_smoke_test() -> None:
+    """Explicit local smoke test; importing this module never sends a request."""
+    response = requests.post(URL, json=PAYLOAD, timeout=10)
+    response.raise_for_status()
+    print(response.status_code)
+    print(response.json())
+
+
+if __name__ == "__main__":
+    run_manual_smoke_test()

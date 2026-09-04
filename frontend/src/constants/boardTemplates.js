@@ -13,8 +13,6 @@ function buildBoardTemplate({
   columns,
   rows,
   angle_degrees,
-  material,
-  skinClass,
   description,
   reference_system = 'system-spray-wall',
   board_width_mm,
@@ -32,7 +30,7 @@ function buildBoardTemplate({
   const resolved_height_mm = board_height_mm || grid_height_mm + margin_bottom_mm + margin_top_mm
   const total_holes = columns * rows
   const cellLabel = `${columns} x ${rows}`
-  const angleLabel = `${angle_degrees} deg`
+  const angleLabel = `${angle_degrees}°`
   const physicalLabel = `${resolved_width_mm} x ${resolved_height_mm} mm`
   const spacingLabel = `${hole_spacing_x_mm} x ${hole_spacing_y_mm} mm`
 
@@ -62,9 +60,12 @@ function buildBoardTemplate({
     angleLabel,
     physicalLabel,
     spacingLabel,
-    material,
-    skinClass,
+    // Kept nullable for compatibility with older saved board records. The current
+    // local product does not claim a physical material or visual skin.
+    material: null,
+    skinClass: null,
     description,
+    ai_supported: columns === 11 && rows === 18,
     // Legacy visual consumers still read width/height. Keep them derived from real millimeters.
     width: resolved_width_mm,
     height: resolved_height_mm,
@@ -75,53 +76,45 @@ export const BOARD_TEMPLATES = [
   buildBoardTemplate({
     id: 'classic-11x18',
     template_key: 'spray-small',
-    label: 'MoonBoard 风格标准板',
+    label: '11×18 标准训练板',
     columns: 11,
     rows: 18,
     board_width_mm: 2440,
     board_height_mm: 3660,
     angle_degrees: 40,
     reference_system: 'moonboard-derived',
-    material: '深色木纹复合板',
-    skinClass: 'skin-wood-classic',
-    description: '以 200mm 孔距和 11 x 18 坐标作为 AI 生成默认规格，兼容现有路线算法。',
+    description: '支持手工定线、完整性检查、AI 组合与审核。',
   }),
   buildBoardTemplate({
     id: 'studio-14x20',
     template_key: 'spray-medium',
-    label: 'Studio 扩展喷点板',
+    label: '14×20 扩展训练板',
     columns: 14,
     rows: 20,
     angle_degrees: 10,
-    material: '桦木纹理 + 密集孔位',
-    skinClass: 'skin-birch-studio',
-    description: '系统扩展规格，适合中等规模手动布点和自由组合岩点。',
+    description: '支持手工定线与保存；当前不进入 AI 实验。',
   }),
   buildBoardTemplate({
     id: 'commercial-16x24',
     template_key: 'spray-large',
-    label: 'Commercial 大型喷点板',
+    label: '16×24 大型训练板',
     columns: 16,
     rows: 24,
     angle_degrees: 15,
-    material: '灰黑防滑板面',
-    skinClass: 'skin-commercial-dark',
-    description: '系统扩展规格，提供更多横向移动空间和更高的路线容量。',
+    description: '支持手工定线与保存；当前不进入 AI 实验。',
   }),
   buildBoardTemplate({
     id: 'competition-18x22',
     template_key: 'competition-wide',
-    label: 'Competition 宽体训练板',
+    label: '18×22 宽体训练板',
     columns: 18,
     rows: 22,
     angle_degrees: 20,
-    material: '蓝灰竞赛板面',
-    skinClass: 'skin-competition-blue',
-    description: '系统扩展规格，适合大跨度横移、协调动作和复杂组合模拟。',
+    description: '支持手工定线与保存；当前不进入 AI 实验。',
   }),
 ]
 
-export const DEFAULT_BOARD_TEMPLATE_ID = 'studio-14x20'
+export const DEFAULT_BOARD_TEMPLATE_ID = 'classic-11x18'
 export const LEGACY_BOARD_TEMPLATE_ID = 'classic-11x18'
 
 export function getBoardTemplateById(id) {
@@ -175,7 +168,7 @@ function completePhysicalSpec(spec, template, columns, rows) {
     reference_system: spec?.reference_system || template.reference_system,
     physicalLabel: `${board_width_mm} x ${board_height_mm} mm`,
     spacingLabel: `${hole_spacing_x_mm} x ${hole_spacing_y_mm} mm`,
-    angleLabel: `${angle_degrees} deg`,
+    angleLabel: `${angle_degrees}°`,
     width: board_width_mm,
     height: board_height_mm,
   }
@@ -197,9 +190,10 @@ export function createBoardSpecSnapshot(template = getBoardTemplateById(DEFAULT_
     cols: columns,
     rows,
     cellLabel: template?.cellLabel || `${columns} x ${rows}`,
-    material: template?.material || normalizedTemplate.material,
-    skinClass: template?.skinClass || normalizedTemplate.skinClass,
+    material: null,
+    skinClass: null,
     description: template?.description || normalizedTemplate.description,
+    ai_supported: columns === 11 && rows === 18,
     xLabels: createAxisLabels(columns),
     yLabels: Array.from({ length: rows }, (_, index) => index + 1),
   }
@@ -208,7 +202,11 @@ export function createBoardSpecSnapshot(template = getBoardTemplateById(DEFAULT_
 export function normalizeBoardSpec(spec) {
   if (!spec) return createBoardSpecSnapshot(getBoardTemplateById(LEGACY_BOARD_TEMPLATE_ID))
 
-  const template = getBoardTemplateById(spec.preset_id || spec.template_key)
+  const requestedTemplateId = LEGACY_TEMPLATE_ALIASES[spec.preset_id || spec.template_key] || spec.preset_id || spec.template_key
+  const matchedTemplate = BOARD_TEMPLATES.find(
+    (item) => item.id === requestedTemplateId || item.template_key === requestedTemplateId,
+  )
+  const template = matchedTemplate || getBoardTemplateById(requestedTemplateId)
   const columns = Number(spec.columns || spec.cols || template.columns)
   const rows = Number(spec.rows || template.rows)
   const physicalSpec = completePhysicalSpec(spec, template, columns, rows)
@@ -219,10 +217,16 @@ export function normalizeBoardSpec(spec) {
     ...physicalSpec,
     preset_id: template.id,
     template_key: template.template_key,
+    label: matchedTemplate?.label || spec.label || spec.name || template.label,
+    name: matchedTemplate?.name || spec.name || spec.label || template.name,
     columns,
     cols: columns,
     rows,
     cellLabel: spec.cellLabel || `${columns} x ${rows}`,
+    // Legacy material/skin values are intentionally not promoted into the
+    // current product model because no verified physical finish is configured.
+    material: null,
+    skinClass: null,
     xLabels: Array.isArray(spec.xLabels) && spec.xLabels.length ? spec.xLabels : createAxisLabels(columns),
     yLabels: Array.isArray(spec.yLabels) && spec.yLabels.length ? spec.yLabels : Array.from({ length: rows }, (_, index) => index + 1),
   }

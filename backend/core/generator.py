@@ -7,6 +7,7 @@ import random
 from typing import List, Dict, Tuple, Set, Optional
 from collections import Counter
 from core.models import Hold, HoldType, RecipeItem, HoldSpec
+from core.moonboard_grading import grade_number
 
 class RouteGenerator:
     """
@@ -83,11 +84,7 @@ class RouteGenerator:
             count = len(start_holds)
             center_x = int(round(sum_x / count)) if count > 0 else self.GRID_WIDTH // 2
 
-            difficulty_offset = 2  # Default for V0
-            if target_difficulty == "V1":
-                difficulty_offset = 3
-            elif target_difficulty == "V2":
-                difficulty_offset = 4
+            difficulty_offset = min(5, 2 + grade_number(target_difficulty) // 4)
             
             left_bound = max(0, center_x - difficulty_offset)
             right_bound = min(self.GRID_WIDTH - 1, center_x + difficulty_offset)

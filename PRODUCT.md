@@ -10,7 +10,7 @@ Indoor climbing route setters and operators use this app while designing, saving
 
 ## Product Purpose
 
-The product helps users manage climbing board assets and use AI to compose or review route ideas from saved board data. Success means users can quickly select the right board, understand what the AI is evaluating, and move useful results back into Studio for editing.
+The local single-machine product helps users manage climbing board assets and use deterministic rules to compose or review route ideas from saved board data. Success means users can quickly select the right board, understand what the AI experiment is evaluating, and move useful results back into the route-setting workspace for editing. The UI must not invent a board material, commercial model, cloud capability, or unsupported AI scope.
 
 ## Brand Personality
 

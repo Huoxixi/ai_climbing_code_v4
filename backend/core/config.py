@@ -9,8 +9,8 @@ load_dotenv()
 class Settings(BaseSettings):
     # 兼容你 .env 里的 OPENAI_API_KEY
     api_key: str = os.getenv("OPENAI_API_KEY", "")
-    # 兼容你 .env 里的 OPENAI_BASE_URL
-    base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.apiyi.com/v1")
+    # 外部模型地址必须由部署环境明确提供，避免误用未经审核的默认供应商。
+    base_url: str = os.getenv("OPENAI_BASE_URL", "")
     model_name: str = os.getenv("LLM_MODEL_NAME", "gpt-4o")
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

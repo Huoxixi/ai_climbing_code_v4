@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AI Climbing data backup at 03:15 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=120
+Unit=ai-climbing-backup.service
+
+[Install]
+WantedBy=timers.target

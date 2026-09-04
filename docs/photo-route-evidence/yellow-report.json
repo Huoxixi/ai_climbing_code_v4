@@ -1,0 +1,181 @@
+{
+  "algorithm": "mobilesam-color-v5",
+  "refine": true,
+  "model_sha256": "6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
+  "source_name": "抱石路线1.jpg",
+  "source_sha256": "ac150779cf13f04639de045a2fa8f300ad4b9fb7f5546cf14858a0ee14bf931f",
+  "source_dimensions": [
+    810,
+    1440
+  ],
+  "working_dimensions": [
+    810,
+    1440
+  ],
+  "seed": [
+    0.383,
+    0.285
+  ],
+  "hue_tolerance": 12,
+  "seed_hue": 23.05899813016664,
+  "elapsed_seconds": 14.656,
+  "candidate_count": 13,
+  "objects": [
+    {
+      "id": "object-01",
+      "bbox": [
+        490,
+        189,
+        97,
+        154
+      ],
+      "area": 7257,
+      "touches_border": false
+    },
+    {
+      "id": "object-02",
+      "bbox": [
+        264,
+        267,
+        146,
+        86
+      ],
+      "area": 5770,
+      "touches_border": false
+    },
+    {
+      "id": "object-03",
+      "bbox": [
+        216,
+        337,
+        160,
+        211
+      ],
+      "area": 16207,
+      "touches_border": false
+    },
+    {
+      "id": "object-04",
+      "bbox": [
+        378,
+        615,
+        132,
+        78
+      ],
+      "area": 4593,
+      "touches_border": false
+    },
+    {
+      "id": "object-05",
+      "bbox": [
+        92,
+        649,
+        88,
+        92
+      ],
+      "area": 4035,
+      "touches_border": false
+    },
+    {
+      "id": "object-06",
+      "bbox": [
+        493,
+        683,
+        175,
+        83
+      ],
+      "area": 9779,
+      "touches_border": false
+    },
+    {
+      "id": "object-07",
+      "bbox": [
+        253,
+        728,
+        108,
+        52
+      ],
+      "area": 2528,
+      "touches_border": false
+    },
+    {
+      "id": "object-08",
+      "bbox": [
+        51,
+        796,
+        162,
+        141
+      ],
+      "area": 12069,
+      "touches_border": false
+    },
+    {
+      "id": "object-09",
+      "bbox": [
+        234,
+        907,
+        35,
+        40
+      ],
+      "area": 787,
+      "touches_border": false
+    },
+    {
+      "id": "object-10",
+      "bbox": [
+        475,
+        909,
+        73,
+        67
+      ],
+      "area": 2279,
+      "touches_border": false
+    },
+    {
+      "id": "object-11",
+      "bbox": [
+        141,
+        931,
+        162,
+        148
+      ],
+      "area": 11322,
+      "touches_border": false
+    },
+    {
+      "id": "object-12",
+      "bbox": [
+        476,
+        1117,
+        102,
+        74
+      ],
+      "area": 3008,
+      "touches_border": false
+    },
+    {
+      "id": "object-13",
+      "bbox": [
+        350,
+        1264,
+        113,
+        60
+      ],
+      "area": 3210,
+      "touches_border": false
+    }
+  ],
+  "warnings": [
+    "实验性本地模型结果，需要检查重复、粘连和漏选",
+    "没有推断起终点、线路完整性或不可见纹理"
+  ],
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "opencv_threads": 1,
+    "opencv": "5.0.0",
+    "python": "3.12.13"
+  },
+  "acceptance": "UNASSESSED: candidates are not confirmed ground truth; server timing has not been measured"
+}

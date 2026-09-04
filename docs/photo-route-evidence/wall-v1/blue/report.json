@@ -1,0 +1,23 @@
+{
+  "source_sha256": "796c7fead767022b996e0b074e31d46e944bf4d7ab002c018f451da89394dd68",
+  "algorithm": "local-wall-lama-v1",
+  "model_sha256": "7ba7aa7ac37a4d41fdbbeba3a2af7ead18058552997e3a3cd1a3b2210c9e6b4c",
+  "review_sha256": "8521acf93345d6e8479ea70523bd73f18e275fc84b595fbe1747d074cc230413",
+  "reviewer": "assistant visual selection of scene catalog and explicit manual missed-hold masks; provisional, not human acceptance",
+  "human_confirmed": false,
+  "status": "needs_visual_review",
+  "selected_target_count": 10,
+  "removal_proposal_count": 20,
+  "manual_polygon_count": 3,
+  "source_dimensions": [
+    1080,
+    1920
+  ],
+  "working_edge": 768,
+  "margin": 20,
+  "repair_fraction": 0.3852,
+  "target_changed_pixels": 0,
+  "unmasked_changed_pixels": 0,
+  "elapsed_seconds": 9.984,
+  "note": "Repair is synthetic wall appearance; hidden holes, seams and texture are not observed measurements. Original and target pixels are preserved."
+}

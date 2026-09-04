@@ -7,33 +7,19 @@ export const HOLD_TYPES = ['Jug', 'Crimp', 'Sloper', 'Pinch', 'Pocket', 'Foot']
 export function useHoldLibrary() {
   const holdImageMap = reactive({})
   const holdVectorMap = reactive({})
+  const holdAssets = ref([])
   const loading = ref(false)
   const uploadInfo = reactive({ hold_type: 'Jug', variant: '', file: null })
   const search = ref('')
   const typeFilter = ref('All')
   const previewMode = ref('vector')
+  const showArchived = ref(false)
 
   const managedHolds = computed(() => {
-    const holds = []
-    const allTypes = new Set([...Object.keys(holdImageMap), ...Object.keys(holdVectorMap)])
-    allTypes.forEach((hold_type) => {
-      const variants = new Set([
-        ...Object.keys(holdImageMap[hold_type] || {}),
-        ...Object.keys(holdVectorMap[hold_type] || {}),
-      ])
-      variants.forEach((variant) => {
-        if (variant === 'default') return
-        holds.push({
-          key: `${hold_type}-${variant}`,
-          hold_type,
-          type: hold_type,
-          variant,
-          imageUrl: holdImageMap[hold_type]?.[variant] || holdImageMap[hold_type]?.default,
-          svgPath: holdVectorMap[hold_type]?.[variant] || holdVectorMap[hold_type]?.default,
-        })
-      })
-    })
-    return holds.sort((a, b) => `${a.hold_type}-${a.variant}`.localeCompare(`${b.hold_type}-${b.variant}`))
+    return holdAssets.value
+      .filter((hold) => Boolean(hold.archived_at) === showArchived.value)
+      .map((hold) => ({ ...hold, type: hold.hold_type }))
+      .sort((a, b) => `${a.hold_type}-${a.variant}`.localeCompare(`${b.hold_type}-${b.variant}`))
   })
 
   const filteredHolds = computed(() => {
@@ -60,7 +46,12 @@ export function useHoldLibrary() {
   async function fetchAllHoldData() {
     loading.value = true
     try {
-      await Promise.all([fetchHoldMapping(), fetchHoldVectors()])
+      const [, , assetsResponse] = await Promise.all([
+        fetchHoldMapping(),
+        fetchHoldVectors(),
+        apiClient.get('/api/holds/assets', { params: { include_archived: true } }),
+      ])
+      holdAssets.value = Array.isArray(assetsResponse.data) ? assetsResponse.data : []
     } catch (error) {
       ElMessage.error(`岩点库刷新失败：${error.response?.data?.detail || error.message}`)
     } finally {
@@ -81,8 +72,8 @@ export function useHoldLibrary() {
 
     loading.value = true
     try {
-      await apiClient.post('/api/holds/upload', formData)
-      ElMessage.success('岩点上传成功')
+      const response = await apiClient.post('/api/holds/upload', formData)
+      ElMessage.success(response.data?.background_removed ? '岩点上传成功，白色背景已自动去除' : '岩点上传成功')
       uploadInfo.variant = ''
       uploadInfo.file = null
       await fetchAllHoldData()
@@ -93,19 +84,29 @@ export function useHoldLibrary() {
     }
   }
 
-  async function deleteHold(hold_type, variant) {
+  async function archiveHold(hold_type, variant) {
     try {
-      await ElMessageBox.confirm(`确定删除岩点 ${hold_type} / ${variant}？此操作会归档该资源。`, '删除岩点', {
-        confirmButtonText: '删除',
+      await ElMessageBox.confirm(`确定归档岩点 ${hold_type} / ${variant}？历史线路仍可继续显示。`, '归档岩点', {
+        confirmButtonText: '归档岩点',
         cancelButtonText: '取消',
         type: 'warning',
       })
       await apiClient.delete(`/api/holds/${hold_type}/${variant}`)
-      ElMessage.success('岩点已删除')
+      ElMessage.success('岩点已归档')
       await fetchAllHoldData()
     } catch (error) {
       if (error === 'cancel' || error === 'close') return
-      ElMessage.error(`删除失败：${error.response?.data?.detail || error.message}`)
+      ElMessage.error(`归档失败：${error.response?.data?.detail || error.message}`)
+    }
+  }
+
+  async function restoreHold(hold_type, variant) {
+    try {
+      await apiClient.post(`/api/holds/${hold_type}/${variant}/restore`)
+      ElMessage.success('岩点已恢复')
+      await fetchAllHoldData()
+    } catch (error) {
+      ElMessage.error(`恢复失败：${error.response?.data?.detail || error.message}`)
     }
   }
 
@@ -121,17 +122,20 @@ export function useHoldLibrary() {
   return {
     holdImageMap,
     holdVectorMap,
+    holdAssets,
     holdTypes: HOLD_TYPES,
     loading,
     uploadInfo,
     search,
     typeFilter,
     previewMode,
+    showArchived,
     managedHolds,
     filteredHolds,
     fetchAllHoldData,
     uploadImage,
-    deleteHold,
+    archiveHold,
+    restoreHold,
     resolveHoldVisual,
   }
 }
