@@ -3,9 +3,10 @@
     :active="activePage"
     @update:active="changePage"
     :title="pageTitle"
-    :board-label="studio.currentBoardSpec.label"
-    :hold-count="studio.placedHolds.length"
-    :dirty="studio.unsavedChanges"
+    :board-label="activePage === 'photo-routes' ? '30×20 照片线路岩板' : studio.currentBoardSpec.label"
+    :hold-count="activePage === 'photo-routes' ? photoStatus.count : studio.placedHolds.length"
+    :dirty="activePage === 'photo-routes' ? photoStatus.dirty : studio.unsavedChanges"
+    :save-label="activePage === 'photo-routes' ? photoStatus.state : ''"
     :simulation-enabled="simulationEnabled"
   >
     <section v-if="activePage === 'dashboard'" class="page dashboard-page">
@@ -102,6 +103,8 @@
         </section>
       </div>
     </section>
+
+    <PhotoRoutesPage v-else-if="activePage === 'photo-routes'" ref="photoPage" @status="photoStatus = $event" />
 
     <section v-else-if="activePage === 'studio'" class="studio-page">
       <div class="command-bar">
@@ -1116,6 +1119,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import AIExperimentExplanation from './components/AIExperimentExplanation.vue'
 import AppShell from './components/AppShell.vue'
 import BoardCanvas from './components/BoardCanvas.vue'
+import PhotoRoutesPage from './components/PhotoRoutesPage.vue'
 import BoardComparisonPanel from './components/BoardComparisonPanel.vue'
 import InspectorPanel from './components/InspectorPanel.vue'
 import { useBoardPersistence } from './composables/useBoardPersistence'
@@ -1134,6 +1138,8 @@ const SimulationLab = simulationEnabled
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
+const photoPage = ref(null)
+const photoStatus = ref({ count: 0, dirty: false, state: '' })
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
 const aiExperiment = reactive({
@@ -1227,6 +1233,7 @@ const standardBoard = reactive({
 const pageTitle = computed(() => ({
   dashboard: '总览',
   studio: '定线工作台',
+  'photo-routes': '照片线路',
   library: '岩点库',
   boards: '岩板资产',
   'standard-board': '标准板库',
@@ -1398,6 +1405,7 @@ watch(activePage, () => {
 async function changePage(nextPage) {
   if (nextPage === 'simulation' && !simulationEnabled) return
   if (nextPage === activePage.value) return
+  if (activePage.value === 'photo-routes' && !(await photoPage.value?.beforeLeave())) return
   if (activePage.value === 'studio' && studio.unsavedChanges) {
     try {
       await ElMessageBox.confirm('当前修改仍会保留在本次工作区，但尚未写入本地岩板库。是否切换页面？', '未保存的草稿', {

@@ -1,0 +1,161 @@
+{
+  "algorithm": "mobilesam-color-v6",
+  "refine": true,
+  "model_sha256": "6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
+  "torch_threads": 2,
+  "batch_size": 2,
+  "source_name": "抱石路线2.jpg",
+  "source_sha256": "796c7fead767022b996e0b074e31d46e944bf4d7ab002c018f451da89394dd68",
+  "source_dimensions": [
+    1080,
+    1920
+  ],
+  "working_dimensions": [
+    1080,
+    1920
+  ],
+  "seed": [
+    0.445,
+    0.271
+  ],
+  "hue_tolerance": 12,
+  "seed_hue": 105.84616993065043,
+  "elapsed_seconds": 47.484,
+  "candidate_count": 10,
+  "objects": [
+    {
+      "id": "object-01",
+      "bbox": [
+        337,
+        454,
+        245,
+        143
+      ],
+      "area": 27666,
+      "touches_border": false,
+      "mask_sha256": "f86ff4104133ad1b899bf56d33d2539ffbe42c73b3cf56475982404b6cd98e19"
+    },
+    {
+      "id": "object-02",
+      "bbox": [
+        519,
+        551,
+        127,
+        158
+      ],
+      "area": 14050,
+      "touches_border": false,
+      "mask_sha256": "9064539876fb491dee87013fab1d45d5b17364ddeb5872f0e692c05997a8b2f7"
+    },
+    {
+      "id": "object-03",
+      "bbox": [
+        394,
+        720,
+        178,
+        639
+      ],
+      "area": 72575,
+      "touches_border": false,
+      "mask_sha256": "31b743e72eb1e184298eacc7abaee625d405435b98620299e190f30105cb3b16"
+    },
+    {
+      "id": "object-04",
+      "bbox": [
+        652,
+        837,
+        122,
+        329
+      ],
+      "area": 34350,
+      "touches_border": false,
+      "mask_sha256": "a6cd4c667042130b1a18774e6d49fbaa1d00bfc62fb3b4f95660d37019da89dc"
+    },
+    {
+      "id": "object-05",
+      "bbox": [
+        87,
+        945,
+        307,
+        224
+      ],
+      "area": 38585,
+      "touches_border": false,
+      "mask_sha256": "4a27fa84135d4adc08e3d0fcec6f6b3357a60266041772a51c6a37e16d8d008d"
+    },
+    {
+      "id": "object-06",
+      "bbox": [
+        405,
+        985,
+        32,
+        92
+      ],
+      "area": 1970,
+      "touches_border": false,
+      "mask_sha256": "c69af3196a586e343e2b7af40f85e5fe203ab93e7f6e297dbb9be15db4b9383c"
+    },
+    {
+      "id": "object-07",
+      "bbox": [
+        441,
+        1151,
+        130,
+        247
+      ],
+      "area": 21105,
+      "touches_border": false,
+      "mask_sha256": "cc84e51665a6588b9cd7305a1d8000890beec288b09e6ace343b873ad7cd2be9"
+    },
+    {
+      "id": "object-08",
+      "bbox": [
+        659,
+        1167,
+        202,
+        187
+      ],
+      "area": 30437,
+      "touches_border": false,
+      "mask_sha256": "81c203b240f8c1d5f26d683580c3e557c61f9af2920712ac272e7b483d7fc4be"
+    },
+    {
+      "id": "object-09",
+      "bbox": [
+        435,
+        1398,
+        224,
+        152
+      ],
+      "area": 25202,
+      "touches_border": false,
+      "mask_sha256": "805077cf3728d635bf257d7a9578ee3a687a38e02b76cdabd217a09b94acb20f"
+    },
+    {
+      "id": "object-10",
+      "bbox": [
+        236,
+        1636,
+        409,
+        279
+      ],
+      "area": 51992,
+      "touches_border": false,
+      "mask_sha256": "8ea68dbb4e19319524dbba79ac2c16504ae3f4878876b05ce9ba75a415c9774b"
+    }
+  ],
+  "warnings": [
+    "实验性本地模型结果，需要检查重复、粘连和漏选",
+    "没有推断起终点、线路完整性或不可见纹理"
+  ],
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "opencv_threads": 1,
+    "opencv": "5.0.0",
+    "python": "3.12.13"
+  },
+  "acceptance": "UNASSESSED: candidates are not confirmed ground truth; server timing has not been measured",
+  "result_sha256": "73bcc87ea4fc2343a57c343e32c1b99eef0b4a18119b4bbefc2dc45526bbfa07"
+}

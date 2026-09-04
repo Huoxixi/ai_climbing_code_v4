@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from agent.controller import generate_route_with_reflection
 from agent.experiments import run_ai_experiment
 from core.board_readiness import apply_board_readiness
+from core.photo_route_drafts import PhotoRouteStore, create_photo_route_router
 from core.hold_image_processing import (
     PROCESSING_VERSION,
     SUPPORTED_IMAGE_SUFFIXES,
@@ -161,6 +162,8 @@ app.add_middleware(
 )
 
 DATA_DIR = "data"
+photo_route_store = PhotoRouteStore(Path(os.getenv("PHOTO_ROUTE_DATA_DIR", str(Path(__file__).resolve().parent / "data/photo_routes"))))
+app.include_router(create_photo_route_router(photo_route_store))
 HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
 PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")

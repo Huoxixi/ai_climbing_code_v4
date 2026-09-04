@@ -1,0 +1,23 @@
+{
+  "source_sha256": "ac150779cf13f04639de045a2fa8f300ad4b9fb7f5546cf14858a0ee14bf931f",
+  "algorithm": "mobilesam-color-v2",
+  "reviewer": "assistant visual review; provisional, not user-approved ground truth",
+  "human_confirmed": false,
+  "target_ids": ["Y01", "Y02", "Y03", "Y04", "Y05", "Y06", "Y07", "Y08", "Y09", "Y10", "Y11", "Y12"],
+  "judgments": [
+    {"candidate_id": "object-01", "target_ids": ["Y01"]},
+    {"candidate_id": "object-02", "target_ids": ["Y02"]},
+    {"candidate_id": "object-03", "target_ids": ["Y03"]},
+    {"candidate_id": "object-04", "target_ids": ["Y05"]},
+    {"candidate_id": "object-05", "target_ids": ["Y04"]},
+    {"candidate_id": "object-06", "target_ids": ["Y07"]},
+    {"candidate_id": "object-07", "target_ids": ["Y06"]},
+    {"candidate_id": "object-08", "target_ids": ["Y08"]},
+    {"candidate_id": "object-09", "target_ids": [], "reason": "printed sticker"},
+    {"candidate_id": "object-10", "target_ids": ["Y10"]},
+    {"candidate_id": "object-11", "target_ids": ["Y09"]},
+    {"candidate_id": "object-12", "target_ids": [], "reason": "printed sticker"},
+    {"candidate_id": "object-13", "target_ids": ["Y11"]},
+    {"candidate_id": "object-14", "target_ids": ["Y12"]}
+  ]
+}

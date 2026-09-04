@@ -1,0 +1,8 @@
+{
+  "status": "completed",
+  "returncode": 0,
+  "wall_seconds": 10.969,
+  "timeout_seconds": 180,
+  "peak_resident_mib": 1390.5,
+  "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap"
+}

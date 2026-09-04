@@ -110,6 +110,10 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_ai_lab_experiments \
   test_hold_image_processing \
   test_local_only_mode \
+  test_photo_route_benchmark \
+  test_photo_route_drafts \
+  test_photo_route_processing \
+  test_photo_wall_processing \
   test_pilot_access \
   test_release_hardening \
   test_release_readiness \
