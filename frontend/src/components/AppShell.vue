@@ -30,7 +30,7 @@
         <div class="topbar-status">
           <span class="status-pill">{{ boardLabel }}</span>
           <span class="status-pill">{{ holdCount }} 岩点</span>
-          <span class="status-pill" :class="{ dirty: dirty }">{{ dirty ? '未保存' : '已同步' }}</span>
+          <span class="status-pill" :class="{ dirty: dirty }">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span>
           <span
             class="status-pill access-status"
             :class="{ editing: pilotAccess.lease.ownedByMe, waiting: pilotAccess.lease.active && !pilotAccess.lease.ownedByMe }"
@@ -80,7 +80,7 @@
 
 <script setup>
 import { computed, inject } from 'vue'
-import { Collection, DataBoard, Grid, Histogram, Platform } from '@element-plus/icons-vue'
+import { Collection, DataBoard, Grid, Histogram, Picture, Platform } from '@element-plus/icons-vue'
 
 const props = defineProps({
   active: { type: String, required: true },
@@ -88,6 +88,7 @@ const props = defineProps({
   boardLabel: { type: String, default: '未选择岩板' },
   holdCount: { type: Number, default: 0 },
   dirty: { type: Boolean, default: false },
+  saveLabel: { type: String, default: '' },
   simulationEnabled: { type: Boolean, default: false },
 })
 
@@ -98,6 +99,7 @@ const pilotAccess = inject('pilotAccess')
 const baseItems = [
   { key: 'dashboard', label: '总览', short: '总览', icon: DataBoard },
   { key: 'studio', label: '定线工作台', short: '定线', icon: Platform },
+  { key: 'photo-routes', label: '照片线路', short: '照片', icon: Picture },
   { key: 'library', label: '岩点库', short: '岩点', icon: Collection },
   { key: 'boards', label: '岩板资产', short: '资产', icon: Grid },
   { key: 'standard-board', label: '标准板库', short: '板库', icon: Grid },

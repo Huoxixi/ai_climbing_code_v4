@@ -1,0 +1,25 @@
+{
+  "reviewer": "assistant visual review of v6 overlays; provisional, not user-approved ground truth",
+  "human_confirmed": false,
+  "reference_target_count": 10,
+  "candidate_count": 10,
+  "one_to_one_matches": 10,
+  "recall": 1.0,
+  "precision": 1.0,
+  "unmatched_target_ids": [],
+  "false_positive_candidate_ids": [],
+  "merged_candidate_ids": [],
+  "duplicate_target_ids": [],
+  "major_contour_error_ids": [
+    "object-03",
+    "object-07"
+  ],
+  "unreviewed_contour_ids": [],
+  "review_bound_to_result": true,
+  "production_timing_verified": false,
+  "unresolved_inventory": [],
+  "count_threshold_met": true,
+  "gate_passed": false,
+  "correction_workflow_verified": false,
+  "note": "Counts do not certify contours, correction time or production performance."
+}

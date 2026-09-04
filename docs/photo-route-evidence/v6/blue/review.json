@@ -1,0 +1,96 @@
+{
+  "source_sha256": "796c7fead767022b996e0b074e31d46e944bf4d7ab002c018f451da89394dd68",
+  "algorithm": "mobilesam-color-v6",
+  "reviewer": "assistant visual review of v6 overlays; provisional, not user-approved ground truth",
+  "human_confirmed": false,
+  "inventory_confirmation": "2026-09-03: user confirmed the gray-blue small hold is part of the blue route; ten reference objects. Pixel-level contours and complete review remain unconfirmed.",
+  "target_ids": [
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B09",
+    "B10"
+  ],
+  "unresolved_inventory": [],
+  "judgments": [
+    {
+      "candidate_id": "object-01",
+      "target_ids": [
+        "B01"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-02",
+      "target_ids": [
+        "B02"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-03",
+      "target_ids": [
+        "B04"
+      ],
+      "major_contour_error": true,
+      "reason": "v6 still assigns lower triangular support and part of left base to mounted large hold; visible boundary is not acceptable"
+    },
+    {
+      "candidate_id": "object-04",
+      "target_ids": [
+        "B06"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-05",
+      "target_ids": [
+        "B03"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-06",
+      "target_ids": [
+        "B10"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-07",
+      "target_ids": [
+        "B05"
+      ],
+      "major_contour_error": true,
+      "reason": "v6 still assigns lower triangular support and part of left base to mounted large hold; visible boundary is not acceptable"
+    },
+    {
+      "candidate_id": "object-08",
+      "target_ids": [
+        "B07"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-09",
+      "target_ids": [
+        "B08"
+      ],
+      "major_contour_error": false
+    },
+    {
+      "candidate_id": "object-10",
+      "target_ids": [
+        "B09"
+      ],
+      "major_contour_error": false
+    }
+  ],
+  "result_sha256": "73bcc87ea4fc2343a57c343e32c1b99eef0b4a18119b4bbefc2dc45526bbfa07",
+  "production_timing_verified": false
+}

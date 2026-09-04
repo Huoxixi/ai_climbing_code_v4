@@ -1,0 +1,14 @@
+{
+  "viewports": [
+    1440,
+    1024,
+    390
+  ],
+  "holes": 600,
+  "pinchZoom": "229%",
+  "dragSaved": true,
+  "crossSession": true,
+  "leaseRecovery": true,
+  "conflictRecovery": true,
+  "browserErrors": []
+}

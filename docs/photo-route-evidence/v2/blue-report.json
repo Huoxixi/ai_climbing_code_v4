@@ -1,0 +1,137 @@
+{
+  "algorithm": "mobilesam-color-v2",
+  "refine": true,
+  "model_sha256": "6dbb90523a35330fedd7f1d3dfc66f995213d81b29a5ca8108dbcdd4e37d6c2f",
+  "source_name": "抱石路线2.jpg",
+  "source_sha256": "796c7fead767022b996e0b074e31d46e944bf4d7ab002c018f451da89394dd68",
+  "source_dimensions": [
+    1080,
+    1920
+  ],
+  "working_dimensions": [
+    1080,
+    1920
+  ],
+  "seed": [
+    0.445,
+    0.271
+  ],
+  "hue_tolerance": 12,
+  "seed_hue": 105.84616993065043,
+  "elapsed_seconds": 19.5,
+  "candidate_count": 9,
+  "objects": [
+    {
+      "id": "object-01",
+      "bbox": [
+        337,
+        454,
+        245,
+        143
+      ],
+      "area": 27666,
+      "touches_border": false
+    },
+    {
+      "id": "object-02",
+      "bbox": [
+        519,
+        551,
+        127,
+        158
+      ],
+      "area": 14050,
+      "touches_border": false
+    },
+    {
+      "id": "object-03",
+      "bbox": [
+        394,
+        720,
+        178,
+        639
+      ],
+      "area": 72575,
+      "touches_border": false
+    },
+    {
+      "id": "object-04",
+      "bbox": [
+        652,
+        837,
+        122,
+        329
+      ],
+      "area": 34350,
+      "touches_border": false
+    },
+    {
+      "id": "object-05",
+      "bbox": [
+        87,
+        945,
+        307,
+        224
+      ],
+      "area": 38585,
+      "touches_border": false
+    },
+    {
+      "id": "object-06",
+      "bbox": [
+        441,
+        1151,
+        130,
+        247
+      ],
+      "area": 21105,
+      "touches_border": false
+    },
+    {
+      "id": "object-07",
+      "bbox": [
+        659,
+        1167,
+        202,
+        187
+      ],
+      "area": 30437,
+      "touches_border": false
+    },
+    {
+      "id": "object-08",
+      "bbox": [
+        435,
+        1398,
+        224,
+        152
+      ],
+      "area": 25202,
+      "touches_border": false
+    },
+    {
+      "id": "object-09",
+      "bbox": [
+        236,
+        1636,
+        409,
+        279
+      ],
+      "area": 51992,
+      "touches_border": false
+    }
+  ],
+  "warnings": [
+    "实验性本地模型结果，需要检查重复、粘连和漏选",
+    "没有推断起终点、线路完整性或不可见纹理"
+  ],
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "opencv_threads": 1,
+    "opencv": "5.0.0",
+    "python": "3.12.13"
+  },
+  "acceptance": "UNASSESSED: candidates are not confirmed ground truth; server timing has not been measured"
+}

@@ -41,3 +41,6 @@ backend/data/holds_images_processed/
 
 # Local simulation reports and human feedback
 backend/data/local_simulation/
+
+# Private photo-route drafts and content-addressed source assets
+backend/data/photo_routes/
