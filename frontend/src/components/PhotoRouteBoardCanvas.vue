@@ -22,6 +22,10 @@
         <g class="photo-reference-holes" aria-hidden="true">
           <circle v-for="hole in holes" :key="hole.id" :cx="hole.x" :cy="4100-hole.y" r="9"><title>{{ hole.id }}</title></circle>
         </g>
+        <g v-if="snapPreview" class="photo-snap-preview" aria-hidden="true">
+          <circle :cx="snapPreview.x" :cy="4100-snapPreview.y" r="42" />
+          <line :x1="snapPreview.fromX" :y1="4100-snapPreview.fromY" :x2="snapPreview.x" :y2="4100-snapPreview.y" />
+        </g>
         <g v-if="labels" class="photo-axis-labels" aria-hidden="true">
           <text v-for="i in 30" :key="`x${i}`" :x="200+(i-1)*200" y="4070" text-anchor="middle">{{ columnLabel(i-1) }}</text>
           <text v-for="i in 20" :key="`y${i}`" x="60" :y="4100-(100+(i-1)*200)+15" text-anchor="middle">{{ i }}</text>
@@ -31,8 +35,10 @@
           class="photo-wall-object" :class="{ 'is-selected': selectedId === object.id || groupSelected }"
           role="button" tabindex="0" :aria-label="objectLabel(object)" :aria-pressed="selectedId === object.id"
           @keydown="objectKey($event, object.id)">
-          <image :href="photoAssetUrl(object.cutout)" :x="-objectWidth(object)/2" :y="-objectHeight(object)/2"
+          <image :href="resolveAsset(object.cutout)" :x="-objectWidth(object)/2" :y="-objectHeight(object)/2"
             :width="objectWidth(object)" :height="objectHeight(object)" draggable="false" />
+          <rect v-if="object.route_color" class="photo-route-outline" :style="{ stroke:object.route_color }"
+            :x="-objectWidth(object)/2-12" :y="-objectHeight(object)/2-12" :width="objectWidth(object)+24" :height="objectHeight(object)+24"><title>{{ object.route_name }}</title></rect>
           <rect v-if="selectedId === object.id || groupSelected" class="photo-object-selection"
             :x="-objectWidth(object)/2-8" :y="-objectHeight(object)/2-8" :width="objectWidth(object)+16" :height="objectHeight(object)+16" />
           <g v-if="object.roles.length" class="photo-role-marker" :transform="`translate(${-objectWidth(object)/2} ${-objectHeight(object)/2})`">
@@ -42,7 +48,7 @@
         </g>
       </svg>
     </div>
-    <div class="photo-canvas-caption"><span>{{ mode === 'browse' ? '拖动画布 · 双指或滚轮缩放' : groupSelected ? '拖动任一对象可移动整条线路' : '点选并拖动对象 · 方向键微调' }}</span><span>按比例适配 · 无吸附</span></div>
+    <div class="photo-canvas-caption"><span>{{ mode === 'browse' ? '拖动画布 · 双指或滚轮缩放' : groupSelected ? '拖动任一对象可移动整条线路' : '点选并拖动对象 · 方向键微调' }}</span><span>{{ mode === 'edit' && snapping ? '释放后吸附到最近孔位' : '按比例适配 · 自由移动' }}</span></div>
   </div>
 </template>
 
@@ -52,7 +58,7 @@ import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { photoHoles, columnLabel, zoomCamera } from '../utils/photoBoard.js'
 import { photoAssetUrl } from '../services/photoRouteService'
 
-const props = defineProps({ objects: { type: Array, required: true }, selectedId: { type: String, default: '' }, groupSelected: Boolean, mode: { type: String, default: 'browse' }, editable: Boolean })
+const props = defineProps({ objects: { type: Array, required: true }, selectedId: { type: String, default: '' }, groupSelected: Boolean, mode: { type: String, default: 'browse' }, editable: Boolean, snapping: Boolean, snapPreview: { type: Object, default: null }, assetUrl: { type: Function, default: photoAssetUrl } })
 const emit = defineEmits(['select', 'begin', 'move', 'end', 'nudge'])
 const viewport = ref(null), labels = ref(false)
 const camera = reactive({ zoom: 1, x: 0, y: 0 }), size = reactive({ width: 1, height: 1 })
@@ -62,6 +68,7 @@ const baseWidth = computed(() => Math.min(size.width, size.height * 6200 / 4100)
 const wallStyle = computed(() => ({ width: `${baseWidth.value}px`, height: `${baseWidth.value * 4100 / 6200}px`, transform: `translate(-50%, -50%) translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }))
 const objectWidth = (o) => o.source_bbox_px[2] * o.scale_mm_per_px
 const objectHeight = (o) => o.source_bbox_px[3] * o.scale_mm_per_px
+const resolveAsset = (asset) => props.assetUrl(asset)
 const objectLabel = (o) => `对象 ${o.id.replace('object-', '')}${o.kind === 'volume' ? '，造型' : '，岩点'}${o.contour_status === 'needs_correction' ? '，轮廓待修正' : ''}`
 let observer, drag = null, pinch = null
 const pointers = new Map()
@@ -134,11 +141,14 @@ defineExpose({ resetCamera })
 .photo-wood-wall { position: absolute; left: 50%; top: 50%; transform-origin: center; border: 0; border-radius: 0; box-shadow: none; background: #e8d4b2 url('../assets/photo-wall-birch.png') center / cover; }
 .photo-panel-joints { stroke: #8c704545; stroke-width: 4; pointer-events: none; }
 .photo-reference-holes { fill: #695439; pointer-events: none; }
+.photo-snap-preview { fill: none; stroke: #0b7568; stroke-width: 18; pointer-events: none; }
+.photo-snap-preview line { stroke-dasharray: 30 22; }
 .photo-axis-labels { fill: #57452f; font-size: 43px; font-weight: 500; pointer-events: none; }
 .photo-wall-object { cursor: pointer; outline: none; }
 .photo-wall-object image { pointer-events: all; }
 .photo-wall-object:focus-visible image { outline: 3px solid #1f5f99; }
 .photo-object-selection { fill: none; stroke: #174d78; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.photo-route-outline { fill:none; stroke-width:5; vector-effect:non-scaling-stroke; pointer-events:none; }
 .photo-role-marker { pointer-events: none; }
 .photo-role-marker rect { fill: #fffdf5; }
 .photo-role-marker text { fill: #1a4536; font-size: 55px; font-weight: 700; }
