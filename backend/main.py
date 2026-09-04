@@ -179,6 +179,17 @@ EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 STANDARD_BOARD_ACTIVITY_FILE = os.path.join(DATA_DIR, "standard_board_activity.json")
 PILOT_AUTH_ENABLED = env_flag("PILOT_AUTH_ENABLED", default=APP_ENV == "production")
 PILOT_COOKIE_SECURE = env_flag("PILOT_COOKIE_SECURE", default=APP_ENV == "production")
+PILOT_QUICK_LOGIN_ENABLED = env_flag(
+    "PILOT_QUICK_LOGIN_ENABLED",
+    default=APP_ENV == "development",
+)
+PILOT_QUICK_LOGIN_ALLOW_REMOTE = env_flag("PILOT_QUICK_LOGIN_ALLOW_REMOTE", default=False)
+PILOT_QUICK_LOGIN_USERNAME = (
+    os.getenv("PILOT_QUICK_LOGIN_USERNAME", "ma-trial").strip().lower() or "ma-trial"
+)
+PILOT_QUICK_LOGIN_DISPLAY_NAME = (
+    os.getenv("PILOT_QUICK_LOGIN_DISPLAY_NAME", "马老师").strip() or "马老师"
+)
 PILOT_COOKIE_NAME = "ai_climbing_session"
 PILOT_USERS_FILE = os.getenv("PILOT_USERS_FILE", os.path.join(DATA_DIR, "pilot_users.json"))
 PILOT_AUDIT_FILE = os.getenv("PILOT_AUDIT_FILE", os.path.join(DATA_DIR, "pilot_audit.jsonl"))
@@ -207,6 +218,39 @@ def request_client_ip(request: Request) -> str:
         request.headers.get("cf-connecting-ip")
         or request.headers.get("x-real-ip")
         or (request.client.host if request.client else "unknown")
+    )
+
+
+def quick_login_available(request: Request) -> bool:
+    if not PILOT_QUICK_LOGIN_ENABLED:
+        return False
+    if PILOT_QUICK_LOGIN_ALLOW_REMOTE:
+        return True
+    loopback_hosts = {"127.0.0.1", "::1", "localhost"}
+    socket_host = request.client.host if request.client else "unknown"
+    return request_client_ip(request) in loopback_hosts and socket_host in loopback_hosts
+
+
+def quick_login_identity(request: Request) -> PilotUser | None:
+    if not quick_login_available(request):
+        return None
+    try:
+        return pilot_access.active_user(PILOT_QUICK_LOGIN_USERNAME)
+    except PilotAccessError:
+        if APP_ENV == "development":
+            return PilotUser(PILOT_QUICK_LOGIN_USERNAME, PILOT_QUICK_LOGIN_DISPLAY_NAME)
+        return None
+
+
+def set_pilot_session_cookie(response: JSONResponse, token: str) -> None:
+    response.set_cookie(
+        PILOT_COOKIE_NAME,
+        token,
+        max_age=pilot_access.session_seconds,
+        secure=PILOT_COOKIE_SECURE,
+        httponly=True,
+        samesite="strict",
+        path="/",
     )
 
 
@@ -256,6 +300,7 @@ async def pilot_access_middleware(request: Request, call_next):
     public_paths = {
         "/api/health",
         "/api/auth/login",
+        "/api/auth/quick-login",
         "/api/auth/logout",
         "/api/auth/session",
     }
@@ -727,16 +772,28 @@ async def pilot_login(payload: PilotLoginRequest, request: Request):
             "display_name": user.display_name,
         }
     )
-    response.set_cookie(
-        PILOT_COOKIE_NAME,
-        token,
-        max_age=pilot_access.session_seconds,
-        secure=PILOT_COOKIE_SECURE,
-        httponly=True,
-        samesite="strict",
-        path="/",
-    )
+    set_pilot_session_cookie(response, token)
     audit_request(request, 200, "login_succeeded")
+    return response
+
+
+@app.post("/api/auth/quick-login")
+async def pilot_quick_login(request: Request):
+    identity = quick_login_identity(request)
+    if not identity:
+        raise HTTPException(status_code=404, detail="快速登录当前不可用。")
+    token, user = pilot_access.create_session(identity)
+
+    request.state.pilot_user = user
+    response = JSONResponse(
+        {
+            "authenticated": True,
+            "username": user.username,
+            "display_name": user.display_name,
+        }
+    )
+    set_pilot_session_cookie(response, token)
+    audit_request(request, 200, "quick_login_succeeded")
     return response
 
 
@@ -767,13 +824,23 @@ async def pilot_session(request: Request):
             "auth_enabled": False,
         }
     user = pilot_access.session_user(request.cookies.get(PILOT_COOKIE_NAME))
+    quick_identity = quick_login_identity(request)
     if not user:
-        raise HTTPException(status_code=401, detail="登录已失效，请重新登录。")
+        return {
+            "authenticated": False,
+            "auth_enabled": True,
+            "quick_login_enabled": quick_identity is not None,
+            "default_username": quick_identity.username if quick_identity else "",
+            "default_display_name": quick_identity.display_name if quick_identity else "",
+        }
     return {
         "authenticated": True,
         "username": user.username,
         "display_name": user.display_name,
         "auth_enabled": True,
+        "quick_login_enabled": quick_identity is not None,
+        "default_username": quick_identity.username if quick_identity else "",
+        "default_display_name": quick_identity.display_name if quick_identity else "",
     }
 
 

@@ -26,7 +26,7 @@
       />
 
       <button
-        v-for="hold in baseHolds"
+        v-for="hold in visibleBaseHolds"
         :key="`setup-${hold.id}`"
         type="button"
         class="placed-hold setup-hold"
@@ -43,7 +43,6 @@
           <path :d="visualFor(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
         </svg>
         <span v-else :class="['hold-shape', (hold.hold_type || hold.type || 'Jug').toLowerCase()]" />
-        <span v-if="overlayFor(hold)" class="hold-marker-badge">{{ overlayLabel(overlayFor(hold)) }}</span>
       </button>
 
       <button
@@ -123,6 +122,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   comparisonStatusById: { type: Object, default: () => ({}) },
   showBetaSteps: { type: Boolean, default: false },
+  showNonRouteHolds: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['place', 'select'])
@@ -132,6 +132,10 @@ const overlayByCoord = computed(() => {
   const map = new Map()
   props.routeOverlay.forEach((point) => map.set(point.coord_id, point))
   return map
+})
+const visibleBaseHolds = computed(() => {
+  if (props.showNonRouteHolds) return props.baseHolds
+  return props.baseHolds.filter((hold) => overlayByCoord.value.has(hold.id))
 })
 const betaNumbersByHold = computed(() => {
   const numbers = new Map()
@@ -275,13 +279,7 @@ function setupClass(hold) {
 
 function setupTitle(hold) {
   const overlay = overlayFor(hold)
-  const label = {
-    start: '起点',
-    start_hand: '起点手点',
-    start_foot: '起点脚点',
-    mid: '中间点',
-    end: '终点',
-  }[overlay?.role] || overlay?.role
+  const label = overlayRoleLabel(overlay?.role)
   return overlay ? `${hold.id} ${label} LED ${overlay.led_index}` : hold.id
 }
 
@@ -289,14 +287,14 @@ function overlayFor(hold) {
   return overlayByCoord.value.get(hold.id)
 }
 
-function overlayLabel(overlay) {
+function overlayRoleLabel(role) {
   return {
-    start: '起',
-    start_hand: '手',
-    start_foot: '脚',
-    mid: '线',
-    end: '顶',
-  }[overlay?.role] || '点'
+    start: '起点',
+    start_hand: '起点手点',
+    start_foot: '起点脚点',
+    mid: '中间点',
+    end: '终点',
+  }[role] || '线路点'
 }
 
 function visualFor(hold) {

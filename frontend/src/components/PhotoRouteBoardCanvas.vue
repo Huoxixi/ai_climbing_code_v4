@@ -14,7 +14,7 @@
       aria-label="30列20行照片线路电子岩板，可缩放和平移" @wheel.prevent="wheel"
       @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp"
       @lostpointercapture="pointerUp">
-      <svg class="photo-wood-wall" :style="wallStyle" viewBox="0 0 6200 4100" aria-label="浅木色无边框岩板">
+      <svg class="photo-technical-wall" :style="wallStyle" viewBox="0 0 6200 4100" aria-label="30列20行中性灰技术岩板">
         <g class="photo-panel-joints" aria-hidden="true">
           <line v-for="x in [1240, 2480, 3720, 4960]" :key="x" :x1="x" :x2="x" y1="0" y2="4100" />
           <line x1="0" x2="6200" y1="2050" y2="2050" />
@@ -125,38 +125,206 @@ defineExpose({ resetCamera })
 </script>
 
 <style scoped>
-.photo-canvas-shell { min-width: 0; background: #f3f0e9; }
-.photo-view-controls, .photo-canvas-caption { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; color: #554c3d; font-size: 12px; }
-.photo-view-controls > div { display: flex; align-items: center; gap: 4px; }
-.photo-view-controls button { background: transparent; border: 0; color: #4b4439; min-height: 36px; padding: 6px 9px; cursor: pointer; border-radius: 4px; }
-.photo-view-controls button:hover, .photo-view-controls button[aria-pressed=true] { background: #e3ded3; }
-.photo-view-controls button:disabled { opacity: .4; cursor: default; }
-.photo-view-controls button svg { width: 18px; height: 18px; vertical-align: middle; }
-.photo-view-controls button:focus-visible { outline: 2px solid #1f5f99; outline-offset: 2px; }
-.photo-muted { color: #6c6253; }
-.photo-zoom-value { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
-.photo-wall-viewport { position: relative; width: 100%; height: clamp(350px, 55vw, 680px); overflow: hidden; touch-action: none; user-select: none; }
-.photo-wall-viewport.is-browsing { cursor: grab; }
-.photo-wall-viewport.is-browsing:active { cursor: grabbing; }
-.photo-wood-wall { position: absolute; left: 50%; top: 50%; transform-origin: center; border: 0; border-radius: 0; box-shadow: none; background: #e8d4b2 url('../assets/photo-wall-birch.png') center / cover; }
-.photo-panel-joints { stroke: #8c704545; stroke-width: 4; pointer-events: none; }
-.photo-reference-holes { fill: #695439; pointer-events: none; }
-.photo-snap-preview { fill: none; stroke: #0b7568; stroke-width: 18; pointer-events: none; }
-.photo-snap-preview line { stroke-dasharray: 30 22; }
-.photo-axis-labels { fill: #57452f; font-size: 43px; font-weight: 500; pointer-events: none; }
-.photo-wall-object { cursor: pointer; outline: none; }
-.photo-wall-object image { pointer-events: all; }
-.photo-wall-object:focus-visible image { outline: 3px solid #1f5f99; }
-.photo-object-selection { fill: none; stroke: #174d78; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
-.photo-route-outline { fill:none; stroke-width:5; vector-effect:non-scaling-stroke; pointer-events:none; }
-.photo-role-marker { pointer-events: none; }
-.photo-role-marker rect { fill: #fffdf5; }
-.photo-role-marker text { fill: #1a4536; font-size: 55px; font-weight: 700; }
-.photo-canvas-caption { border-top: 1px solid #ddd5c8; color: #675b48; flex-wrap: wrap; }
+.photo-canvas-shell {
+  min-width: 0;
+  background: var(--ui-surface-subtle);
+}
+
+.photo-view-controls,
+.photo-canvas-caption {
+  padding: 11px 16px;
+  color: var(--ui-ink-muted);
+  background: var(--ui-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.photo-view-controls {
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.photo-view-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.photo-view-controls button {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--ui-radius-small);
+  background: transparent;
+  color: var(--ui-ink);
+  cursor: pointer;
+}
+
+.photo-view-controls button:hover,
+.photo-view-controls button[aria-pressed="true"] {
+  background: var(--ui-brand-soft);
+}
+
+.photo-view-controls button:disabled {
+  cursor: default;
+  opacity: .4;
+}
+
+.photo-view-controls button svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+}
+
+.photo-view-controls button:focus-visible,
+.photo-wall-object:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.photo-muted {
+  color: var(--ui-ink-faint);
+}
+
+.photo-zoom-value {
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.photo-wall-viewport {
+  position: relative;
+  width: 100%;
+  height: clamp(360px, 55vw, 720px);
+  background: var(--ui-ground);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.photo-wall-viewport.is-browsing {
+  cursor: grab;
+}
+
+.photo-wall-viewport.is-browsing:active {
+  cursor: grabbing;
+}
+
+.photo-technical-wall {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 1px solid var(--ui-board-frame);
+  border-radius: 2px;
+  background: var(--ui-board-face);
+  box-shadow: 0 18px 36px rgba(28, 30, 33, .14);
+  transform-origin: center;
+}
+
+.photo-panel-joints {
+  stroke: var(--ui-board-grid);
+  stroke-width: 3;
+  opacity: .42;
+  pointer-events: none;
+}
+
+.photo-reference-holes {
+  fill: var(--ui-board-hole);
+  opacity: .88;
+  pointer-events: none;
+}
+
+.photo-snap-preview {
+  fill: none;
+  stroke: var(--ui-brand);
+  stroke-width: 18;
+  pointer-events: none;
+}
+
+.photo-snap-preview line {
+  stroke-dasharray: 30 22;
+}
+
+.photo-axis-labels {
+  fill: var(--ui-ink-muted);
+  font-size: 43px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.photo-wall-object {
+  cursor: pointer;
+  outline: none;
+}
+
+.photo-wall-object image {
+  pointer-events: all;
+}
+
+.photo-object-selection {
+  fill: none;
+  stroke: var(--ui-brand);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.photo-route-outline {
+  fill: none;
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.photo-role-marker {
+  pointer-events: none;
+}
+
+.photo-role-marker rect {
+  fill: var(--ui-brand);
+}
+
+.photo-role-marker text {
+  fill: var(--ui-brand-ink);
+  font-size: 55px;
+  font-weight: 700;
+}
+
+.photo-canvas-caption {
+  border-top: 1px solid var(--ui-line);
+  flex-wrap: wrap;
+}
+
 @media (max-width: 760px) {
-  .photo-wall-viewport { height: max(285px, 66vw); }
-  .photo-view-controls { padding: 8px; align-items: flex-start; flex-direction: column; gap: 4px; }
-  .photo-view-controls > div { width: 100%; justify-content: flex-end; }
-  .photo-canvas-caption { font-size: 11px; padding: 10px; }
+  .photo-wall-viewport {
+    height: max(285px, 66vw);
+  }
+
+  .photo-view-controls {
+    padding: 8px 10px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .photo-view-controls > div {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .photo-view-controls button {
+    min-height: 44px;
+  }
+
+  .photo-canvas-caption {
+    padding: 10px;
+    font-size: 11px;
+  }
+
+  .photo-technical-wall {
+    box-shadow: 0 12px 26px rgba(28, 30, 33, .12);
+  }
 }
 </style>

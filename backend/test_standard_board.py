@@ -39,6 +39,7 @@ class StandardBoardDataTest(unittest.TestCase):
         self.assertIn("A1", coord_ids)
         self.assertIn("K18", coord_ids)
         self.assertEqual(len(variants), 8)
+        self.assertNotIn(("Jug", "local-jpeg"), variants)
         self.assertTrue(all(hold.imageUrl for hold in setup))
         self.assertTrue(all(hold.imageUrl.startswith("/images/processed/") for hold in setup))
         self.assertTrue(all(hold.scale == 0.78 for hold in setup))

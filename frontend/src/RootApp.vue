@@ -10,7 +10,11 @@
     v-else-if="!session.authenticated"
     :submitting="loginSubmitting"
     :error-message="loginError"
+    :quick-login-enabled="session.quickLoginEnabled"
+    :default-username="session.defaultUsername"
+    :default-display-name="session.defaultDisplayName"
     @login="login"
+    @quick-login="quickLogin"
   />
   <App v-else />
 </template>
@@ -30,6 +34,9 @@ const session = reactive({
   username: '',
   displayName: '',
   authEnabled: true,
+  quickLoginEnabled: false,
+  defaultUsername: '',
+  defaultDisplayName: '',
 })
 const lease = reactive({
   active: false,
@@ -48,6 +55,11 @@ function applySession(payload) {
   session.username = payload?.username || ''
   session.displayName = payload?.display_name || ''
   session.authEnabled = payload?.auth_enabled !== false
+  if (Object.hasOwn(payload || {}, 'quick_login_enabled')) {
+    session.quickLoginEnabled = Boolean(payload.quick_login_enabled)
+    session.defaultUsername = payload.default_username || ''
+    session.defaultDisplayName = payload.default_display_name || ''
+  }
 }
 
 function applyLease(payload) {
@@ -81,6 +93,20 @@ async function login(credentials) {
     await refreshLease()
   } catch (error) {
     loginError.value = error?.response?.data?.detail || '登录失败，请检查网络后重试。'
+  } finally {
+    loginSubmitting.value = false
+  }
+}
+
+async function quickLogin() {
+  loginSubmitting.value = true
+  loginError.value = ''
+  try {
+    const response = await apiClient.post('/api/auth/quick-login')
+    applySession(response.data)
+    await refreshLease()
+  } catch (error) {
+    loginError.value = error?.response?.data?.detail || '快速登录失败，请使用其他账号登录。'
   } finally {
     loginSubmitting.value = false
   }
@@ -156,7 +182,11 @@ onMounted(() => {
     (response) => response,
     (error) => {
       const path = error?.config?.url || ''
-      if (error?.response?.status === 401 && !path.includes('/api/auth/login')) {
+      if (
+        error?.response?.status === 401
+        && !path.includes('/api/auth/login')
+        && !path.includes('/api/auth/quick-login')
+      ) {
         applyLease({})
         applySession({ authenticated: false })
       }
