@@ -49,3 +49,6 @@ backend/data/photo_routes/
 frontend/test-results/
 frontend/playwright-report/
 .local/
+# Member credentials and personal content live only in persistent storage.
+backend/data/accounts.sqlite3*
+backend/data/members/
