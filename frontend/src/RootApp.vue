@@ -6,11 +6,18 @@
       <small>请稍候，不会影响已保存的数据。</small>
     </div>
   </div>
+  <div v-else-if="!session.authenticated && !session.authEnabled" class="pilot-loading">
+    <div class="pilot-loading-card"><strong>已退出登录</strong><p>本地账号 owner · 负责人</p><p>照片和线路进度已保留。</p><el-button type="primary" :loading="loginSubmitting" @click="localLogin">登录本地账号</el-button><p v-if="loginError" role="alert">{{loginError}}</p></div>
+  </div>
   <PilotLogin
     v-else-if="!session.authenticated"
     :submitting="loginSubmitting"
     :error-message="loginError"
+    :quick-login-enabled="session.quickLoginEnabled"
+    :default-username="session.defaultUsername"
+    :default-display-name="session.defaultDisplayName"
     @login="login"
+    @quick-login="quickLogin"
   />
   <App v-else />
 </template>
@@ -30,6 +37,9 @@ const session = reactive({
   username: '',
   displayName: '',
   authEnabled: true,
+  quickLoginEnabled: false,
+  defaultUsername: '',
+  defaultDisplayName: '',
 })
 const lease = reactive({
   active: false,
@@ -48,6 +58,11 @@ function applySession(payload) {
   session.username = payload?.username || ''
   session.displayName = payload?.display_name || ''
   session.authEnabled = payload?.auth_enabled !== false
+  if (Object.hasOwn(payload || {}, 'quick_login_enabled')) {
+    session.quickLoginEnabled = Boolean(payload.quick_login_enabled)
+    session.defaultUsername = payload.default_username || ''
+    session.defaultDisplayName = payload.default_display_name || ''
+  }
 }
 
 function applyLease(payload) {
@@ -61,6 +76,7 @@ async function loadSession() {
   try {
     const response = await apiClient.get('/api/auth/session')
     applySession(response.data)
+    if (!session.authEnabled && sessionStorage.getItem('local-account-signed-out') === 'true') session.authenticated = false
     await refreshLease()
   } catch (error) {
     if (error?.response?.status !== 401) {
@@ -86,13 +102,35 @@ async function login(credentials) {
   }
 }
 
-async function logout() {
+async function quickLogin() {
+  loginSubmitting.value = true
+  loginError.value = ''
   try {
-    await apiClient.post('/api/auth/logout')
+    const response = await apiClient.post('/api/auth/quick-login')
+    applySession(response.data)
+    await refreshLease()
+  } catch (error) {
+    loginError.value = error?.response?.data?.detail || '快速登录失败，请使用其他账号登录。'
   } finally {
-    applyLease({})
-    applySession({ authenticated: false })
+    loginSubmitting.value = false
   }
+}
+
+async function logout() {
+  await apiClient.post('/api/auth/logout')
+  const authEnabled = session.authEnabled
+  if (!authEnabled) sessionStorage.setItem('local-account-signed-out','true')
+  applyLease({})
+  applySession({ authenticated: false, auth_enabled: authEnabled })
+}
+
+async function localLogin() {
+  loginSubmitting.value = true
+  loginError.value = ''
+  try {
+    sessionStorage.removeItem('local-account-signed-out')
+    await loadSession()
+  } finally { loginSubmitting.value = false }
 }
 
 async function refreshLease() {
@@ -156,7 +194,11 @@ onMounted(() => {
     (response) => response,
     (error) => {
       const path = error?.config?.url || ''
-      if (error?.response?.status === 401 && !path.includes('/api/auth/login')) {
+      if (
+        error?.response?.status === 401
+        && !path.includes('/api/auth/login')
+        && !path.includes('/api/auth/quick-login')
+      ) {
         applyLease({})
         applySession({ authenticated: false })
       }

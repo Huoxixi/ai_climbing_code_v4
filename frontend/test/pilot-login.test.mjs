@@ -17,6 +17,17 @@ test('登录页只公开两位老师的用户名，不公开或预填密码', ()
   assert.doesNotMatch(loginSource, /password:\s*['"][^'"]+/)
 })
 
+test('登录页默认账号可一键进入并保留其他账号登录入口', () => {
+  assert.match(loginSource, /默认账号/)
+  assert.match(loginSource, /已就绪/)
+  assert.match(loginSource, /身份进入/)
+  assert.match(loginSource, /emit\('quick-login'\)/)
+  assert.match(loginSource, /使用其他账号/)
+  assert.match(loginSource, /showPasswordLogin/)
+  assert.match(rootSource, /\/api\/auth\/quick-login/)
+  assert.match(rootSource, /quickLoginEnabled/)
+})
+
 test('根界面在会话失效后返回登录页并维护编辑权心跳', () => {
   assert.match(rootSource, /\/api\/auth\/session/)
   assert.match(rootSource, /\/api\/auth\/logout/)

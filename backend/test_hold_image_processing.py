@@ -142,7 +142,6 @@ class LocalHoldUploadTest(unittest.TestCase):
                 patch("main.PROCESSED_HOLDS_IMAGES_DIR", str(processed_dir)),
                 patch("main.HOLDS_MAPPING_FILE", str(mapping_path)),
                 patch("main.HOLDS_VECTORS_FILE", str(vectors_path)),
-                patch("main.HOLDS_METADATA_FILE", str(root / "hold_assets_meta.json")),
                 patch("main.should_use_supabase", return_value=False),
             ):
                 response = self.client.post(
@@ -181,7 +180,6 @@ class LocalHoldUploadTest(unittest.TestCase):
                 patch("main.PROCESSED_HOLDS_IMAGES_DIR", str(processed_dir)),
                 patch("main.HOLDS_MAPPING_FILE", str(mapping_path)),
                 patch("main.HOLDS_VECTORS_FILE", str(vectors_path)),
-                patch("main.HOLDS_METADATA_FILE", str(root / "hold_assets_meta.json")),
                 patch("main.should_use_supabase", return_value=False),
             ):
                 response = self.client.post(

@@ -5,12 +5,12 @@
         <div class="pilot-login-brand">
           <div class="pilot-login-mark" aria-hidden="true">攀</div>
           <div>
-            <p class="eyebrow">小范围试用</p>
-            <h1 id="pilot-login-title">攀岩定线系统</h1>
+            <h1 id="pilot-login-title">定线助手</h1>
+            <p>攀岩线路工作台</p>
           </div>
         </div>
         <p class="pilot-login-intro">
-          登录后可以查看完整岩板资源。需要修改内容时，请先在系统顶部取得编辑权。
+          默认账号已经准备好，进入后即可查看岩板资源并继续定线工作。
         </p>
 
         <el-alert
@@ -21,7 +21,31 @@
           show-icon
         />
 
-        <el-form class="pilot-login-form" label-position="top" @submit.prevent="submit">
+        <section v-if="quickLoginEnabled && !showPasswordLogin" class="pilot-quick-login">
+          <div class="pilot-default-account" aria-label="默认登录账号">
+            <span class="pilot-account-avatar" aria-hidden="true">{{ defaultInitial }}</span>
+            <span class="pilot-default-account-copy">
+              <small>默认账号</small>
+              <strong>{{ defaultDisplayName || defaultUsername }}</strong>
+              <code>{{ defaultUsername }}</code>
+            </span>
+            <span class="pilot-account-ready">已就绪</span>
+          </div>
+          <el-button
+            class="pilot-login-submit"
+            type="primary"
+            :loading="submitting"
+            :disabled="!defaultUsername"
+            @click="emit('quick-login')"
+          >
+            以{{ defaultDisplayName || defaultUsername }}身份进入
+          </el-button>
+          <button class="pilot-login-alternate" type="button" @click="openPasswordLogin">
+            使用其他账号
+          </button>
+        </section>
+
+        <el-form v-else class="pilot-login-form" label-position="top" @submit.prevent="submit">
           <el-form-item label="用户名">
             <el-input
               ref="usernameInput"
@@ -51,15 +75,22 @@
           >
             登录系统
           </el-button>
+          <button
+            v-if="quickLoginEnabled"
+            class="pilot-login-alternate"
+            type="button"
+            @click="returnToQuickLogin"
+          >
+            返回默认账号
+          </button>
         </el-form>
-        <p class="pilot-login-footnote">试用流量会经过 Cloudflare 加密转发，请勿转发临时链接或账号。</p>
+        <p class="pilot-login-footnote">账号会话仅保存在当前浏览器，请勿共享试用凭据。</p>
       </div>
 
       <aside class="pilot-account-panel" aria-label="试用账号">
         <div>
-          <p class="eyebrow">选择账号</p>
-          <h2>两位老师使用各自账号</h2>
-          <p>点击卡片会自动填写用户名。密码不在页面显示，请向负责人获取。</p>
+          <h2>需要切换账号？</h2>
+          <p>选择对应账号后输入负责人提供的密码。页面不会显示或保存密码。</p>
         </div>
         <div class="pilot-account-grid">
           <article
@@ -92,16 +123,21 @@
 <script setup>
 import { nextTick, reactive, ref } from 'vue'
 
-defineProps({
+const props = defineProps({
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
+  quickLoginEnabled: { type: Boolean, default: false },
+  defaultUsername: { type: String, default: '' },
+  defaultDisplayName: { type: String, default: '' },
 })
 
-const emit = defineEmits(['login'])
+const emit = defineEmits(['login', 'quick-login'])
 const usernameInput = ref(null)
 const passwordInput = ref(null)
 const copiedUsername = ref('')
 const form = reactive({ username: '', password: '' })
+const showPasswordLogin = ref(!props.quickLoginEnabled)
+const defaultInitial = props.defaultDisplayName?.trim().charAt(0) || '马'
 const accounts = [
   { label: '马老师试用账号', username: 'ma-trial', initial: '马' },
   { label: '邓老师试用账号', username: 'deng-trial', initial: '邓' },
@@ -112,10 +148,24 @@ function focusPassword() {
 }
 
 async function selectAccount(username) {
+  showPasswordLogin.value = true
   form.username = username
   form.password = ''
   await nextTick()
   focusPassword()
+}
+
+async function openPasswordLogin() {
+  showPasswordLogin.value = true
+  form.username = ''
+  form.password = ''
+  await nextTick()
+  usernameInput.value?.focus()
+}
+
+function returnToQuickLogin() {
+  showPasswordLogin.value = false
+  form.password = ''
 }
 
 async function copyUsername(username) {

@@ -1,6 +1,6 @@
 <template>
-  <div class="canvas-wrap">
-    <div class="board-frame" :style="frameStyle">
+  <div ref="viewport" class="canvas-wrap">
+    <div class="board-frame" :style="fittedFrameStyle">
       <div class="dimension-label dimension-label-top">宽 {{ boardSpec.board_width_mm }}mm</div>
       <div class="dimension-label dimension-label-side">高 {{ boardSpec.board_height_mm }}mm</div>
       <div class="dimension-label dimension-label-spacing">孔距 {{ boardSpec.hole_spacing_x_mm }}mm</div>
@@ -26,7 +26,7 @@
       />
 
       <button
-        v-for="hold in baseHolds"
+        v-for="hold in visibleBaseHolds"
         :key="`setup-${hold.id}`"
         type="button"
         class="placed-hold setup-hold"
@@ -43,7 +43,6 @@
           <path :d="visualFor(hold).svgPath" :fill="shapeColor(hold.hold_type || hold.type)" />
         </svg>
         <span v-else :class="['hold-shape', (hold.hold_type || hold.type || 'Jug').toLowerCase()]" />
-        <span v-if="overlayFor(hold)" class="hold-marker-badge">{{ overlayLabel(overlayFor(hold)) }}</span>
       </button>
 
       <button
@@ -105,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 
 const props = defineProps({
   columns: { type: Array, required: true },
@@ -123,7 +122,23 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   comparisonStatusById: { type: Object, default: () => ({}) },
   showBetaSteps: { type: Boolean, default: false },
+  showNonRouteHolds: { type: Boolean, default: true },
 })
+
+const viewport = ref(null)
+const available = reactive({ width:0, height:0 })
+let observer
+const fittedFrameStyle = computed(() => {
+  const ratio = props.boardSpec.board_width_mm / props.boardSpec.board_height_mm
+  const width = Math.max(1, Math.min(available.width, available.height * ratio))
+  return { ...props.frameStyle, width:`${width}px`, height:`${width / ratio}px`, maxWidth:'none', maxHeight:'none',
+    '--hole-diameter':`${Math.max(1.5, width * 18 / props.boardSpec.board_width_mm)}px` }
+})
+onMounted(() => {
+  observer = new ResizeObserver(([entry]) => { available.width = entry.contentRect.width; available.height = entry.contentRect.height })
+  observer.observe(viewport.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 const emit = defineEmits(['place', 'select'])
 
@@ -132,6 +147,10 @@ const overlayByCoord = computed(() => {
   const map = new Map()
   props.routeOverlay.forEach((point) => map.set(point.coord_id, point))
   return map
+})
+const visibleBaseHolds = computed(() => {
+  if (props.showNonRouteHolds) return props.baseHolds
+  return props.baseHolds.filter((hold) => overlayByCoord.value.has(hold.id))
 })
 const betaNumbersByHold = computed(() => {
   const numbers = new Map()
@@ -275,13 +294,7 @@ function setupClass(hold) {
 
 function setupTitle(hold) {
   const overlay = overlayFor(hold)
-  const label = {
-    start: '起点',
-    start_hand: '起点手点',
-    start_foot: '起点脚点',
-    mid: '中间点',
-    end: '终点',
-  }[overlay?.role] || overlay?.role
+  const label = overlayRoleLabel(overlay?.role)
   return overlay ? `${hold.id} ${label} LED ${overlay.led_index}` : hold.id
 }
 
@@ -289,14 +302,14 @@ function overlayFor(hold) {
   return overlayByCoord.value.get(hold.id)
 }
 
-function overlayLabel(overlay) {
+function overlayRoleLabel(role) {
   return {
-    start: '起',
-    start_hand: '手',
-    start_foot: '脚',
-    mid: '线',
-    end: '顶',
-  }[overlay?.role] || '点'
+    start: '起点',
+    start_hand: '起点手点',
+    start_foot: '起点脚点',
+    mid: '中间点',
+    end: '终点',
+  }[role] || '线路点'
 }
 
 function visualFor(hold) {

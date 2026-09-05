@@ -268,18 +268,16 @@ AI 定线不再是 Dashboard 或 Studio 的主操作入口。
 
 当前阶段仍属于渐进式重构：
 
-- `App.vue` 仍是主容器，尚未完成页面级组件拆分。
-- Dashboard 已接入 `BoardTemplatePicker`，但 Studio 画布仍未独立为 `BoardCanvas`。
-- 旧 `Wall.vue` / `WallDisplay.vue` 仍保留固定规格逻辑，后续需要统一升级或废弃。
-- 本轮按用户要求未执行构建验证，因此设计报告仅记录结构审查，不新增构建结论。
+- `App.vue` 继续负责跨页面状态与业务编排；页面模板已拆为 `DashboardPage`、`StudioPage`、`HoldLibraryPage`、`BoardsPage`、`StandardBoardPage` 和 `AILabPage`。
+- Dashboard 已接入独立 `BoardTemplatePicker`；Studio、标准板、对照和仿真复用独立 `BoardCanvas`。
+- 当前仓库已经不存在旧 `Wall.vue` / `WallDisplay.vue`，无需再把它们列为待升级组件。
+- 2026-08-31 已完成前端合同测试、生产构建，以及桌面和移动端浏览器回归。
 
 ### 8.6 更新后的后续优化优先级
 
 建议后续按以下顺序推进：
 
-1. 页面拆分：`DashboardPage`、`StudioPage`、`HoldLibraryPage`、`BoardsPage`、`AILabSealedPage`。
-2. 画布拆分：抽出 `BoardCanvas`，统一动态规格与拖拽落点。
-3. 资源拆分：抽出 `HoldPoolPanel`、`HoldLibraryPanel`。
-4. 属性拆分：抽出 `InspectorPanel` 与 `BetaSequencePanel`。
-5. 旧组件治理：升级或移除仍写死 `11 × 18` 的旧墙体组件。
-6. 在允许时补充构建验证与浏览器回归。
+1. 继续把 `App.vue` 中的跨页面业务编排下沉为更小的领域组合逻辑，避免重新膨胀。
+2. 按实际复用需要评估 `HoldPoolPanel` 和独立 `BetaSequencePanel`，不做无使用场景的抽象。
+3. 为标准板真实数据和 AI 完整线路补充更深的端到端场景。
+4. 持续监控生产包体积；低频页面已采用动态加载。

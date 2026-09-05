@@ -1,4 +1,4 @@
-﻿"""Standard route library data services.
+"""Standard route library data services.
 
 The module models a generic 11x18 fixed-hold training board. Route data is an
 overlay that highlights a subset of the fixed setup; it is not hardware control.
@@ -62,6 +62,18 @@ PROCESSED_HOLDS_IMAGES_PATH = DATA_DIR / "holds_images_processed"
 REVIEW_QUEUE_PATH = DATA_DIR / "standard_board_review_queue.json"
 ACCEPTED_REPAIRS_PATH = DATA_DIR / "standard_board_accepted_repairs.json"
 SETUP_SCALE = 0.78
+STANDARD_BOARD_VARIANT_KEYS = frozenset(
+    {
+        ("Jug", "Jug classic 1"),
+        ("Jug", "Jug classic 2"),
+        ("Jug", "Jug classic 3"),
+        ("Crimp", "Crimp classic1"),
+        ("Crimp", "Crimp classic2"),
+        ("Crimp", "Crimp classic3"),
+        ("Foot", "Foot classic 1"),
+        ("Foot", "Foot classic 2"),
+    }
+)
 
 FONT_GRADE_ORDER = list(FONT_GRADES)
 HOLD_DIFFICULTY = {
@@ -294,6 +306,8 @@ def _recorded_hold_variants() -> List[Dict[str, Any]]:
         normalized_type = _normalize_hold_type(hold_type)
         for variant, image_url in typed_variants.items():
             if variant == "default":
+                continue
+            if (hold_type, variant) not in STANDARD_BOARD_VARIANT_KEYS:
                 continue
             variants.append(
                 {

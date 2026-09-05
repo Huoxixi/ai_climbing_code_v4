@@ -16,7 +16,6 @@ jiter==0.16.0
 numpy==2.5.1
 openai==2.44.0
 opencv-python-headless==5.0.0.93
-pillow==12.3.0
 pydantic==2.13.1
 pydantic-settings==2.13.1
 pydantic_core==2.46.1

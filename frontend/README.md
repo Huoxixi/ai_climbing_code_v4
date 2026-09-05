@@ -17,6 +17,11 @@ npm.cmd run dev
 发布前验证：
 
 ```powershell
+npm.cmd ci
 npm.cmd test
 npm.cmd run build
+npx.cmd playwright install chromium
+npm.cmd run test:e2e
 ```
+
+`test:e2e` 会在桌面和移动端 Chromium 中验证模板选择、岩点放置、未保存提醒、岩点库、岩板对照、仿真关闭和 AI 安全边界。测试使用本地拦截数据，不会修改真实岩板、账号或服务器数据。

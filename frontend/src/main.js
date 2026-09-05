@@ -6,6 +6,7 @@ import {
   ElCheckboxGroup,
   ElCollapse,
   ElCollapseItem,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
@@ -20,10 +21,15 @@ import {
   ElSlider,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElUpload,
 } from 'element-plus'
 import 'element-plus/dist/index.css'
 import './style.css'
+import './styles/tokens.css'
+import './styles/base.css'
+import './styles/redesign.css'
 import RootApp from './RootApp.vue'
 
 const app = createApp(RootApp)
@@ -34,6 +40,7 @@ const elementComponents = [
   ElCheckboxGroup,
   ElCollapse,
   ElCollapseItem,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
@@ -48,6 +55,8 @@ const elementComponents = [
   ElSlider,
   ElTable,
   ElTableColumn,
+  ElTabPane,
+  ElTabs,
   ElUpload,
 ]
 

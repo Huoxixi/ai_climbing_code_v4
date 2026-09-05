@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { PHOTO_BOARD, photoHoles, fitPhotoObjects, union, withinBoard, translateObjects, scaleObjects, patchObject, createHistory, zoomCamera } from '../src/utils/photoBoard.js'
+import { PHOTO_BOARD, photoHoles, fitPhotoObjects, union, withinBoard, translateObjects, scaleObjects, patchObject, createHistory, zoomCamera, nearestPhotoHole, snapObjectToHole } from '../src/utils/photoBoard.js'
 import { createDraftAutosave } from '../src/utils/photoDraftAutosave.js'
 
 const source = () => [{ id:'a', source_bbox_px:[100,100,100,200], z_index:0 }, { id:'b', source_bbox_px:[600,700,200,100], z_index:1 }]
@@ -39,6 +39,15 @@ test('history restores transforms and roles; a fresh edit clears redo', () => {
 test('zoom focal point stays fixed and resets do not edit objects', () => {
   const camera=zoomCamera({zoom:1,x:0,y:0},2,{x:100,y:50})
   assert.deepEqual(camera,{zoom:2,x:-100,y:-50}); assert.equal(zoomCamera(camera,99,{x:0,y:0}).zoom,8)
+})
+test('snap preview uses the nearest physical hole and release confirms an anchor', () => {
+  const object = { center_x_mm: 248, center_y_mm: 142 }
+  const preview = nearestPhotoHole(object.center_x_mm, object.center_y_mm)
+  assert.equal(preview.id, 'A1')
+  const snapped = snapObjectToHole(object)
+  assert.deepEqual([snapped.object.center_x_mm, snapped.object.center_y_mm], [200, 100])
+  assert.deepEqual(snapped.object.anchors[0], { hole_id:'A1', x_mm:200, y_mm:100, confidence:1, confirmed:true })
+  assert.equal(snapObjectToHole({ center_x_mm:350, center_y_mm:250 }, 40).preview, null)
 })
 
 function fixture(save) {

@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.09.04",
+  "status": "approved",
+  "product": {
+    "name": "定线助手",
+    "englishName": "CLIMB SETTER",
+    "mode": "operate",
+    "creativeNorthStar": "岩点样品册与技术板",
+    "approvedDirection": "方案 B：样品架",
+    "conceptSeed": "386d2c68",
+    "personality": ["精确", "实用", "平静", "任务导向"]
+  },
+  "sourceOfTruth": {
+    "rootDesignDocument": "../../DESIGN.md",
+    "productionTokens": "../../frontend/src/styles/tokens.css",
+    "effectIndex": "./EFFECTS.md",
+    "promptLibrary": "./PROMPTS.md",
+    "conflictRule": "README 最新交互决策 > 本目录 DESIGN.md > 本文件 > PROMPTS.md > 效果图"
+  },
+  "tokens": {
+    "fontFamily": "MiSans, PingFang SC, Microsoft YaHei, system-ui, sans-serif",
+    "fontSource": "self-hosted-woff2",
+    "fontDisplay": "swap",
+    "colors": {
+      "ground": "#F7F5EF",
+      "surface": "#FFFFFF",
+      "surfaceSubtle": "#F1EFE9",
+      "surfaceRaised": "#FBFAF7",
+      "ink": "#1C1E21",
+      "inkMuted": "#696C72",
+      "inkFaint": "#92959B",
+      "line": "#DEDBD3",
+      "lineStrong": "#C9C5BC",
+      "brand": "#F4C430",
+      "brandHover": "#E7B821",
+      "brandSoft": "#FFF3B2",
+      "brandInk": "#2D2500",
+      "success": "#27775A",
+      "warning": "#9B6710",
+      "danger": "#BD4343",
+      "boardFace": "#E8EAED",
+      "boardFrame": "#C9CDD2",
+      "boardHole": "#2B2F33",
+      "boardGrid": "#A5ABB2"
+    },
+    "typeScalePx": {
+      "metadata": 12,
+      "body": 14,
+      "emphasis": 16,
+      "cardTitle": 18,
+      "sectionTitle": 20,
+      "pageTitleMobile": 22,
+      "pageTitleDesktop": 28
+    },
+    "fontWeights": { "body": 400, "control": 500, "title": 600, "max": 700 },
+    "radiusPx": { "card": 12, "control": 10, "small": 8 },
+    "touchTargetMinPx": 44
+  },
+  "layout": {
+    "desktop": {
+      "headerHeightPx": 64,
+      "contentMaxWidthPx": 1440,
+      "pageGutterPx": 32,
+      "dashboardColumns": "3fr 2fr",
+      "studioColumns": "240px 1fr 300px"
+    },
+    "mobile": {
+      "breakpointMaxPx": 860,
+      "minWidthPx": 360,
+      "brandBarHeightPx": 56,
+      "contextBarHeightPx": 48,
+      "bottomNavHeightPx": 64,
+      "bottomNavItems": ["首页", "定线", "板库", "资产", "AI"],
+      "studioDockItems": ["岩点", "属性", "Beta", "保存"],
+      "canvasFirst": true
+    }
+  },
+  "board": {
+    "physicalWidthMm": 2440,
+    "physicalHeightMm": 3660,
+    "aspectRatio": 0.6666667,
+    "aspectRatioSource": "physicalDimensions",
+    "columns": 11,
+    "rows": 18,
+    "holeSpacingMm": 200,
+    "holeAreaWidthMm": 2000,
+    "holeAreaHeightMm": 3400,
+    "marginsMm": { "left": 220, "right": 220, "top": 130, "bottom": 130 },
+    "rules": [
+      "11x18 is the hole matrix only",
+      "never use 11/18 as the outer-frame aspect ratio",
+      "scale the entire board uniformly and leave surplus container space empty",
+      "holes and holds must share the same physical-coordinate function"
+    ]
+  },
+  "standardBoardRoutePreview": {
+    "showNonRouteHoldsDefault": false,
+    "showNonRouteHoldsToggle": true,
+    "preferencePersistence": "localStorage",
+    "preferenceKey": "climb-setter:standard-board:show-non-route-holds",
+    "appliesTo": ["main-route-preview", "repair-comparison"],
+    "extraFluorescentMarkers": "forbidden",
+    "extraSolidMarkers": "forbidden",
+    "extraRingMarkers": "forbidden",
+    "textBadgesOnBoard": "forbidden"
+  },
+  "rules": {
+    "useRealHoldAssets": true,
+    "selfHostFonts": true,
+    "preserveExistingApiAndDataContracts": true,
+    "forbidWoodTexture": true,
+    "forbidGlassEffects": true,
+    "forbidDecorativeGradients": true,
+    "forbidEmojiIcons": true,
+    "forbidEqualCardWall": true,
+    "forbidPageHorizontalOverflow": true
+  },
+  "referenceImages": [
+    "./effects/01-dashboard-desktop.png",
+    "./effects/02-dashboard-596.png",
+    "./effects/03-dashboard-mobile.png",
+    "./effects/04-studio-desktop.png",
+    "./effects/05-studio-596.png",
+    "./effects/06-studio-mobile.png",
+    "./effects/07-board-ratio-contract.png"
+  ],
+  "requiredReviewViewports": [
+    { "width": 1440, "height": 1000 },
+    { "width": 596, "height": 800 },
+    { "width": 390, "height": 844 },
+    { "width": 360, "height": 800 }
+  ]
+}

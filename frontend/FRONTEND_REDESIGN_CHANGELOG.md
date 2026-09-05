@@ -1,6 +1,8 @@
 # 前端企业级改版修改报告
 
 > 历史资料（已归档）：本文仅用于追溯 2026-05-21 的前端改版，不代表当前本地单机版的功能、界面或验收标准。当前口径以项目根目录 `PRODUCT.md`、`docs/项目业务审核与修改报告.md` 和实际运行界面为准。
+>
+> 2026-08-31 完成补充：模板选择和页面拆分计划已落地。新增 `BoardTemplatePicker.vue`，并将总览、定线、岩点库、岩板资产、标准板库和 AI 实验室拆为独立页面组件；下文早期规划和“未执行构建”段落仅作为修改前历史记录。
 
 生成时间：2026-05-21
 
@@ -218,12 +220,12 @@ Some chunks are larger than 500 kB after minification.
 
 #### `frontend/src/components/BoardTemplatePicker.vue`
 
-新增底层岩板模板选择组件，用于 Dashboard 中展示多规格岩板入口。组件职责：
+现已新增独立岩板模板选择组件，由 `DashboardPage.vue` 使用；模板卡片逻辑不再由 `App.vue` 承担。组件职责为：
 
 - 展示可选岩板模板卡片。
 - 高亮当前模板。
-- 点击模板后向父组件发出 `select` 事件。
-- 将模板 UI 从 `App.vue` 中拆出，作为本轮第一批高价值组件拆分。
+- 通过 `v-model` 向父组件同步所选模板，并通过独立确认事件开始创建岩板。
+- 提供 `radiogroup` / `radio` 语义和当前选中状态，支持键盘与辅助技术识别。
 
 #### `frontend/src/composables/useBoardEditor.js`
 
@@ -284,31 +286,28 @@ Some chunks are larger than 500 kB after minification.
 
 ### 7.3 代码审查记录
 
-本轮按用户要求未执行构建验证，只做静态审查与差异检查。已检查内容：
+以下是组件拆分完成前的历史审查记录；2026-08-31 的最新验证结果见下一节：
 
-- `git diff --stat`：确认本轮主要改动集中在 `App.vue`、`useBoardEditor.js`，并新增模板常量与模板选择组件。
+- `git diff --stat`：当时记录的主要改动集中在 `App.vue`、`useBoardEditor.js` 和模板常量；当时模板选择组件尚未保留，现已在 2026-08-31 后续改造中补齐。
 - `git status --short`：确认涉及文件包括：
   - `frontend/src/App.vue`
   - `frontend/src/composables/useBoardEditor.js`
-  - `frontend/src/components/BoardTemplatePicker.vue`
   - `frontend/src/constants/boardTemplates.js`
   - 前端设计/修改报告文档
 - `git diff --check`：发现并修复 `App.vue` 中一处行尾空格。
 - 审查并修复 `isHoldInsideSpec()` 坐标解析逻辑，避免在 `hold.x` 存在但 `hold.y` 缺失时错误拼接坐标。
 
-### 7.4 未执行构建说明
+### 7.4 最新构建与浏览器验证
 
-按用户最新指示：**本轮不执行构建验证**。
-
-因此本节不记录新的 `npm run build` 结果。上一轮文档中的构建结果仅代表上一轮企业级工作区改版，不代表本轮“模拟系统聚焦 + AI 软封印 + 多规格岩板”追加改造的构建结论。
+2026-08-31 已完成前端锁定依赖安装、15 项合同测试、生产构建，以及 Chromium 桌面和移动端 6 项端到端回归。回归覆盖模板选择、岩点放置、未保存提醒、`local-jpeg`、岩板对照、仿真入口关闭和 AI 安全边界。
 
 ### 7.5 当前已知风险
 
-1. `App.vue` 仍然承担大量模板、状态、业务逻辑和样式，虽然已新增 `BoardTemplatePicker` 与 `boardTemplates`，但还没有完成页面级拆分。
-2. `components/Wall.vue` 与 `components/WallDisplay.vue` 仍保留旧的 `ABCDEFGHIJK`、`18`、`450 × 650` 写死逻辑；当前主入口 `App.vue` 已改为动态规格，但后续如果重新启用这些旧组件，需要同步升级。
-3. 工作区切换仍主要依赖 `activeWorkspace` 与 CSS 过滤，建议下一阶段拆为真实页面组件。
+1. `App.vue` 仍承担跨页面状态和业务编排，但页面模板已经拆分，体积由约 1848 行降低到约 889 行。
+2. 页面切换仍使用轻量的 `activePage` 状态，没有引入路由；对当前单页试用范围足够，未来需要可分享深链接时再引入路由。
+3. 标准板与 AI 页面参数较多，后续可按领域组合逻辑继续收敛接口，但不应为了减少参数而隐藏数据流。
 4. `generateRoute()` 底层函数仍保留，但 UI 入口已软封印；未来恢复 AI 实验室时需要重新梳理生成流程和提示文案。
-5. 当前未执行构建验证，建议在后续允许时执行一次前端构建或至少运行开发服务器做浏览器级回归。
+5. 2026-08-31 已完成生产构建和桌面/移动端浏览器回归；新增回归测试进入发布门禁。
 
 ### 7.6 下一步建议
 
@@ -316,7 +315,7 @@ Some chunks are larger than 500 kB after minification.
 
 1. 拆出 `DashboardPage.vue`、`StudioPage.vue`、`HoldLibraryPage.vue`、`BoardsPage.vue`、`AILabSealedPage.vue`。
 2. 抽出 `BoardCanvas.vue`，并将当前动态坐标、孔位、拖拽落点逻辑从 `App.vue` 下沉。
-3. 升级或废弃旧的 `Wall.vue` / `WallDisplay.vue`，避免旧固定规格组件误用。
-4. 将岩点资源管理拆为 `useHoldLibrary` + `HoldLibraryPage`。
-5. 将岩板资产保存/载入逻辑拆为 `useBoardPersistence`。
-6. 在用户允许后补跑构建验证，并记录本轮构建结果。
+3. 按实际复用需要再拆 `HoldPoolPanel` 和 `BetaSequencePanel`。
+4. 为标准板真实数据与 AI 完整线路补充更深的端到端场景。
+5. 保持 `useHoldLibrary`、`useBoardPersistence` 与页面职责边界，避免业务重新堆回 `App.vue`。
+6. 持续执行已进入发布门禁的测试、构建和浏览器回归。
