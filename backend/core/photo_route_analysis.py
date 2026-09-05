@@ -156,20 +156,35 @@ def _colour_name(lab: np.ndarray) -> str:
 
 def _candidate_masks(image: np.ndarray) -> list[np.ndarray]:
     """Generate full-scene colour candidates; MobileSAM may refine them later."""
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     saturation = hsv[:, :, 1]
     value = hsv[:, :, 2]
     # Coloured holds plus dark holds. The dark mask is conservative to avoid holes.
-    foreground = (((saturation > 58) & (value > 34)) | ((value < 62) & (saturation > 22))).astype(np.uint8) * 255
+    # Label hue groups before morphology, so touching different colours cannot
+    # become one connected component. This remains a coarse, unverified pass.
+    hue = hsv[:, :, 0]
+    groups = np.digitize(hue, [8, 20, 38, 85, 108, 142, 172])
+    groups[groups == 7] = 0
+    foreground = ((saturation > 58) & (value > 34)) | ((value < 62) & (saturation > 22))
+    groups[value < 62] = 7
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    foreground = cv2.morphologyEx(foreground, cv2.MORPH_OPEN, kernel)
-    foreground = cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, kernel, iterations=2)
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(foreground)
+    separated = np.zeros(image.shape[:2], np.int32)
+    label_offset = 0
+    all_stats = []
+    for group in range(8):
+        binary = (foreground & (groups == group)).astype(np.uint8) * 255
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+        binary[foreground & (groups != group)] = 0
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(binary)
+        separated[labels > 0] = labels[labels > 0] + label_offset
+        all_stats.extend(stats[1:])
+        label_offset += count - 1
+    labels = separated
     area = image.shape[0] * image.shape[1]
     masks: list[np.ndarray] = []
-    for index in range(1, count):
-        x, y, width, height, size = [int(v) for v in stats[index]]
+    for index, stats in enumerate(all_stats, 1):
+        x, y, width, height, size = [int(v) for v in stats]
         if size < max(45, area * .000025) or size > area * .08:
             continue
         if width < 8 or height < 8:
@@ -240,10 +255,14 @@ def _detect_grid_points(image: np.ndarray) -> list[list[float]]:
 
 def analyze_board_photo(photo_path: Path, storage_root: Path, *,
                         cancelled: Callable[[], bool] | None = None,
-                        deadline: float | None = None) -> dict:
+                        deadline: float | None = None, seed: tuple[float, float] | None = None,
+                        color_group: str | None = None, calibration: dict | None = None,
+                        progress: Callable[[str, int], None] | None = None, coarse_only: bool = False) -> dict:
     """Produce local object, colour, hole and initial anchor proposals."""
     cancelled = cancelled or (lambda: False)
     deadline = deadline or time.monotonic() + 180
+    progress = progress or (lambda stage, percent: None)
+    progress("检查照片与工作尺寸", 12)
     image = decode_photo(photo_path.read_bytes())
     quality = assess_capture_quality(image)
     if not quality.accepted:
@@ -255,10 +274,27 @@ def analyze_board_photo(photo_path: Path, storage_root: Path, *,
         [[0, original_height], [original_width, original_height], [original_width, 0], [0, 0]],
         [[0, 0], [BOARD_WIDTH_MM, 0], [BOARD_WIDTH_MM, BOARD_HEIGHT_MM], [0, BOARD_HEIGHT_MM]],
     )
+    if calibration and calibration.get("matrix"):
+        matrix = calibration["matrix"]
     proposals = []
     lab = cv2.cvtColor(work, cv2.COLOR_BGR2LAB)
-    mobile = _mobilesam_masks(work, deadline, cancelled)
-    candidate_masks, model_version = mobile if mobile is not None else (_candidate_masks(work), "local-rules-v2-no-mobilesam")
+    progress("全图候选识别", 20)
+    if seed is not None:
+        repo, checkpoint = mobilesam_paths()
+        sys.path.insert(0, str(repo))
+        from core.photo_route_mobilesam import extract_with_mobilesam
+        extraction = extract_with_mobilesam(image, seed, checkpoint=checkpoint,
+            cancelled=cancelled, timeout_seconds=max(.1, deadline-time.monotonic()),
+            batch_size=2, prune_inspection=True, progress=progress)
+        work = extraction.image
+        candidate_masks = [item.mask for item in extraction.candidates]
+        if not candidate_masks:
+            raise PhotoProcessingError("该采样颜色未找到可靠对象，请换一个颜色清晰的位置重试；原版本已保留")
+        model_version = "mobilesam-vit-t-" + hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12] + "+color-refine-v6"
+    else:
+        mobile = None if coarse_only else _mobilesam_masks(work, deadline, cancelled)
+        candidate_masks, model_version = mobile if mobile is not None else (_candidate_masks(work), "local-rules-v3-no-mobilesam")
+    progress("整理轮廓与颜色，生成复核素材", 65)
     for index, mask in enumerate(candidate_masks, 1):
         if cancelled():
             raise InterruptedError("任务已取消")
@@ -273,7 +309,7 @@ def analyze_board_photo(photo_path: Path, storage_root: Path, *,
         mask_ref = _write_asset(storage_root, _encode_png(crop_mask), "png", right - x, bottom - y)
         cutout_ref = _write_asset(storage_root, _encode_png(rgba), "png", right - x, bottom - y)
         median_lab = np.median(lab[mask > 0], axis=0).astype(np.uint8)
-        colour = _colour_name(median_lab)
+        colour = color_group if seed is not None else _colour_name(median_lab)
         source_cx, source_cy = (x + right) / (2 * ratio), (y + bottom) / (2 * ratio)
         board_x, board_y = map_point(matrix, source_cx, source_cy)
         hole, distance = nearest_hole(board_x, board_y)
@@ -293,26 +329,35 @@ def analyze_board_photo(photo_path: Path, storage_root: Path, *,
             "rotation_deg": 0.0,
             "scale_mm_per_px": round((BOARD_WIDTH_MM / width) * ratio, 8),
             "confidence": round(object_confidence, 4),
-            "review_status": "confirmed" if mobile is not None and object_confidence >= .9 else "needs_review",
+            "review_status": "needs_review",
             "anchors": [{"hole_id": hole["id"], "x_mm": hole["x_mm"], "y_mm": hole["y_mm"],
                          "confidence": round(anchor_confidence, 4),
-                         "confirmed": anchor_confidence >= .86}],
+                         "confirmed": False}],
         })
     grid_points = _detect_grid_points(work)
     return {
         "quality": {"accepted": quality.accepted, "issues": quality.issues, "metrics": quality.metrics},
-        "calibration": {
+        "calibration": calibration or {
             "matrix": matrix,
             "method": "visible-hole-hybrid" if len(grid_points) >= 20 else "board-boundary-provisional",
             "detected_hole_count": len(grid_points),
             "confidence": round(min(.94, .45 + len(grid_points) / 160), 4),
-            "status": "confirmed" if len(grid_points) >= 80 else "needs_review",
+            "status": "needs_review",
         },
         "objects": proposals,
         "model_version": model_version,
         "input_fingerprint": hashlib.sha256(photo_path.read_bytes()).hexdigest(),
         "warnings": ([] if proposals else ["未自动识别到可靠岩点，请手动添加对象"]),
     }
+
+
+def mobilesam_paths() -> tuple[Path, Path]:
+    repo_value = os.getenv("PHOTO_ROUTE_MOBILESAM_REPO", "")
+    checkpoint_value = os.getenv("PHOTO_ROUTE_MOBILESAM_CHECKPOINT", "")
+    repo, checkpoint = Path(repo_value), Path(checkpoint_value)
+    if not repo_value or not checkpoint_value or not (repo / "mobile_sam").is_dir() or not checkpoint.is_file():
+        raise PhotoProcessingError("颜色精修需要配置本地 MobileSAM 模型；当前只有简化初识别，未执行精修")
+    return repo.resolve(), checkpoint.resolve()
 
 
 def fingerprint_payload(value: object) -> str:

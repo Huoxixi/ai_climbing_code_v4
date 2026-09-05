@@ -1,9 +1,9 @@
 <template>
-  <section class="photo-routes-page" aria-label="照片线路工作台">
+  <section class="photo-routes-page" aria-label="抱石线路工作台">
     <div class="photo-draft-toolbar">
       <label class="photo-draft-picker">当前草稿
         <select :value="draft?.id || ''" :disabled="loading" @change="switchDraft($event.target.value)">
-          <option v-if="!drafts.length" value="">尚无照片线路草稿</option>
+          <option v-if="!drafts.length" value="">尚无抱石线路草稿</option>
           <option v-for="item in drafts" :key="item.id" :value="item.id">{{ item.name || '未命名草稿' }}</option>
         </select>
       </label>
@@ -24,7 +24,7 @@
     <div v-if="saveState === 'lease'" class="photo-conflict" role="alert">{{ editable ? '已可继续编辑，点击重试保存当前修改。' : '编辑权已失效，当前修改仍保留。请先取得编辑权。' }} <button v-if="editable" class="photo-action" @click="saveNow">重试保存</button></div>
     <div v-if="saveState === 'error'" class="photo-error" role="alert">保存失败，当前修改仍保留。<button class="photo-action" @click="saveNow">重试保存</button></div>
     <div v-if="recoveryWarning" class="photo-error" role="alert">{{ recoveryWarning }} <button v-if="draft" class="photo-action" @click="downloadRecovery">下载当前副本</button></div>
-    <div v-if="loading && !draft" class="photo-empty" role="status">正在读取照片线路…</div>
+    <div v-if="loading && !draft" class="photo-empty" role="status">正在读取抱石线路…</div>
     <div v-else-if="!draft" class="photo-empty"><h2>将提取线路放到电子岩板</h2><p>载入本机已有的提取结果，即可等比适配并自由编辑。</p><button class="photo-action primary" @click="showImport = true">选择提取结果</button></div>
     <template v-else>
       <div class="photo-editor-toolbar">
@@ -161,14 +161,14 @@ async function refresh() {
       activate(items.find(d => d.id === active) || items[0])
     }
     if (!items.length) showImport.value = true
-  } catch { error.value = '无法读取照片线路，请检查本机服务后重试。' }
+  } catch { error.value = '无法读取抱石线路，请检查本机服务后重试。' }
   finally { loading.value = false }
 }
 async function beforeLeave() {
   endDrag(); await saver?.flush()
   if (!saver?.dirty) return true
   const message = recoveryWarning.value ? '当前修改尚未保存到服务器，浏览器也未能保留恢复副本。请先下载当前副本，离开可能丢失修改。' : '当前修改尚未保存到服务器。已保留在此浏览器，其他设备暂时看不到这些修改。'
-  try { await ElMessageBox.confirm(message, '离开照片线路？', { confirmButtonText: '离开', cancelButtonText: '继续编辑' }); return true } catch { return false }
+  try { await ElMessageBox.confirm(message, '离开抱石线路？', { confirmButtonText: '离开', cancelButtonText: '继续编辑' }); return true } catch { return false }
 }
 async function switchDraft(id) {
   if (!id || id === draft.value?.id || !(await beforeLeave())) return

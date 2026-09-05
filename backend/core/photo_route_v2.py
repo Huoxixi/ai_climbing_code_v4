@@ -23,13 +23,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.photo_route_analysis import (BOARD_HEIGHT_MM, BOARD_WIDTH_MM, analyze_board_photo,
                                        assess_capture_quality, board_holes, compute_homography,
-                                       fingerprint_payload, map_point, nearest_hole)
+                                       fingerprint_payload, map_point, nearest_hole, mobilesam_paths)
 from core.photo_route_processing import PhotoProcessingError, decode_photo
 from core.photo_wall_processing import restore_wall
 
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class ColorRefinement(BaseModel):
+    expected_version: int = Field(ge=1)
+    color_group: str = Field(min_length=1, max_length=40)
+    seed: tuple[float, float]
+
+    @model_validator(mode="after")
+    def valid_seed(self):
+        if not all(np.isfinite(value) and 0 <= value <= 1 for value in self.seed):
+            raise ValueError("请在照片内选择颜色清晰的岩点")
+        return self
 
 
 class Contract(BaseModel):
@@ -249,10 +261,11 @@ class PhotoRouteV2Store:
         if suffix == "jpeg": suffix = "jpg"
         filename = f"{digest}.{suffix}"
         target = self.assets / filename
-        if not target.exists():
-            temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
-            temp.write_bytes(data)
-            os.replace(temp, target)
+        with self._lock:
+            if not target.exists():
+                temp = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+                temp.write_bytes(data)
+                os.replace(temp, target)
         return {"filename": filename, "sha256": digest, "width": width, "height": height}
 
     def asset_path(self, filename: str) -> Path:
@@ -293,6 +306,9 @@ class PhotoRouteV2Store:
         result["original_asset"] = self._load(result["original_asset"])
         result["quality"] = self._load(result.pop("quality_json"), {})
         result["calibration"] = self._load(result.pop("calibration_json"), None)
+        # Include the last recognition job so an interrupted upload can resume.
+        job = db.execute("SELECT id,kind,status,stage,progress,error,board_version_id,route_id FROM processing_jobs WHERE board_version_id=? AND kind='recognition' ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
+        result["latest_job"] = dict(job) if job else None
         if include_objects:
             objects = db.execute("SELECT * FROM board_objects WHERE board_version_id=? AND review_status!='rejected' ORDER BY created_at,id", (row["id"],)).fetchall()
             result["objects"] = [self._row_object(db, item) for item in objects]
@@ -337,6 +353,28 @@ class PhotoRouteV2Store:
                     db.execute("INSERT INTO object_anchors VALUES(?,?,?,?,?,?,?,?)",
                                (uuid.uuid4().hex, object_id, anchor["hole_id"], anchor["x_mm"], anchor["y_mm"],
                                 anchor["confidence"], int(anchor["confirmed"]), now))
+
+    def create_color_refinement(self, board_id: str, owner: str, payload: ColorRefinement):
+        source = self.get_board(board_id, owner)
+        try: mobilesam_paths()
+        except PhotoProcessingError as exc: raise HTTPException(503, str(exc)) from exc
+        new_id, job_id, now = uuid.uuid4().hex, uuid.uuid4().hex, utcnow()
+        with self.transaction() as db:
+            current = db.execute("SELECT version,status FROM board_versions WHERE id=? AND owner=?", (board_id, owner)).fetchone()
+            if current["version"] != payload.expected_version: raise HTTPException(409, "岩板版本已变化，请重新打开后精修")
+            if current["status"] not in {"review", "ready"}: raise HTTPException(409, "请等待初识别完成后再精修")
+            if not any(item["color_group"] == payload.color_group for item in source["objects"]):
+                raise HTTPException(422, "请先选择当前岩板中的颜色")
+            number = db.execute("SELECT COALESCE(MAX(board_version_no),0)+1 FROM board_versions WHERE owner=? AND board_key=?", (owner, source["board_key"])).fetchone()[0]
+            db.execute("INSERT INTO board_versions(id,owner,board_key,board_version_no,version,status,original_asset,width,height,quality_json,calibration_json,model_version,input_fingerprint,created_at,updated_at,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)",
+                (new_id, owner, source["board_key"], number, 1, "processing", self._json(source["original_asset"]), source["width"], source["height"], self._json(source["quality"]), self._json(source["calibration"]), None, source["input_fingerprint"], now, now))
+            # Snapshot other colours so later edits to the original never alter
+            # the queued refinement. No existing objects or routes are replaced.
+            job_payload = {"seed": payload.seed, "color_group": payload.color_group,
+                "calibration": source["calibration"], "preserved_objects": [item for item in source["objects"] if item["color_group"] != payload.color_group]}
+            db.execute("INSERT INTO processing_jobs(id,owner,board_version_id,kind,status,stage,progress,payload_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (job_id, owner, new_id, "recognition", "queued", "等待按颜色精修", 0, self._json(job_payload), now, now))
+        return {"board": self.get_board(new_id, owner), "job": self.get_job(job_id, owner)}
 
     def create_job(self, owner: str, kind: str, *, board_id: str | None = None,
                    route_id: str | None = None, payload: dict | None = None) -> dict:
@@ -773,7 +811,12 @@ class PhotoRouteJobManager:
         board = self.store.get_board(job["board_version_id"], job["owner"])
         path = self.store.asset_path(board["original_asset"]["filename"])
         result = analyze_board_photo(path, self.store.root, cancelled=lambda: cancel.is_set(),
-                                     deadline=started + self.timeout_seconds)
+            deadline=started + self.timeout_seconds, seed=job["payload"].get("seed"),
+            color_group=job["payload"].get("color_group"), calibration=job["payload"].get("calibration"),
+            progress=lambda stage, percent: self.store.mark_job(job["id"], "running", stage, percent)
+                if not cancel.is_set() else None)
+        for index, item in enumerate(job["payload"].get("preserved_objects", [])):
+            result["objects"].append({**item, "id": f"preserved-{index:03d}"})
         if time.monotonic() - started > self.timeout_seconds: raise TimeoutError("识别任务超过 180 秒")
         if cancel.is_set() or self.store.get_job(job["id"])["cancel_requested"]: return
         self.store.mark_job(job["id"], "running", "写入标定与对象", 85)
@@ -834,6 +877,12 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
 
     @router.post("/boards/{board_id}/versions")
     def board_version(board_id: str, request: Request): return store.new_board_version(board_id, owner(request))
+
+    @router.post("/boards/{board_id}/refine")
+    def refine_board(board_id: str, payload: ColorRefinement, request: Request):
+        result = store.create_color_refinement(board_id, owner(request), payload)
+        jobs.enqueue(result["job"]["id"])
+        return result
 
     @router.put("/boards/{board_id}/calibration")
     def calibrate(board_id: str, payload: CalibrationUpdate, request: Request): return store.update_calibration(board_id, owner(request), payload)

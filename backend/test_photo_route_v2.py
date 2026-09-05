@@ -92,6 +92,17 @@ class PhotoRouteV2Tests(unittest.TestCase):
         self.assertEqual(created['board']['status'], 'processing')
         self.assertEqual(self.jobs.enqueued, [created['job']['id']])
 
+    def test_board_returns_recognition_job_for_resume_without_exposing_payload(self):
+        created = self.create_board()
+        board_id, job_id = created['board']['id'], created['job']['id']
+        for board in (self.store.get_board(board_id, 'owner'), self.store.list_boards('owner')[0]):
+            self.assertEqual(board['latest_job']['id'], job_id)
+            self.assertEqual(board['latest_job']['status'], 'queued')
+            self.assertNotIn('payload_json', board['latest_job'])
+        self.store.mark_job(job_id, 'failed', 'failed', 20, 'test failure')
+        self.assertEqual(self.store.get_board(board_id, 'owner')['latest_job']['status'], 'failed')
+        self.assertEqual(self.store.list_boards('another-owner'), [])
+
     def test_object_anchor_route_validation_versions_and_history(self):
         created = self.create_board(); board = self.seed_analysis(created['board']['id'])
         obj = board['objects'][0]

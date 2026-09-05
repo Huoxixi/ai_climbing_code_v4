@@ -104,7 +104,8 @@ def separate_proposals(proposals, color_mask: np.ndarray, saturated_mask: np.nda
 def extract_with_mobilesam(image: np.ndarray, seed: tuple[float, float], *, checkpoint: Path,
                            cancelled: Callable[[], bool] = lambda: False,
                            timeout_seconds: float = 180, threads: int = 2,
-                           prune_inspection: bool = False, batch_size: int = 8) -> Extraction:
+                           prune_inspection: bool = False, batch_size: int = 8,
+                           progress: Callable[[str, int], None] = lambda stage, percent: None) -> Extraction:
     started = time.monotonic()
 
     def check():
@@ -169,6 +170,7 @@ def extract_with_mobilesam(image: np.ndarray, seed: tuple[float, float], *, chec
             return result
 
     model = sam_model_registry["vit_t"]()
+    progress("载入本地分割模型", 25)
     # Only tensor weights are deserialized, and the device is explicitly CPU.
     model.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
     model.to(device="cpu").eval()
@@ -176,6 +178,7 @@ def extract_with_mobilesam(image: np.ndarray, seed: tuple[float, float], *, chec
                                       points_per_batch=batch_size, pred_iou_thresh=.8,
                                       stability_score_thresh=.9, box_nms_thresh=.65,
                                       min_mask_region_area=60)
+    progress("按采样颜色识别全图岩点", 35)
     with torch.inference_mode():
         proposals = generator.generate(cv2.cvtColor(work, cv2.COLOR_BGR2RGB))
     check()
@@ -185,7 +188,8 @@ def extract_with_mobilesam(image: np.ndarray, seed: tuple[float, float], *, chec
     coarse = separate_proposals(proposals, color_mask)
     regions = [c for c in coarse if np.count_nonzero(c.mask) > width * height * .03]
     regions.sort(key=lambda c: np.count_nonzero(c.mask), reverse=True)
-    for parent in regions[:3]:
+    for region_index, parent in enumerate(regions[:3]):
+        progress(f"局部放大精修 {region_index + 1}/{min(3, len(regions))}", 45 + region_index * 5)
         check()
         left, top, box_width, box_height = parent.bounds
         padding = max(24, round(min(box_width, box_height) * .35))
@@ -230,6 +234,7 @@ def extract_with_mobilesam(image: np.ndarray, seed: tuple[float, float], *, chec
             proposals.append({**detail, "segmentation": global_mask})
     check()
     saturated = (hsv[:, :, 1] > 75) & (hsv[:, :, 2] > 35)
+    progress("去重并分离相邻对象", 62)
     candidates = separate_proposals(proposals, color_mask, saturated)
     return Extraction(work, candidates, hue, time.monotonic() - started,
                       ["实验性本地模型结果，需要检查重复、粘连和漏选", "没有推断起终点、线路完整性或不可见纹理"])

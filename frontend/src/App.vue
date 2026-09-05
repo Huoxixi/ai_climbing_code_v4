@@ -3,14 +3,20 @@
     :active="activePage"
     @update:active="changePage"
     :title="pageTitle"
-    :board-label="activePage === 'photo-routes' ? '30×20 照片线路岩板' : studio.currentBoardSpec.label"
+    :board-label="activePage === 'photo-routes' ? '30×20 抱石线路岩板' : studio.currentBoardSpec.label"
     :hold-count="activePage === 'photo-routes' ? photoStatus.count : studio.placedHolds.length"
     :dirty="activePage === 'photo-routes' ? photoStatus.dirty : studio.unsavedChanges"
     :save-label="activePage === 'photo-routes' ? photoStatus.state : ''"
     :simulation-enabled="simulationEnabled"
   >
+    <div v-if="photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status))" class="photo-task-notice" role="status">
+      <span>{{ photoWork.state.uploading ? '照片正在上传，可以继续使用其他功能' : photoWork.state.session.status === 'ready' ? (photoWork.state.session.viewed ? '当前线路进度已保存' : '线路已提取，进度已保存') : photoWork.state.session.stage }}</span>
+      <button type="button" @click="returnPhotoWork">{{ photoWork.state.session?.status === 'ready' ? '返回查看' : '查看当前线路' }}</button>
+      <span v-if="photoWork.state.connectionLost">暂时断开，正在重新连接</span>
+    </div>
+    <SettingsPage v-if="activePage === 'settings'" />
     <DashboardPage
-      v-if="activePage === 'dashboard'"
+      v-else-if="activePage === 'dashboard'"
       v-model:selected-template-id="selectedDashboardTemplateId"
       :studio="studio"
       :boards="boards"
@@ -23,10 +29,9 @@
       @load-board="loadBoardIntoStudio"
     />
 
-    <PhotoRoutesV2Page
+    <PhotoRouteWorkflowPage
       v-else-if="activePage === 'photo-routes'"
       ref="photoPage"
-      @status="photoStatus = $event"
     />
 
     <StudioPage
@@ -154,15 +159,17 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, provide, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AppShell from './components/AppShell.vue'
+import SettingsPage from './components/SettingsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
 import StudioPage from './components/StudioPage.vue'
 import AILabPage from './components/AILabPage.vue'
 import BoardsPage from './components/BoardsPage.vue'
 import HoldLibraryPage from './components/HoldLibraryPage.vue'
-import PhotoRoutesV2Page from './components/PhotoRoutesV2Page.vue'
+import PhotoRouteWorkflowPage from './components/PhotoRouteWorkflowPage.vue'
+import { createPhotoWorkflow } from './composables/usePhotoWorkflow'
 import SimulationLab from './components/SimulationLab.vue'
 import StandardBoardPage from './components/StandardBoardPage.vue'
 import { useBoardPersistence } from './composables/useBoardPersistence'
@@ -173,13 +180,26 @@ import { DEFAULT_FONT_GRADE, FONT_GRADES, UNGRADED, calibrationLabel, confidence
 import { ROUTE_TAG_GROUPS, boardSystemTags, boardTags, matchesTags, tagLabel } from './constants/routeTags'
 import standardBoardService from './services/standardBoardService'
 
-const activePage = ref('dashboard')
+const activePage = ref(['photo-routes','settings'].includes(location.hash.slice(2)) ? location.hash.slice(2) : 'dashboard')
+const photoAccess = inject('pilotAccess')
+const photoWork = createPhotoWorkflow(photoAccess.session.username || 'local')
+provide('photoWorkflow', photoWork)
+async function returnPhotoWork() {
+  await changePage('photo-routes')
+  if(activePage.value==='photo-routes') {
+    await photoPage.value?.returnCurrent()
+    if(photoWork.state.session?.status==='ready') await photoWork.change('viewed').catch(()=>{})
+  }
+}
+function photoHashChanged() { if (['photo-routes','settings'].includes(location.hash.slice(2))) changePage(location.hash.slice(2)) }
+onMounted(() => { photoWork.init(); window.addEventListener('hashchange', photoHashChanged) })
+onBeforeUnmount(() => { photoWork.close(); window.removeEventListener('hashchange', photoHashChanged) })
 const simulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION === 'true'
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
 const photoPage = ref(null)
-const photoStatus = ref({ count: 0, dirty: false, state: '已同步' })
+const photoStatus = computed(() => ({count:photoWork.state.session?.route?.members.length || 0,dirty:!!photoWork.state.pendingChange,state:photoWork.state.saving?'保存中…':photoWork.state.session?.stage || '已同步'}))
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
 const aiExperiment = reactive({
@@ -271,9 +291,10 @@ const standardBoard = reactive({
 })
 
 const pageTitle = computed(() => ({
+  settings: '设置',
   dashboard: '总览',
   studio: '定线工作台',
-  'photo-routes': '照片线路',
+  'photo-routes': '抱石线路',
   library: '岩点库',
   boards: '岩板资产',
   'standard-board': '标准板库',
@@ -436,6 +457,7 @@ async function changePage(nextPage) {
     }
   }
   activePage.value = nextPage
+  history.replaceState(null, '', nextPage === 'photo-routes' ? '#/photo-routes' : '#/' + nextPage)
 }
 
 function startBlankStudio() {
@@ -985,3 +1007,7 @@ function runAiExperiment() {
   })
 }
 </script>
+<style scoped>
+.photo-task-notice {display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 20px;background:#fff3c4;color:#453709;border-bottom:1px solid #e2d297;font-size:14px}
+.photo-task-notice button {min-height:36px;padding:6px 12px;border:1px solid #aa8a28;border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+</style>

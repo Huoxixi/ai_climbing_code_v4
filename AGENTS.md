@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## 用户指定的本地开发基线（2026-09-05）
+
+当前版本 `local-latest-2026.09.05.1` 为用户指定的本地最新版。后续本地代码修改以本目录最新提交为基础，参见 `LOCAL_LATEST.md` 与 `LOCAL_VERSION.json`。不要把旧 audit 工作区、历史快照或生产版本当成本地开发基线。固定入口为 `http://127.0.0.1:4176/#/photo-routes`，本地持久数据及 API 密钥必须保留在 `.local/` 并保持 Git 忽略。
+
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

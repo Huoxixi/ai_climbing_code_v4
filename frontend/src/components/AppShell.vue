@@ -13,20 +13,19 @@
           <span class="sync-state" :class="{ dirty }"><i />{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span>
           <el-button v-if="!pilotAccess.lease.ownedByMe" size="small" type="primary" :loading="pilotAccess.lease.loading" @click="pilotAccess.acquireLease">开始编辑</el-button>
           <el-button v-else size="small" :loading="pilotAccess.lease.loading" @click="pilotAccess.releaseLease">释放编辑权</el-button>
-          <div class="pilot-user-menu"><span>{{ pilotAccess.session.displayName }}</span><button v-if="pilotAccess.session.authEnabled" type="button" @click="pilotAccess.logout">退出</button></div>
+          <button class="settings-trigger" type="button" aria-label="设置" title="设置" :aria-current="active === 'settings' ? 'page' : undefined" @click="$emit('update:active', 'settings')"><Setting /></button>
         </div>
       </div>
       <div class="mobile-context-row">
-        <div><h1>{{ title }}</h1><span>{{ boardLabel }} · {{ holdCount }} 岩点</span></div>
+        <div><h1>{{ title }}</h1><span v-if="active !== 'settings'">{{ boardLabel }} · {{ holdCount }} 岩点</span></div>
         <span class="sync-state" :class="{ dirty }"><i />{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span>
       </div>
     </header>
 
     <main class="shell-main">
-      <div v-if="['boards', 'library', 'photo-routes'].includes(active)" class="mobile-asset-switch" aria-label="资产分类">
+      <div v-if="['boards', 'library'].includes(active)" class="mobile-asset-switch" aria-label="资产分类">
         <button :class="{ active: active === 'boards' }" @click="$emit('update:active', 'boards')">岩板</button>
         <button :class="{ active: active === 'library' }" @click="$emit('update:active', 'library')">岩点</button>
-        <button :class="{ active: active === 'photo-routes' }" @click="$emit('update:active', 'photo-routes')">照片线路</button>
       </div>
       <slot />
     </main>
@@ -41,7 +40,7 @@
 
 <script setup>
 import { computed, inject } from 'vue'
-import { Collection, DataBoard, Grid, Histogram, Platform } from '@element-plus/icons-vue'
+import { Collection, DataBoard, Grid, Histogram, Picture, Platform, Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
   active: { type: String, required: true }, title: { type: String, required: true }, boardLabel: { type: String, default: '未选择岩板' },
@@ -51,12 +50,18 @@ defineEmits(['update:active'])
 const pilotAccess = inject('pilotAccess')
 const desktopItems = computed(() => ([
   { key: 'dashboard', label: '总览' }, { key: 'studio', label: '定线' },
-  { key: 'photo-routes', label: '照片线路' }, { key: 'standard-board', label: '板库' }, { key: 'boards', label: '资产' },
+  { key: 'photo-routes', label: '抱石线路' }, { key: 'standard-board', label: '板库' }, { key: 'boards', label: '资产' },
   { key: 'simulation', label: '仿真审核' }, { key: 'ai-lab', label: 'AI 实验室' },
 ]).filter((item) => item.key !== 'simulation' || props.simulationEnabled))
 const mobileItems = [
   { key: 'dashboard', short: '首页', icon: DataBoard }, { key: 'studio', short: '定线', icon: Platform },
+  { key: 'photo-routes', short: '抱石线路', icon: Picture },
   { key: 'standard-board', short: '板库', icon: Grid }, { key: 'boards', short: '资产', icon: Collection }, { key: 'ai-lab', short: 'AI', icon: Histogram },
 ]
-const mobileActive = computed(() => (['boards', 'library', 'photo-routes'].includes(props.active) ? 'boards' : props.active))
+const mobileActive = computed(() => (['boards', 'library'].includes(props.active) ? 'boards' : props.active))
 </script>
+
+<style scoped>
+.settings-trigger{display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--ink);cursor:pointer}
+.settings-trigger svg{width:23px;height:23px}.settings-trigger:hover,.settings-trigger[aria-current=page]{background:var(--brand-soft);border-color:var(--line)}.settings-trigger:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+</style>

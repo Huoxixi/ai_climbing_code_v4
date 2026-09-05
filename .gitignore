@@ -44,3 +44,8 @@ backend/data/local_simulation/
 
 # Private photo-route drafts and content-addressed source assets
 backend/data/photo_routes/
+
+# Browser integration screenshots and traces
+frontend/test-results/
+frontend/playwright-report/
+.local/

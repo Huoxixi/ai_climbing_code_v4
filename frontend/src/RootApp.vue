@@ -6,6 +6,9 @@
       <small>请稍候，不会影响已保存的数据。</small>
     </div>
   </div>
+  <div v-else-if="!session.authenticated && !session.authEnabled" class="pilot-loading">
+    <div class="pilot-loading-card"><strong>已退出登录</strong><p>本地账号 owner · 负责人</p><p>照片和线路进度已保留。</p><el-button type="primary" :loading="loginSubmitting" @click="localLogin">登录本地账号</el-button><p v-if="loginError" role="alert">{{loginError}}</p></div>
+  </div>
   <PilotLogin
     v-else-if="!session.authenticated"
     :submitting="loginSubmitting"
@@ -73,6 +76,7 @@ async function loadSession() {
   try {
     const response = await apiClient.get('/api/auth/session')
     applySession(response.data)
+    if (!session.authEnabled && sessionStorage.getItem('local-account-signed-out') === 'true') session.authenticated = false
     await refreshLease()
   } catch (error) {
     if (error?.response?.status !== 401) {
@@ -113,12 +117,20 @@ async function quickLogin() {
 }
 
 async function logout() {
+  await apiClient.post('/api/auth/logout')
+  const authEnabled = session.authEnabled
+  if (!authEnabled) sessionStorage.setItem('local-account-signed-out','true')
+  applyLease({})
+  applySession({ authenticated: false, auth_enabled: authEnabled })
+}
+
+async function localLogin() {
+  loginSubmitting.value = true
+  loginError.value = ''
   try {
-    await apiClient.post('/api/auth/logout')
-  } finally {
-    applyLease({})
-    applySession({ authenticated: false })
-  }
+    sessionStorage.removeItem('local-account-signed-out')
+    await loadSession()
+  } finally { loginSubmitting.value = false }
 }
 
 async function refreshLease() {

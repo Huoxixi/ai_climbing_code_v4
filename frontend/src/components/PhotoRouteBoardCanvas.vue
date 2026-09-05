@@ -11,27 +11,27 @@
       </div>
     </div>
     <div ref="viewport" class="photo-wall-viewport" :class="{ 'is-browsing': mode === 'browse' }"
-      aria-label="30列20行照片线路电子岩板，可缩放和平移" @wheel.prevent="wheel"
+      aria-label="30列20行抱石线路电子岩板，可缩放和平移" @wheel.prevent="wheel"
       @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp"
       @lostpointercapture="pointerUp">
-      <svg class="photo-technical-wall" :style="wallStyle" viewBox="0 0 6200 4100" aria-label="30列20行中性灰技术岩板">
+      <svg class="photo-technical-wall" :style="wallStyle" :viewBox="`0 0 ${PHOTO_BOARD.board_width_mm} ${PHOTO_BOARD.board_height_mm}`" aria-label="30列20行中性灰技术岩板">
         <g class="photo-panel-joints" aria-hidden="true">
           <line v-for="x in [1240, 2480, 3720, 4960]" :key="x" :x1="x" :x2="x" y1="0" y2="4100" />
           <line x1="0" x2="6200" y1="2050" y2="2050" />
         </g>
         <g class="photo-reference-holes" aria-hidden="true">
-          <circle v-for="hole in holes" :key="hole.id" :cx="hole.x" :cy="4100-hole.y" r="9"><title>{{ hole.id }}</title></circle>
+          <circle v-for="hole in holes" :key="hole.id" :cx="hole.x" :cy="PHOTO_BOARD.board_height_mm-hole.y" r="9"><title>{{ hole.id }}</title></circle>
         </g>
         <g v-if="snapPreview" class="photo-snap-preview" aria-hidden="true">
-          <circle :cx="snapPreview.x" :cy="4100-snapPreview.y" r="42" />
-          <line :x1="snapPreview.fromX" :y1="4100-snapPreview.fromY" :x2="snapPreview.x" :y2="4100-snapPreview.y" />
+          <circle :cx="snapPreview.x" :cy="PHOTO_BOARD.board_height_mm-snapPreview.y" r="42" />
+          <line :x1="snapPreview.fromX" :y1="PHOTO_BOARD.board_height_mm-snapPreview.fromY" :x2="snapPreview.x" :y2="PHOTO_BOARD.board_height_mm-snapPreview.y" />
         </g>
         <g v-if="labels" class="photo-axis-labels" aria-hidden="true">
           <text v-for="i in 30" :key="`x${i}`" :x="200+(i-1)*200" y="4070" text-anchor="middle">{{ columnLabel(i-1) }}</text>
           <text v-for="i in 20" :key="`y${i}`" x="60" :y="4100-(100+(i-1)*200)+15" text-anchor="middle">{{ i }}</text>
         </g>
         <g v-for="object in sortedObjects" :key="object.id" :data-object-id="object.id"
-          :transform="`translate(${object.center_x_mm} ${4100-object.center_y_mm}) rotate(${object.rotation_deg})`"
+          :transform="`translate(${object.center_x_mm} ${PHOTO_BOARD.board_height_mm-object.center_y_mm}) rotate(${object.rotation_deg})`"
           class="photo-wall-object" :class="{ 'is-selected': selectedId === object.id || groupSelected }"
           role="button" tabindex="0" :aria-label="objectLabel(object)" :aria-pressed="selectedId === object.id"
           @keydown="objectKey($event, object.id)">
@@ -55,7 +55,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
-import { photoHoles, columnLabel, zoomCamera } from '../utils/photoBoard.js'
+import { PHOTO_BOARD, photoHoles, columnLabel, zoomCamera } from '../utils/photoBoard.js'
 import { photoAssetUrl } from '../services/photoRouteService'
 
 const props = defineProps({ objects: { type: Array, required: true }, selectedId: { type: String, default: '' }, groupSelected: Boolean, mode: { type: String, default: 'browse' }, editable: Boolean, snapping: Boolean, snapPreview: { type: Object, default: null }, assetUrl: { type: Function, default: photoAssetUrl } })
@@ -64,8 +64,8 @@ const viewport = ref(null), labels = ref(false)
 const camera = reactive({ zoom: 1, x: 0, y: 0 }), size = reactive({ width: 1, height: 1 })
 const holes = photoHoles()
 const sortedObjects = computed(() => [...props.objects].sort((a, b) => a.z_index - b.z_index))
-const baseWidth = computed(() => Math.min(size.width, size.height * 6200 / 4100))
-const wallStyle = computed(() => ({ width: `${baseWidth.value}px`, height: `${baseWidth.value * 4100 / 6200}px`, transform: `translate(-50%, -50%) translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }))
+const baseWidth = computed(() => Math.min(size.width, size.height * PHOTO_BOARD.board_width_mm / PHOTO_BOARD.board_height_mm))
+const wallStyle = computed(() => ({ width: `${baseWidth.value}px`, height: `${baseWidth.value * PHOTO_BOARD.board_height_mm / PHOTO_BOARD.board_width_mm}px`, transform: `translate(-50%, -50%) translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }))
 const objectWidth = (o) => o.source_bbox_px[2] * o.scale_mm_per_px
 const objectHeight = (o) => o.source_bbox_px[3] * o.scale_mm_per_px
 const resolveAsset = (asset) => props.assetUrl(asset)
@@ -102,7 +102,7 @@ function pointerMove(event) {
   }
   if (!drag) return
   if (drag.kind === 'pan') { camera.x = drag.x + point.x - drag.start.x; camera.y = drag.y + point.y - drag.start.y }
-  else if (props.editable) emit('move', { id: drag.id, dx: (point.x - drag.start.x) * 6200 / (baseWidth.value * camera.zoom), dy: -(point.y - drag.start.y) * 6200 / (baseWidth.value * camera.zoom) })
+  else if (props.editable) emit('move', { id: drag.id, dx: (point.x - drag.start.x) * PHOTO_BOARD.board_width_mm / (baseWidth.value * camera.zoom), dy: -(point.y - drag.start.y) * PHOTO_BOARD.board_width_mm / (baseWidth.value * camera.zoom) })
 }
 function pointerUp(event) {
   if (!pointers.has(event.pointerId)) return
@@ -197,7 +197,9 @@ defineExpose({ resetCamera })
 .photo-wall-viewport {
   position: relative;
   width: 100%;
-  height: clamp(360px, 55vw, 720px);
+  height: auto;
+  aspect-ratio: 6200 / 4100;
+  max-height: calc(100dvh - 260px);
   background: var(--ui-ground);
   overflow: hidden;
   touch-action: none;
@@ -214,6 +216,9 @@ defineExpose({ resetCamera })
 
 .photo-technical-wall {
   position: absolute;
+  display: block;
+  max-width: none;
+  max-height: none;
   top: 50%;
   left: 50%;
   border: 1px solid var(--ui-board-frame);
@@ -299,7 +304,9 @@ defineExpose({ resetCamera })
 
 @media (max-width: 760px) {
   .photo-wall-viewport {
-    height: max(285px, 66vw);
+    height: auto;
+    max-height: none;
+    aspect-ratio: 6200 / 4100;
   }
 
   .photo-view-controls {

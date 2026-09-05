@@ -1,6 +1,6 @@
 <template>
-  <div class="canvas-wrap">
-    <div class="board-frame" :style="frameStyle">
+  <div ref="viewport" class="canvas-wrap">
+    <div class="board-frame" :style="fittedFrameStyle">
       <div class="dimension-label dimension-label-top">宽 {{ boardSpec.board_width_mm }}mm</div>
       <div class="dimension-label dimension-label-side">高 {{ boardSpec.board_height_mm }}mm</div>
       <div class="dimension-label dimension-label-spacing">孔距 {{ boardSpec.hole_spacing_x_mm }}mm</div>
@@ -104,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 
 const props = defineProps({
   columns: { type: Array, required: true },
@@ -124,6 +124,21 @@ const props = defineProps({
   showBetaSteps: { type: Boolean, default: false },
   showNonRouteHolds: { type: Boolean, default: true },
 })
+
+const viewport = ref(null)
+const available = reactive({ width:0, height:0 })
+let observer
+const fittedFrameStyle = computed(() => {
+  const ratio = props.boardSpec.board_width_mm / props.boardSpec.board_height_mm
+  const width = Math.max(1, Math.min(available.width, available.height * ratio))
+  return { ...props.frameStyle, width:`${width}px`, height:`${width / ratio}px`, maxWidth:'none', maxHeight:'none',
+    '--hole-diameter':`${Math.max(1.5, width * 18 / props.boardSpec.board_width_mm)}px` }
+})
+onMounted(() => {
+  observer = new ResizeObserver(([entry]) => { available.width = entry.contentRect.width; available.height = entry.contentRect.height })
+  observer.observe(viewport.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 
 const emit = defineEmits(['place', 'select'])
 

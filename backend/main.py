@@ -169,6 +169,11 @@ app.include_router(create_photo_route_router(photo_route_store))
 photo_route_v2_store = PhotoRouteV2Store(PHOTO_ROUTE_DATA_ROOT)
 photo_route_jobs = PhotoRouteJobManager(photo_route_v2_store)
 app.include_router(create_photo_route_v2_router(photo_route_v2_store, photo_route_jobs))
+from core.photo_route_workflow import PhotoWorkflow, workflow_router
+photo_workflow = PhotoWorkflow(photo_route_v2_store)
+app.include_router(workflow_router(photo_workflow))
+from core.photo_route_settings import settings_router
+app.include_router(settings_router(PHOTO_ROUTE_DATA_ROOT))
 HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
 PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")
@@ -321,7 +326,7 @@ async def pilot_access_middleware(request: Request, call_next):
 
     is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
     lease_path = path.startswith("/api/pilot/edit-lease")
-    if is_write and path.startswith("/api/") and not lease_path:
+    if is_write and path.startswith("/api/") and not lease_path and not path.startswith('/api/settings/vision'):
         try:
             pilot_access.require_lease(user.username)
         except EditLeaseError as exc:

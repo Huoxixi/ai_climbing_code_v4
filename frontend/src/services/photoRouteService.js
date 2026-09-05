@@ -19,6 +19,7 @@ export const photoRouteV2Service = {
     return apiClient.post('/api/photo-routes/v2/boards/upload', body).then(r => r.data)
   },
   newBoardVersion: (id) => apiClient.post(`/api/photo-routes/v2/boards/${id}/versions`).then(r => r.data),
+  refine: (id, payload) => apiClient.post(`/api/photo-routes/v2/boards/${id}/refine`, payload).then(r => r.data),
   calibrate: (id, payload) => apiClient.put(`/api/photo-routes/v2/boards/${id}/calibration`, payload).then(r => r.data),
   addObject: (boardId, payload) => apiClient.post(`/api/photo-routes/v2/boards/${boardId}/objects`, payload).then(r => r.data),
   splitObject: (boardId, objectId, payload) => apiClient.post(`/api/photo-routes/v2/boards/${boardId}/objects/${objectId}/split`, payload).then(r => r.data),
