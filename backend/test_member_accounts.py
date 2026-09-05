@@ -49,6 +49,7 @@ class MemberTests(unittest.TestCase):
     def test_registration_login_logout_and_legacy_disabled(self):
         self.assertTrue(self.a.get('/api/auth/session').json()['registration_enabled'])
         response = self.register(self.a, 'alice')
+        self.assertTrue(self.a.get('/api/auth/session').json()['registration_enabled'])
         self.assertIn('HttpOnly', response.headers['set-cookie'])
         self.assertIn('Secure', response.headers['set-cookie'])
         self.a.post('/api/auth/logout')
