@@ -925,6 +925,7 @@ async def pilot_session(request: Request):
         "username": user.username,
         "display_name": user.display_name,
         "auth_enabled": True,
+        "registration_enabled": isinstance(pilot_access, MemberAccounts),
         "quick_login_enabled": quick_identity is not None,
         "default_username": quick_identity.username if quick_identity else "",
         "default_display_name": quick_identity.display_name if quick_identity else "",
