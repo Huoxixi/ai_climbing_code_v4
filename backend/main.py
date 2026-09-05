@@ -26,6 +26,7 @@ from agent.controller import generate_route_with_reflection
 from agent.experiments import run_ai_experiment
 from core.board_readiness import apply_board_readiness
 from core.photo_route_drafts import PhotoRouteStore, create_photo_route_router
+from core.photo_route_v2 import PhotoRouteJobManager, PhotoRouteV2Store, create_photo_route_v2_router
 from core.hold_image_processing import (
     PROCESSING_VERSION,
     SUPPORTED_IMAGE_SUFFIXES,
@@ -162,8 +163,17 @@ app.add_middleware(
 )
 
 DATA_DIR = "data"
-photo_route_store = PhotoRouteStore(Path(os.getenv("PHOTO_ROUTE_DATA_DIR", str(Path(__file__).resolve().parent / "data/photo_routes"))))
+PHOTO_ROUTE_DATA_ROOT = Path(os.getenv("PHOTO_ROUTE_DATA_DIR", str(Path(__file__).resolve().parent / "data/photo_routes")))
+photo_route_store = PhotoRouteStore(PHOTO_ROUTE_DATA_ROOT)
 app.include_router(create_photo_route_router(photo_route_store))
+photo_route_v2_store = PhotoRouteV2Store(PHOTO_ROUTE_DATA_ROOT)
+photo_route_jobs = PhotoRouteJobManager(photo_route_v2_store)
+app.include_router(create_photo_route_v2_router(photo_route_v2_store, photo_route_jobs))
+from core.photo_route_workflow import PhotoWorkflow, workflow_router
+photo_workflow = PhotoWorkflow(photo_route_v2_store)
+app.include_router(workflow_router(photo_workflow))
+from core.photo_route_settings import settings_router
+app.include_router(settings_router(PHOTO_ROUTE_DATA_ROOT))
 HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
 PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")
@@ -174,6 +184,17 @@ EMPTY_WALL_FILE = os.path.join(DATA_DIR, "empty_wall_grid.json")
 STANDARD_BOARD_ACTIVITY_FILE = os.path.join(DATA_DIR, "standard_board_activity.json")
 PILOT_AUTH_ENABLED = env_flag("PILOT_AUTH_ENABLED", default=APP_ENV == "production")
 PILOT_COOKIE_SECURE = env_flag("PILOT_COOKIE_SECURE", default=APP_ENV == "production")
+PILOT_QUICK_LOGIN_ENABLED = env_flag(
+    "PILOT_QUICK_LOGIN_ENABLED",
+    default=APP_ENV == "development",
+)
+PILOT_QUICK_LOGIN_ALLOW_REMOTE = env_flag("PILOT_QUICK_LOGIN_ALLOW_REMOTE", default=False)
+PILOT_QUICK_LOGIN_USERNAME = (
+    os.getenv("PILOT_QUICK_LOGIN_USERNAME", "ma-trial").strip().lower() or "ma-trial"
+)
+PILOT_QUICK_LOGIN_DISPLAY_NAME = (
+    os.getenv("PILOT_QUICK_LOGIN_DISPLAY_NAME", "马老师").strip() or "马老师"
+)
 PILOT_COOKIE_NAME = "ai_climbing_session"
 PILOT_USERS_FILE = os.getenv("PILOT_USERS_FILE", os.path.join(DATA_DIR, "pilot_users.json"))
 PILOT_AUDIT_FILE = os.getenv("PILOT_AUDIT_FILE", os.path.join(DATA_DIR, "pilot_audit.jsonl"))
@@ -202,6 +223,39 @@ def request_client_ip(request: Request) -> str:
         request.headers.get("cf-connecting-ip")
         or request.headers.get("x-real-ip")
         or (request.client.host if request.client else "unknown")
+    )
+
+
+def quick_login_available(request: Request) -> bool:
+    if not PILOT_QUICK_LOGIN_ENABLED:
+        return False
+    if PILOT_QUICK_LOGIN_ALLOW_REMOTE:
+        return True
+    loopback_hosts = {"127.0.0.1", "::1", "localhost"}
+    socket_host = request.client.host if request.client else "unknown"
+    return request_client_ip(request) in loopback_hosts and socket_host in loopback_hosts
+
+
+def quick_login_identity(request: Request) -> PilotUser | None:
+    if not quick_login_available(request):
+        return None
+    try:
+        return pilot_access.active_user(PILOT_QUICK_LOGIN_USERNAME)
+    except PilotAccessError:
+        if APP_ENV == "development":
+            return PilotUser(PILOT_QUICK_LOGIN_USERNAME, PILOT_QUICK_LOGIN_DISPLAY_NAME)
+        return None
+
+
+def set_pilot_session_cookie(response: JSONResponse, token: str) -> None:
+    response.set_cookie(
+        PILOT_COOKIE_NAME,
+        token,
+        max_age=pilot_access.session_seconds,
+        secure=PILOT_COOKIE_SECURE,
+        httponly=True,
+        samesite="strict",
+        path="/",
     )
 
 
@@ -251,6 +305,7 @@ async def pilot_access_middleware(request: Request, call_next):
     public_paths = {
         "/api/health",
         "/api/auth/login",
+        "/api/auth/quick-login",
         "/api/auth/logout",
         "/api/auth/session",
     }
@@ -271,7 +326,7 @@ async def pilot_access_middleware(request: Request, call_next):
 
     is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
     lease_path = path.startswith("/api/pilot/edit-lease")
-    if is_write and path.startswith("/api/") and not lease_path:
+    if is_write and path.startswith("/api/") and not lease_path and not path.startswith('/api/settings/vision'):
         try:
             pilot_access.require_lease(user.username)
         except EditLeaseError as exc:
@@ -722,16 +777,28 @@ async def pilot_login(payload: PilotLoginRequest, request: Request):
             "display_name": user.display_name,
         }
     )
-    response.set_cookie(
-        PILOT_COOKIE_NAME,
-        token,
-        max_age=pilot_access.session_seconds,
-        secure=PILOT_COOKIE_SECURE,
-        httponly=True,
-        samesite="strict",
-        path="/",
-    )
+    set_pilot_session_cookie(response, token)
     audit_request(request, 200, "login_succeeded")
+    return response
+
+
+@app.post("/api/auth/quick-login")
+async def pilot_quick_login(request: Request):
+    identity = quick_login_identity(request)
+    if not identity:
+        raise HTTPException(status_code=404, detail="快速登录当前不可用。")
+    token, user = pilot_access.create_session(identity)
+
+    request.state.pilot_user = user
+    response = JSONResponse(
+        {
+            "authenticated": True,
+            "username": user.username,
+            "display_name": user.display_name,
+        }
+    )
+    set_pilot_session_cookie(response, token)
+    audit_request(request, 200, "quick_login_succeeded")
     return response
 
 
@@ -762,13 +829,23 @@ async def pilot_session(request: Request):
             "auth_enabled": False,
         }
     user = pilot_access.session_user(request.cookies.get(PILOT_COOKIE_NAME))
+    quick_identity = quick_login_identity(request)
     if not user:
-        raise HTTPException(status_code=401, detail="登录已失效，请重新登录。")
+        return {
+            "authenticated": False,
+            "auth_enabled": True,
+            "quick_login_enabled": quick_identity is not None,
+            "default_username": quick_identity.username if quick_identity else "",
+            "default_display_name": quick_identity.display_name if quick_identity else "",
+        }
     return {
         "authenticated": True,
         "username": user.username,
         "display_name": user.display_name,
         "auth_enabled": True,
+        "quick_login_enabled": quick_identity is not None,
+        "default_username": quick_identity.username if quick_identity else "",
+        "default_display_name": quick_identity.display_name if quick_identity else "",
     }
 
 

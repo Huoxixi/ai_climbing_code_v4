@@ -1,6 +1,6 @@
 <template>
   <aside class="inspector">
-    <section class="panel">
+    <section v-if="activeSection === 'all' || activeSection === 'board'" class="panel">
       <div class="panel-heading">
         <h3>当前岩板</h3>
         <span>{{ board.board_spec?.cellLabel }}</span>
@@ -19,7 +19,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section v-if="activeSection === 'all' || activeSection === 'hold'" class="panel">
       <div class="panel-heading">
         <h3>选中岩点</h3>
         <span>{{ selectedHold?.id || '未选择' }}</span>
@@ -39,7 +39,7 @@
       <div v-else class="empty-text">在画布上选择一个岩点后，可在这里编辑属性。</div>
     </section>
 
-    <section class="panel">
+    <section v-if="activeSection === 'all' || activeSection === 'beta'" class="panel">
       <div class="panel-heading">
         <h3>Beta 序列</h3>
         <span>{{ routeSteps.length }}</span>
@@ -81,6 +81,7 @@ const props = defineProps({
   routeSteps: { type: Array, default: () => [] },
   betaForm: { type: Object, required: true },
   holdTypes: { type: Array, required: true },
+  activeSection: { type: String, default: 'all' },
 })
 
 const manualTagOptions = MANUAL_BOARD_TAG_IDS.map((id) => ({ id, label: ROUTE_TAG_LABELS[id] }))

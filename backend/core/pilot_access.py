@@ -74,6 +74,53 @@ class PilotAccessManager:
             failures.popleft()
         return failures
 
+    def _active_user(self, username: str) -> tuple[str, dict[str, Any]]:
+        normalized = username.strip().lower()
+        users = self._load_users()
+        entry = users.get(normalized)
+        if not isinstance(entry, dict) or not entry.get("active", True):
+            raise InvalidCredentialsError("试用账号不可用。")
+        return normalized, entry
+
+    def _issue_session(
+        self,
+        normalized: str,
+        entry: dict[str, Any],
+        now: float,
+    ) -> tuple[str, PilotUser]:
+        token = secrets.token_urlsafe(32)
+        user = PilotUser(
+            username=normalized,
+            display_name=str(entry.get("display_name") or normalized),
+        )
+        self._sessions[token] = {
+            "user": user,
+            "expires_at": now + self.session_seconds,
+        }
+        return token, user
+
+    def create_session(self, user: PilotUser) -> tuple[str, PilotUser]:
+        with self._lock:
+            token = secrets.token_urlsafe(32)
+            self._sessions[token] = {
+                "user": user,
+                "expires_at": time.time() + self.session_seconds,
+            }
+            return token, user
+
+    def active_user(self, username: str) -> PilotUser:
+        with self._lock:
+            normalized, entry = self._active_user(username)
+            return PilotUser(
+                username=normalized,
+                display_name=str(entry.get("display_name") or normalized),
+            )
+
+    def create_session_for_user(self, username: str) -> tuple[str, PilotUser]:
+        with self._lock:
+            normalized, entry = self._active_user(username)
+            return self._issue_session(normalized, entry, time.time())
+
     def authenticate(self, username: str, password: str, client_ip: str) -> tuple[str, PilotUser]:
         normalized = username.strip().lower()
         now = time.time()
@@ -101,16 +148,7 @@ class PilotAccessManager:
                 raise InvalidCredentialsError("用户名或密码不正确。")
 
             failures.clear()
-            token = secrets.token_urlsafe(32)
-            user = PilotUser(
-                username=normalized,
-                display_name=str(entry.get("display_name") or normalized),
-            )
-            self._sessions[token] = {
-                "user": user,
-                "expires_at": now + self.session_seconds,
-            }
-            return token, user
+            return self._issue_session(normalized, entry, now)
 
     def session_user(self, token: str | None) -> PilotUser | None:
         if not token:

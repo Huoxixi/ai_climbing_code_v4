@@ -44,9 +44,17 @@ class PilotAccessApiTests(unittest.TestCase):
         )
         self.previous_enabled = main.PILOT_AUTH_ENABLED
         self.previous_secure = main.PILOT_COOKIE_SECURE
+        self.previous_quick_enabled = main.PILOT_QUICK_LOGIN_ENABLED
+        self.previous_quick_remote = main.PILOT_QUICK_LOGIN_ALLOW_REMOTE
+        self.previous_quick_username = main.PILOT_QUICK_LOGIN_USERNAME
+        self.previous_quick_display_name = main.PILOT_QUICK_LOGIN_DISPLAY_NAME
         self.previous_access = main.pilot_access
         main.PILOT_AUTH_ENABLED = True
         main.PILOT_COOKIE_SECURE = True
+        main.PILOT_QUICK_LOGIN_ENABLED = False
+        main.PILOT_QUICK_LOGIN_ALLOW_REMOTE = False
+        main.PILOT_QUICK_LOGIN_USERNAME = "ma-trial"
+        main.PILOT_QUICK_LOGIN_DISPLAY_NAME = "马老师"
         main.pilot_access = PilotAccessManager(
             users_file=str(users_file),
             audit_file=str(root / "audit.jsonl"),
@@ -58,6 +66,10 @@ class PilotAccessApiTests(unittest.TestCase):
         self.client.close()
         main.PILOT_AUTH_ENABLED = self.previous_enabled
         main.PILOT_COOKIE_SECURE = self.previous_secure
+        main.PILOT_QUICK_LOGIN_ENABLED = self.previous_quick_enabled
+        main.PILOT_QUICK_LOGIN_ALLOW_REMOTE = self.previous_quick_remote
+        main.PILOT_QUICK_LOGIN_USERNAME = self.previous_quick_username
+        main.PILOT_QUICK_LOGIN_DISPLAY_NAME = self.previous_quick_display_name
         main.pilot_access = self.previous_access
         self.temp_dir.cleanup()
 
@@ -89,7 +101,37 @@ class PilotAccessApiTests(unittest.TestCase):
 
         logout = self.client.post("/api/auth/logout")
         self.assertEqual(logout.status_code, 200)
-        self.assertEqual(self.client.get("/api/auth/session").status_code, 401)
+        session = self.client.get("/api/auth/session")
+        self.assertEqual(session.status_code, 200)
+        self.assertFalse(session.json()["authenticated"])
+
+    def test_quick_login_uses_configured_default_account_without_password(self):
+        main.PILOT_QUICK_LOGIN_ENABLED = True
+        main.PILOT_QUICK_LOGIN_ALLOW_REMOTE = True
+
+        session = self.client.get("/api/auth/session")
+        self.assertEqual(session.status_code, 200)
+        self.assertFalse(session.json()["authenticated"])
+        self.assertTrue(session.json()["quick_login_enabled"])
+        self.assertEqual(session.json()["default_username"], "ma-trial")
+        self.assertEqual(session.json()["default_display_name"], "马老师")
+
+        response = self.client.post("/api/auth/quick-login")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["username"], "ma-trial")
+        self.assertEqual(response.json()["display_name"], "马老师")
+        self.assertTrue(self.client.get("/api/auth/session").json()["authenticated"])
+
+    def test_quick_login_is_hidden_when_disabled(self):
+        session = self.client.get("/api/auth/session")
+        self.assertFalse(session.json()["quick_login_enabled"])
+        self.assertEqual(self.client.post("/api/auth/quick-login").status_code, 404)
+
+    def test_quick_login_is_local_only_without_explicit_remote_opt_in(self):
+        main.PILOT_QUICK_LOGIN_ENABLED = True
+        session = self.client.get("/api/auth/session")
+        self.assertFalse(session.json()["quick_login_enabled"])
+        self.assertEqual(self.client.post("/api/auth/quick-login").status_code, 404)
 
     def test_only_one_user_can_hold_edit_lease(self):
         self.assertEqual(

@@ -1,0 +1,113 @@
+@font-face {
+  font-family: "MiSans";
+  src: url("/fonts/MiSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MiSans";
+  src: url("/fonts/MiSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MiSans";
+  src: url("/fonts/MiSans-Semibold.woff2") format("woff2");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  font-family: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --ui-ground: #f7f5ef;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #f1efe9;
+  --ui-surface-raised: #fbfaf7;
+  --ui-ink: #1c1e21;
+  --ui-ink-muted: #696c72;
+  --ui-ink-faint: #92959b;
+  --ui-line: #dedbd3;
+  --ui-line-strong: #c9c5bc;
+  --ui-brand: #f4c430;
+  --ui-brand-hover: #e7b821;
+  --ui-brand-soft: #fff3b2;
+  --ui-brand-ink: #2d2500;
+  --ui-focus: rgba(244, 196, 48, 0.72);
+  --ui-success: #27775a;
+  --ui-warning: #9b6710;
+  --ui-danger: #bd4343;
+  --ui-board-face: #e8eaed;
+  --ui-board-frame: #c9cdd2;
+  --ui-board-hole: #2b2f33;
+  --ui-board-grid: #a5abb2;
+
+  /* Compatibility names used by the production component layer. */
+  --ground: var(--ui-ground);
+  --surface: var(--ui-surface);
+  --surface-soft: var(--ui-surface-subtle);
+  --ink: var(--ui-ink);
+  --ink-soft: var(--ui-ink-muted);
+  --line: var(--ui-line);
+  --line-strong: var(--ui-line-strong);
+  --brand: var(--ui-brand);
+  --brand-soft: var(--ui-brand-soft);
+  --brand-ink: var(--ui-brand-ink);
+  --success: var(--ui-success);
+  --warning: var(--ui-warning);
+  --danger: var(--ui-danger);
+  --radius-card: var(--ui-radius-card);
+  --shadow-float: var(--ui-shadow-float);
+  --shadow-active: var(--ui-shadow-focus);
+
+  --ui-radius-card: 12px;
+  --ui-radius-control: 10px;
+  --ui-radius-small: 8px;
+  --ui-shadow-float: 0 14px 34px rgba(33, 31, 26, 0.12);
+  --ui-shadow-focus: 0 10px 28px rgba(35, 35, 32, 0.09);
+
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-shell-top: 64px;
+  --ui-shell-bottom: 0px;
+
+  --el-font-family: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --el-color-primary: #1c1e21;
+  --el-color-primary-light-3: #55575a;
+  --el-color-primary-light-5: #85878a;
+  --el-color-primary-light-7: #b6b7b9;
+  --el-color-primary-light-8: #d1d2d3;
+  --el-color-primary-light-9: #ededed;
+  --el-color-primary-dark-2: #050506;
+  --el-color-success: #27775a;
+  --el-color-warning: #9b6710;
+  --el-color-danger: #bd4343;
+  --el-border-color: #dedbd3;
+  --el-border-color-light: #e9e6df;
+  --el-border-radius-base: 10px;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f5f3ee;
+  --el-text-color-primary: #1c1e21;
+  --el-text-color-regular: #55585e;
+  --el-text-color-secondary: #696c72;
+}
+
+@media (max-width: 860px) {
+  :root {
+    --ui-shell-top: 104px;
+    --ui-shell-bottom: 64px;
+  }
+}

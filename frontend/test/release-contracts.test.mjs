@@ -10,13 +10,27 @@ import {
 } from '../src/constants/boardTemplates.js'
 import { DEFAULT_FONT_GRADE, FONT_GRADES } from '../src/constants/gradeSystem.js'
 
+const surfaceFiles = [
+  '../src/App.vue',
+  '../src/components/DashboardPage.vue',
+  '../src/components/StudioPage.vue',
+  '../src/components/HoldLibraryPage.vue',
+  '../src/components/BoardsPage.vue',
+  '../src/components/StandardBoardPage.vue',
+  '../src/components/AILabPage.vue',
+]
+
+async function readAppSurface() {
+  return (await Promise.all(surfaceFiles.map((path) => readFile(new URL(path, import.meta.url), 'utf8')))).join('\n')
+}
+
 test('公开评级只使用完整的 MoonBoard Font 等级序列', async () => {
   assert.deepEqual(FONT_GRADES, [
     '6B', '6B+', '6C', '6C+', '7A', '7A+', '7B',
     '7B+', '7C', '7C+', '8A', '8A+', '8B', '8B+',
   ])
   assert.equal(DEFAULT_FONT_GRADE, '6B+')
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   const serviceSource = await readFile(new URL('../src/services/standardBoardService.js', import.meta.url), 'utf8')
   assert.doesNotMatch(appSource + serviceSource, /predicted_v_grade|target_v_grade|\bv_grade\b/)
   assert.match(appSource, /MoonBoard 原始等级/)
@@ -62,14 +76,14 @@ test('旧岩板规格名称在兼容读取时归一为当前中文模板名', ()
 })
 
 test('客户界面不再宣传账号体系或自由文本 AI 要求', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   assert.doesNotMatch(appSource, /登录|注册|邮箱验证|user_requirements|currentUser|useAuth/)
   assert.match(appSource, /generation_goal/)
   assert.match(appSource, /review_focus/)
 })
 
 test('客户界面不显示旧材质和过时工作区名称', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   assert.doesNotMatch(appSource, /深色木纹|桦木纹理|灰黑防滑|蓝灰竞赛|wood composite/)
   assert.doesNotMatch(appSource, />AI Lab<|>Studio</)
   assert.doesNotMatch(appSource, />Routes<|>Selected Route<|>Difficulty<|>Training Log<|>Repair Queue<|>Repair Candidate</)
@@ -78,7 +92,7 @@ test('客户界面不显示旧材质和过时工作区名称', async () => {
 })
 
 test('AI 实验室把风险、润色状态和解释证据显示为通俗中文', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   const explanationSource = await readFile(new URL('../src/components/AIExperimentExplanation.vue', import.meta.url), 'utf8')
   assert.match(appSource, /riskAssessmentLabel\(routeGen\.result\)/)
   assert.match(appSource, /风险未完整评估/)
@@ -94,7 +108,7 @@ test('AI 实验室把风险、润色状态和解释证据显示为通俗中文',
 })
 
 test('AI 实验室首屏收敛，量化证据默认折叠且不展示内部动作', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   const comparisonSource = await readFile(new URL('../src/components/BoardComparisonPanel.vue', import.meta.url), 'utf8')
 
   assert.match(appSource, /辅助定线，不替代试爬/)
@@ -115,7 +129,7 @@ test('AI 实验室首屏收敛，量化证据默认折叠且不展示内部动�
 })
 
 test('总览不再展示固定客户推荐，标准线路库入口仍然保留', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   const removedHeading = ['客户演示', '推荐'].join('')
   const removedStateName = ['recommended', 'Routes'].join('')
   const removedActionName = ['open', 'Recommended', 'Route'].join('')
@@ -127,7 +141,7 @@ test('总览不再展示固定客户推荐，标准线路库入口仍然保留',
 })
 
 test('试运行构建通过环境开关隐藏仿真入口', async () => {
-  const appSource = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  const appSource = await readAppSurface()
   const shellSource = await readFile(new URL('../src/components/AppShell.vue', import.meta.url), 'utf8')
 
   assert.match(appSource, /VITE_ENABLE_SIMULATION/)

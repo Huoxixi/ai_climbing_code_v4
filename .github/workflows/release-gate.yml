@@ -34,6 +34,10 @@ jobs:
             test_photo_route_benchmark \
             test_photo_route_drafts \
             test_photo_route_processing \
+            test_photo_route_v2 \
+            test_photo_route_refinement \
+            test_photo_workflow \
+            test_photo_settings \
             test_photo_wall_processing \
             test_pilot_access \
             test_release_hardening \

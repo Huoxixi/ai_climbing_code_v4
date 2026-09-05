@@ -1,0 +1,88 @@
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--ui-ground);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--ui-ground);
+  color: var(--ui-ink);
+  font-family: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+a { color: inherit; text-underline-offset: 3px; }
+
+::selection { color: var(--ui-ink); background: var(--ui-brand-soft); }
+
+:focus-visible {
+  outline: 3px solid rgba(244, 196, 48, 0.72);
+  outline-offset: 3px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c8c5bd; border: 3px solid var(--ui-ground); border-radius: 999px; }
+
+h1, h2, h3, p { margin-top: 0; }
+h1, h2, h3 { margin-bottom: 0; font-weight: 600; line-height: 1.35; letter-spacing: 0; text-wrap: balance; }
+p { margin-bottom: 0; }
+strong { font-weight: 600; }
+small { font-size: 12px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+.el-button {
+  min-height: 44px;
+  border-radius: var(--ui-radius-small);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.el-button--small { min-height: 36px; }
+.el-button--primary {
+  --el-button-bg-color: var(--ui-brand);
+  --el-button-border-color: var(--ui-brand);
+  --el-button-text-color: var(--ui-brand-ink);
+  --el-button-hover-bg-color: var(--ui-brand-hover);
+  --el-button-hover-border-color: var(--ui-brand-hover);
+}
+
+.el-input__wrapper, .el-select__wrapper {
+  min-height: 44px;
+  border-radius: var(--ui-radius-control);
+  box-shadow: 0 0 0 1px var(--ui-line) inset;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

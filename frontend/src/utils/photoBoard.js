@@ -3,6 +3,24 @@ export const clone = (value) => JSON.parse(JSON.stringify(value))
 export const columnLabel = (index) => index < 26 ? String.fromCharCode(65 + index) : `A${String.fromCharCode(65 + index - 26)}`
 export const photoHoles = () => Array.from({ length: 600 }, (_, index) => ({ id: `${columnLabel(index % 30)}${Math.floor(index / 30) + 1}`, x: 200 + (index % 30) * 200, y: 100 + Math.floor(index / 30) * 200 }))
 
+export function nearestPhotoHole(x, y, threshold = 110) {
+  const hole = photoHoles().reduce((best, item) => {
+    const distance = Math.hypot(item.x - x, item.y - y)
+    return !best || distance < best.distance ? { ...item, distance } : best
+  }, null)
+  return hole && hole.distance <= threshold ? hole : null
+}
+
+export function snapObjectToHole(object, threshold = 110) {
+  const preview = nearestPhotoHole(object.center_x_mm, object.center_y_mm, threshold)
+  if (!preview) return { object, preview: null }
+  return {
+    object: { ...object, center_x_mm: preview.x, center_y_mm: preview.y,
+      anchors: [{ hole_id: preview.id, x_mm: preview.x, y_mm: preview.y, confidence: 1, confirmed: true }] },
+    preview,
+  }
+}
+
 export function bounds(object) {
   const angle = object.rotation_deg * Math.PI / 180
   const w = object.source_bbox_px[2] * object.scale_mm_per_px
