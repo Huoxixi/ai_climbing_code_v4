@@ -1,5 +1,5 @@
 {
-  "version": "local-latest-2026.09.05.2",
+  "version": "local-latest-2026.09.05.3",
   "status": "本地最新",
   "entrypoint": "http://127.0.0.1:4176/#/photo-routes",
   "settings": "http://127.0.0.1:4176/#/settings",

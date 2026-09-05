@@ -1,6 +1,6 @@
 # 本地最新版
 
-版本：`local-latest-2026.09.05.2`。用户于 2026-09-05 指定此版本为以后本地开发的基线。
+版本：`local-latest-2026.09.05.3`。用户于 2026-09-05 指定此版本为以后本地开发的基线。
 
 - 本机唯一主开发目录：`D:\ai_climbing_code\worktrees\ai_climbing_code_v4-photo-yellow-release`。
 - 本地开发分支：`codex/photo-v2-yellow-release`；GitHub 主分支：`main`。
