@@ -115,6 +115,7 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_photo_route_processing \
   test_photo_wall_processing \
   test_pilot_access \
+  test_member_accounts \
   test_release_hardening \
   test_release_readiness \
   test_standard_board \

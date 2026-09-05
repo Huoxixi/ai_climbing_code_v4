@@ -58,8 +58,9 @@
             <HoldPreview :hold="hold" :mode="library.previewMode" />
             <strong>{{ hold.hold_type }}</strong>
             <span>{{ hold.variant }}</span>
+            <small>{{ hold.visibility === 'public' ? '公共资源' : '我的岩点' }}</small>
             <el-button
-              v-if="!library.showArchived"
+              v-if="!library.showArchived && hold.visibility !== 'public'"
               text
               type="danger"
               :icon="Delete"
@@ -67,7 +68,7 @@
             >
               归档
             </el-button>
-            <el-button v-else text type="primary" @click="library.restoreHold(hold.hold_type, hold.variant)">恢复使用</el-button>
+            <el-button v-else-if="library.showArchived && hold.visibility !== 'public'" text type="primary" @click="library.restoreHold(hold.hold_type, hold.variant)">恢复使用</el-button>
           </article>
         </div>
         <div v-if="!library.filteredHolds.length" class="empty-state">

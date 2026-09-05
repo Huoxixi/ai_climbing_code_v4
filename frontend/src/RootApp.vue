@@ -13,13 +13,16 @@
     v-else-if="!session.authenticated"
     :submitting="loginSubmitting"
     :error-message="loginError"
+    :registration-enabled="session.registrationEnabled"
     :quick-login-enabled="session.quickLoginEnabled"
     :default-username="session.defaultUsername"
     :default-display-name="session.defaultDisplayName"
     @login="login"
+    @register="register"
+    @clear-error="loginError = ''"
     @quick-login="quickLogin"
   />
-  <App v-else />
+  <App v-else :key="session.username" />
 </template>
 
 <script setup>
@@ -37,6 +40,7 @@ const session = reactive({
   username: '',
   displayName: '',
   authEnabled: true,
+  registrationEnabled: false,
   quickLoginEnabled: false,
   defaultUsername: '',
   defaultDisplayName: '',
@@ -58,6 +62,7 @@ function applySession(payload) {
   session.username = payload?.username || ''
   session.displayName = payload?.display_name || ''
   session.authEnabled = payload?.auth_enabled !== false
+  if (Object.hasOwn(payload || {}, 'registration_enabled')) session.registrationEnabled = Boolean(payload.registration_enabled)
   if (Object.hasOwn(payload || {}, 'quick_login_enabled')) {
     session.quickLoginEnabled = Boolean(payload.quick_login_enabled)
     session.defaultUsername = payload.default_username || ''
@@ -100,6 +105,18 @@ async function login(credentials) {
   } finally {
     loginSubmitting.value = false
   }
+}
+
+async function register(credentials) {
+  loginSubmitting.value = true
+  loginError.value = ''
+  try {
+    const response = await apiClient.post('/api/auth/register', credentials)
+    applySession(response.data)
+    await refreshLease()
+  } catch (error) {
+    loginError.value = error?.response?.data?.detail || '注册失败，请检查网络后重试。'
+  } finally { loginSubmitting.value = false }
 }
 
 async function quickLogin() {

@@ -28,6 +28,7 @@ export function useBoardPersistence() {
         ...board,
         updated_at: new Date().toISOString(),
       }
+      if (payload.visibility === 'public') { delete payload.saved_id; payload.visibility = 'private' }
       const response = payload.saved_id
         ? await boardService.updateBoard(payload.saved_id, payload)
         : await boardService.createBoard(payload)
