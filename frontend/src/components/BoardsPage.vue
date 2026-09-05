@@ -50,6 +50,7 @@
             <strong>{{ board.route_name || '未命名岩板' }}</strong>
             <span>{{ boardSpecDisplayLabel(board) }} / {{ board.placed_holds?.length || 0 }} 岩点 / {{ board.beta_sequence?.length || 0 }} Beta</span>
             <div class="board-readiness">
+              <span class="state-badge">{{ board.visibility === 'public' ? '公共资源' : '我的岩板' }}</span>
               <span class="state-badge" :class="{ ready: board.workflow_status === 'ready_for_review' }">{{ workflowLabel(board) }}</span>
               <span v-if="board.ai_eligible && !board.archived_at" class="state-badge ready">AI 可用</span>
               <span v-else-if="!board.archived_at" class="state-badge">AI 不可用</span>
@@ -61,11 +62,11 @@
           </div>
           <div class="card-actions">
             <template v-if="!board.archived_at">
-              <el-button :icon="Edit" @click="$emit('load-board', board)">载入编辑</el-button>
-              <el-button :icon="EditPen" @click="$emit('rename-board', board)">重命名</el-button>
-              <el-button type="danger" plain :icon="Delete" @click="$emit('archive-board', board)">归档</el-button>
+              <el-button :icon="Edit" @click="$emit('load-board', board)">{{ board.visibility === 'public' ? '引用并另存' : '载入编辑' }}</el-button>
+              <el-button v-if="board.visibility !== 'public'" :icon="EditPen" @click="$emit('rename-board', board)">重命名</el-button>
+              <el-button v-if="board.visibility !== 'public'" type="danger" plain :icon="Delete" @click="$emit('archive-board', board)">归档</el-button>
             </template>
-            <el-button v-else type="primary" plain @click="$emit('restore-board', board)">恢复岩板</el-button>
+            <el-button v-else-if="board.visibility !== 'public'" type="primary" plain @click="$emit('restore-board', board)">恢复岩板</el-button>
           </div>
         </article>
         <div v-if="!visibleSavedBoards.length" class="empty-state">

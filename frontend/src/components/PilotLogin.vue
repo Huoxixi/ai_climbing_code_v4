@@ -1,187 +1,57 @@
 <template>
   <main class="pilot-login-page">
-    <section class="pilot-login-shell" aria-labelledby="pilot-login-title">
+    <section class="pilot-login-shell member-login" aria-labelledby="login-title">
       <div class="pilot-login-form-panel">
-        <div class="pilot-login-brand">
-          <div class="pilot-login-mark" aria-hidden="true">攀</div>
-          <div>
-            <h1 id="pilot-login-title">定线助手</h1>
-            <p>攀岩线路工作台</p>
-          </div>
-        </div>
-        <p class="pilot-login-intro">
-          默认账号已经准备好，进入后即可查看岩板资源并继续定线工作。
-        </p>
-
-        <el-alert
-          v-if="errorMessage"
-          :title="errorMessage"
-          type="error"
-          :closable="false"
-          show-icon
-        />
-
-        <section v-if="quickLoginEnabled && !showPasswordLogin" class="pilot-quick-login">
-          <div class="pilot-default-account" aria-label="默认登录账号">
-            <span class="pilot-account-avatar" aria-hidden="true">{{ defaultInitial }}</span>
-            <span class="pilot-default-account-copy">
-              <small>默认账号</small>
-              <strong>{{ defaultDisplayName || defaultUsername }}</strong>
-              <code>{{ defaultUsername }}</code>
-            </span>
-            <span class="pilot-account-ready">已就绪</span>
-          </div>
-          <el-button
-            class="pilot-login-submit"
-            type="primary"
-            :loading="submitting"
-            :disabled="!defaultUsername"
-            @click="emit('quick-login')"
-          >
-            以{{ defaultDisplayName || defaultUsername }}身份进入
-          </el-button>
-          <button class="pilot-login-alternate" type="button" @click="openPasswordLogin">
-            使用其他账号
-          </button>
-        </section>
-
-        <el-form v-else class="pilot-login-form" label-position="top" @submit.prevent="submit">
-          <el-form-item label="用户名">
-            <el-input
-              ref="usernameInput"
-              v-model.trim="form.username"
-              autocomplete="username"
-              placeholder="请输入试用账号"
-              @keyup.enter="focusPassword"
-            />
-          </el-form-item>
-          <el-form-item label="密码">
-            <el-input
-              ref="passwordInput"
-              v-model="form.password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="请输入负责人私下发送的密码"
-              show-password
-              @keyup.enter="submit"
-            />
-          </el-form-item>
-          <el-button
-            class="pilot-login-submit"
-            type="primary"
-            native-type="submit"
-            :loading="submitting"
-            :disabled="!form.username || !form.password"
-          >
-            登录系统
-          </el-button>
-          <button
-            v-if="quickLoginEnabled"
-            class="pilot-login-alternate"
-            type="button"
-            @click="returnToQuickLogin"
-          >
-            返回默认账号
-          </button>
+        <h1 id="login-title">{{ registering ? '创建账号' : '登录定线助手' }}</h1>
+        <p>{{ registering ? '使用负责人提供的邀请码，创建自己的定线空间。' : '登录后继续你的岩板和照片线路。' }}</p>
+        <el-alert v-if="localError || errorMessage" :title="localError || errorMessage" type="error" :closable="false" show-icon role="alert" />
+        <el-form label-position="top" @submit.prevent="submit">
+          <el-form-item label="用户名"><el-input v-model="form.username" autocomplete="username" maxlength="32" placeholder="3–32位字母、数字或下划线" :disabled="submitting" /></el-form-item>
+          <el-form-item v-if="registering" label="昵称"><el-input v-model="form.display_name" autocomplete="nickname" maxlength="40" placeholder="其他页面显示的名字" :disabled="submitting" /></el-form-item>
+          <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :autocomplete="registering ? 'new-password' : 'current-password'" :placeholder="registering ? '至少10个字符' : '输入密码'" :disabled="submitting" /></el-form-item>
+          <el-form-item v-if="registering" label="确认密码"><el-input v-model="confirmation" type="password" show-password autocomplete="new-password" :disabled="submitting" /></el-form-item>
+          <el-form-item v-if="registering" label="邀请码"><el-input v-model="form.invite_code" autocomplete="off" maxlength="128" placeholder="每个邀请码只能使用一次" :disabled="submitting" /></el-form-item>
+          <el-button class="pilot-login-submit" type="primary" native-type="submit" :loading="submitting">{{ registering ? '注册并登录' : '登录' }}</el-button>
+          <el-button v-if="registrationEnabled" class="member-switch" text :disabled="submitting" @click="switchMode">{{ registering ? '已有账号？返回登录' : '有邀请码？创建账号' }}</el-button>
+          <el-button v-if="quickLoginEnabled && !registering" text :disabled="submitting" @click="emit('quick-login')">进入本地账号</el-button>
         </el-form>
-        <p class="pilot-login-footnote">账号会话仅保存在当前浏览器，请勿共享试用凭据。</p>
+        <p class="member-note">{{ registering ? '邀请码有效期7天，请向负责人获取。' : '忘记密码请联系网站负责人。' }}</p>
       </div>
-
-      <aside class="pilot-account-panel" aria-label="试用账号">
-        <div>
-          <h2>需要切换账号？</h2>
-          <p>选择对应账号后输入负责人提供的密码。页面不会显示或保存密码。</p>
-        </div>
-        <div class="pilot-account-grid">
-          <article
-            v-for="account in accounts"
-            :key="account.username"
-            class="pilot-account-card"
-            role="button"
-            tabindex="0"
-            @click="selectAccount(account.username)"
-            @keydown.enter="selectAccount(account.username)"
-            @keydown.space.prevent="selectAccount(account.username)"
-          >
-            <span class="pilot-account-avatar" aria-hidden="true">{{ account.initial }}</span>
-            <strong>{{ account.label }}</strong>
-            <code>{{ account.username }}</code>
-            <small>密码请向负责人获取</small>
-            <span class="pilot-account-actions">
-              <span>填写此用户名</span>
-              <button type="button" @click.stop="copyUsername(account.username)">
-                {{ copiedUsername === account.username ? '已复制' : '复制用户名' }}
-              </button>
-            </span>
-          </article>
-        </div>
-      </aside>
+      <aside class="pilot-account-panel"><h2>公共资源，个人创作</h2><p>已有岩板和岩点作为公共资源，可查看、引用，或另存为自己的副本。</p><p>你新建的岩板、上传的照片和保存的线路仅自己可见。</p></aside>
     </section>
   </main>
 </template>
-
 <script setup>
-import { nextTick, reactive, ref } from 'vue'
-
-const props = defineProps({
-  submitting: { type: Boolean, default: false },
-  errorMessage: { type: String, default: '' },
-  quickLoginEnabled: { type: Boolean, default: false },
-  defaultUsername: { type: String, default: '' },
-  defaultDisplayName: { type: String, default: '' },
-})
-
-const emit = defineEmits(['login', 'quick-login'])
-const usernameInput = ref(null)
-const passwordInput = ref(null)
-const copiedUsername = ref('')
-const form = reactive({ username: '', password: '' })
-const showPasswordLogin = ref(!props.quickLoginEnabled)
-const defaultInitial = props.defaultDisplayName?.trim().charAt(0) || '马'
-const accounts = [
-  { label: '马老师试用账号', username: 'ma-trial', initial: '马' },
-  { label: '邓老师试用账号', username: 'deng-trial', initial: '邓' },
-]
-
-function focusPassword() {
-  passwordInput.value?.focus()
+import { reactive, ref } from 'vue'
+defineProps({ submitting: Boolean, errorMessage: { type: String, default: '' }, registrationEnabled: Boolean, quickLoginEnabled: Boolean, defaultUsername: String, defaultDisplayName: String })
+const emit = defineEmits(['login', 'register', 'quick-login', 'clear-error'])
+const registering = ref(false)
+const confirmation = ref('')
+const localError = ref('')
+const form = reactive({ username: '', display_name: '', password: '', invite_code: '' })
+function switchMode() {
+  registering.value = !registering.value
+  form.password = ''; confirmation.value = ''; form.invite_code = ''; localError.value = ''
+  emit('clear-error')
 }
-
-async function selectAccount(username) {
-  showPasswordLogin.value = true
-  form.username = username
-  form.password = ''
-  await nextTick()
-  focusPassword()
-}
-
-async function openPasswordLogin() {
-  showPasswordLogin.value = true
-  form.username = ''
-  form.password = ''
-  await nextTick()
-  usernameInput.value?.focus()
-}
-
-function returnToQuickLogin() {
-  showPasswordLogin.value = false
-  form.password = ''
-}
-
-async function copyUsername(username) {
-  try {
-    await navigator.clipboard.writeText(username)
-    copiedUsername.value = username
-    window.setTimeout(() => {
-      if (copiedUsername.value === username) copiedUsername.value = ''
-    }, 1600)
-  } catch {
-    selectAccount(username)
-  }
-}
-
 function submit() {
-  if (!form.username || !form.password) return
-  emit('login', { username: form.username, password: form.password })
+  localError.value = ''
+  if (!form.username.trim() || !form.password) { localError.value = '请填写用户名和密码。'; return }
+  if (registering.value) {
+    if (!/^[a-z][a-z0-9_]{2,31}$/.test(form.username.trim().toLowerCase())) { localError.value = '用户名需以字母开头，使用3–32位字母、数字或下划线。'; return }
+    if (form.password.length < 10 || new TextEncoder().encode(form.password).length > 72) { localError.value = '密码至少10个字符，长度不超过72字节。'; return }
+    if (form.password !== confirmation.value) { localError.value = '两次密码不一致。'; return }
+    if (!form.display_name.trim() || !form.invite_code.trim()) { localError.value = '请填写昵称和邀请码。'; return }
+    emit('register', { ...form, username: form.username.trim() })
+  } else emit('login', { username: form.username.trim(), password: form.password })
 }
 </script>
+<style scoped>
+.member-login { max-width: 860px; }
+h1 { margin: 0 0 12px; font-size: 28px; }
+.el-form { margin-top: 24px; }
+.member-switch { display: flex; margin: 12px auto 0; }
+.member-note { font-size: 13px; color: #5b6068; }
+.pilot-account-panel p { line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .member-login { display: block; } .pilot-account-panel { display: none; } }
+</style>

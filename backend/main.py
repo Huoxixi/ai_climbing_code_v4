@@ -212,6 +212,21 @@ pilot_access = PilotAccessManager(
     audit_file=PILOT_AUDIT_FILE,
 )
 
+from core.member_accounts import MemberAccounts
+from core.member_storage import member, member_key, private_path, combine, difference
+
+if env_flag('MEMBER_ACCOUNTS_ENABLED', default=APP_ENV == 'production'):
+    pilot_access = MemberAccounts(database=os.path.join(DATA_DIR, 'accounts.sqlite3'),
+                                  users_file=PILOT_USERS_FILE, audit_file=PILOT_AUDIT_FILE)
+    PILOT_QUICK_LOGIN_ENABLED = False
+task_owners = {}
+
+
+def protect_public_hold(hold_type, variant):
+    if member.get() and (variant in read_json(HOLDS_MAPPING_FILE, {}).get(hold_type, {})
+                         or variant in read_json(HOLDS_VECTORS_FILE, {}).get(hold_type, {})):
+        raise HTTPException(403, '公共岩点只能查看和引用。')
+
 
 class PilotLoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
@@ -220,8 +235,7 @@ class PilotLoginRequest(BaseModel):
 
 def request_client_ip(request: Request) -> str:
     return (
-        request.headers.get("cf-connecting-ip")
-        or request.headers.get("x-real-ip")
+        request.headers.get("x-real-ip")
         or (request.client.host if request.client else "unknown")
     )
 
@@ -282,6 +296,11 @@ def audit_request(request: Request, status: int, event: str | None = None) -> No
 async def pilot_access_middleware(request: Request, call_next):
     request.state.request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
     path = request.url.path
+    if path.startswith('/api/auth/') and request.method == 'POST':
+        from urllib.parse import urlsplit
+        origin = request.headers.get('origin')
+        if origin and urlsplit(origin).netloc != request.headers.get('host'):
+            return JSONResponse(status_code=403, content={'detail': '请从本站页面提交。'})
     simulation_path = (
         path.startswith("/api/simulation/")
         or path == "/api/standard-board/simulations/batch"
@@ -305,6 +324,7 @@ async def pilot_access_middleware(request: Request, call_next):
     public_paths = {
         "/api/health",
         "/api/auth/login",
+        "/api/auth/register",
         "/api/auth/quick-login",
         "/api/auth/logout",
         "/api/auth/session",
@@ -312,6 +332,7 @@ async def pilot_access_middleware(request: Request, call_next):
     if request.method == "OPTIONS" or path in public_paths:
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
+        response.headers['Cache-Control'] = 'no-store'
         return response
 
     token = request.cookies.get(PILOT_COOKIE_NAME)
@@ -324,9 +345,22 @@ async def pilot_access_middleware(request: Request, call_next):
         )
     request.state.pilot_user = user
 
+    if isinstance(pilot_access, MemberAccounts):
+        member.set(user.username)
+        parts = path.split('/')
+        if path.startswith('/images/'):
+            image_owner = next((p for p in parts if p.startswith('u-')), None)
+            if image_owner and image_owner != member_key():
+                return JSONResponse(status_code=404, content={'detail': '未找到图片。'})
+        if path.startswith(('/api/result/', '/api/cancel/')) and task_owners.get(parts[-1]) != user.username:
+            return JSONResponse(status_code=404, content={'detail': '未找到任务。'})
+        if path == '/api/standard-board/repairs/publish' or path.startswith('/api/simulation/'):
+            if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+                return JSONResponse(status_code=403, content={'detail': '公共资源不允许修改。'})
+
     is_write = request.method not in {"GET", "HEAD", "OPTIONS"}
     lease_path = path.startswith("/api/pilot/edit-lease")
-    if is_write and path.startswith("/api/") and not lease_path and not path.startswith('/api/settings/vision'):
+    if is_write and path.startswith("/api/") and not lease_path and not path.startswith('/api/settings/vision') and not isinstance(pilot_access, MemberAccounts):
         try:
             pilot_access.require_lease(user.username)
         except EditLeaseError as exc:
@@ -339,6 +373,8 @@ async def pilot_access_middleware(request: Request, call_next):
 
     response = await call_next(request)
     response.headers["X-Request-ID"] = request.state.request_id
+    if isinstance(pilot_access, MemberAccounts):
+        response.headers['Cache-Control'] = 'no-store'
     if is_write and not lease_path:
         audit_request(request, response.status_code)
     return response
@@ -378,6 +414,15 @@ def utc_now() -> str:
 
 
 def load_json(file_path: str, default: Any) -> Any:
+    scoped = private_path(file_path)
+    if scoped != str(Path(file_path)):
+        public = read_json(file_path, default)
+        personal = read_json(scoped, default)
+        return combine(file_path, public, personal)
+    return read_json(file_path, default)
+
+
+def read_json(file_path: str, default: Any) -> Any:
     if not os.path.exists(file_path):
         return default
     try:
@@ -389,6 +434,11 @@ def load_json(file_path: str, default: Any) -> Any:
 
 
 def save_json(file_path: str, data: Any) -> None:
+    scoped = private_path(file_path)
+    if scoped != str(Path(file_path)):
+        public = read_json(file_path, [] if Path(file_path).name == 'saved_boards.json' else {})
+        data = difference(file_path, public, data)
+        file_path = scoped
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     temp_path = f"{file_path}.{uuid.uuid4().hex}.tmp"
     with json_file_lock(file_path):
@@ -419,6 +469,8 @@ def mutate_json(file_path: str, default: Any, mutator) -> Any:
 
 
 def task_envelope(task_id: str, status: str, result: Any = None, error: str | None = None) -> Dict[str, Any]:
+    if member.get():
+        task_owners.setdefault(task_id, member.get())
     return {"task_id": task_id, "status": status, "result": result, "error": error}
 
 
@@ -616,6 +668,7 @@ def load_hold_assets(include_archived: bool = False) -> List[Dict[str, Any]]:
                     "imageUrl": mapping.get(hold_type, {}).get(variant) or mapping.get(hold_type, {}).get("default"),
                     "svgPath": vectors.get(hold_type, {}).get(variant) or vectors.get(hold_type, {}).get("default"),
                     "archived_at": archived_at,
+                    "visibility": 'public' if member.get() and variant in read_json(HOLDS_MAPPING_FILE, {}).get(hold_type, {}) else 'private',
                 }
             )
     return assets
@@ -740,6 +793,34 @@ async def append_standard_activity_event(request: Request, source_id: str, activ
     return mutate_json(STANDARD_BOARD_ACTIVITY_FILE, {}, update)
 
 
+@app.post('/api/auth/register')
+async def register_member(request: Request):
+    if not isinstance(pilot_access, MemberAccounts):
+        raise HTTPException(404, '注册未开放。')
+    if int(request.headers.get('content-length') or 0) > 4096:
+        raise HTTPException(413, '注册信息过长。')
+    try:
+        data = await request.json()
+        fields = ['username', 'display_name', 'password', 'invite_code']
+        if not isinstance(data, dict) or any(not isinstance(data.get(k), str) or len(data[k]) > 256 for k in fields):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(422, '请完整填写用户名、昵称、密码和邀请码。')
+    try:
+        token, user = await asyncio.to_thread(pilot_access.register, data['username'], data['display_name'],
+                                              data['password'], data['invite_code'], request_client_ip(request))
+    except LoginBlockedError as exc:
+        raise HTTPException(429, str(exc)) from exc
+    except PilotAccessError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    request.state.pilot_user = user
+    response = JSONResponse({'authenticated': True, 'auth_enabled': True, 'registration_enabled': True,
+                             'username': user.username, 'display_name': user.display_name}, status_code=201)
+    set_pilot_session_cookie(response, token)
+    audit_request(request, 201, 'registration_succeeded')
+    return response
+
+
 @app.post("/api/auth/login")
 async def pilot_login(payload: PilotLoginRequest, request: Request):
     try:
@@ -834,6 +915,7 @@ async def pilot_session(request: Request):
         return {
             "authenticated": False,
             "auth_enabled": True,
+            "registration_enabled": isinstance(pilot_access, MemberAccounts),
             "quick_login_enabled": quick_identity is not None,
             "default_username": quick_identity.username if quick_identity else "",
             "default_display_name": quick_identity.display_name if quick_identity else "",
@@ -1003,6 +1085,10 @@ async def upload_hold_image(request: Request):
     try:
         ext = os.path.splitext(getattr(file, "filename", "") or "")[1].lower() or ".png"
         filename = f"{uuid.uuid4()}{ext}"
+        if member.get():
+            if variant in read_json(HOLDS_MAPPING_FILE, {}).get(hold_type, {}) or variant in read_json(HOLDS_VECTORS_FILE, {}).get(hold_type, {}):
+                raise HTTPException(403, '公共岩点不能覆盖，请使用新的岩点名称。')
+            filename = member_key() + '/' + filename
         svg_path = extract_svg_path_from_image(image_bytes)
         if should_use_supabase(request):
             try:
@@ -1030,7 +1116,10 @@ async def upload_hold_image(request: Request):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         save_path = Path(HOLDS_IMAGES_DIR) / filename
-        processed_path = Path(PROCESSED_HOLDS_IMAGES_DIR) / processed_filename_for(filename)
+        processed_name = processed_filename_for(Path(filename).name)
+        if member.get():
+            processed_name = member_key() + '/' + processed_name
+        processed_path = Path(PROCESSED_HOLDS_IMAGES_DIR) / processed_name
         write_bytes_atomic(save_path, image_bytes)
         try:
             write_bytes_atomic(processed_path, processed_bytes)
@@ -1039,7 +1128,7 @@ async def upload_hold_image(request: Request):
             raise
 
         mapping = load_json(HOLDS_MAPPING_FILE, {})
-        mapping.setdefault(hold_type, {})[variant] = f"/images/processed/{processed_path.name}"
+        mapping.setdefault(hold_type, {})[variant] = f"/images/processed/{processed_name}"
         vectors = load_json(HOLDS_VECTORS_FILE, {})
         vectors.setdefault(hold_type, {})[variant] = svg_path
         try:
@@ -1059,7 +1148,7 @@ async def upload_hold_image(request: Request):
 
         return {
             "success": True,
-            "image_path": f"/images/processed/{processed_path.name}",
+            "image_path": f"/images/processed/{processed_name}",
             "svg_path": vectors[hold_type][variant],
             "background_removed": True,
             "processing_version": PROCESSING_VERSION,
@@ -1072,6 +1161,7 @@ async def upload_hold_image(request: Request):
 
 @app.delete("/api/holds/{hold_type}/{variant}")
 async def delete_hold(hold_type: str, variant: str, request: Request):
+    protect_public_hold(hold_type, variant)
     user = await resolve_supabase_user(request) if should_use_supabase(request) else None
     if should_use_supabase(request) and user:
         try:
@@ -1100,6 +1190,7 @@ async def delete_hold(hold_type: str, variant: str, request: Request):
 
 @app.post("/api/holds/{hold_type}/{variant}/restore")
 async def restore_hold(hold_type: str, variant: str):
+    protect_public_hold(hold_type, variant)
     mapping = load_json(HOLDS_MAPPING_FILE, {})
     vectors = load_json(HOLDS_VECTORS_FILE, {})
     if variant not in mapping.get(hold_type, {}) and variant not in vectors.get(hold_type, {}):
@@ -1130,6 +1221,8 @@ async def save_board(payload: Dict[str, Any], request: Request):
     board = normalize_board_payload(payload)
     board.saved_id = str(uuid.uuid4())
     saved = dump_board(board)
+    if member.get():
+        saved['visibility'] = 'private'
     mutate_json(SAVED_BOARDS_FILE, [], lambda boards: boards.append(saved))
     return {"success": True, "message": "岩板已保存", **saved}
 
