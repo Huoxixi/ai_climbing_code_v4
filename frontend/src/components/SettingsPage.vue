@@ -1,39 +1,63 @@
 <template>
   <section class="settings-page">
-    <h1>设置</h1>
-    <p class="settings-hint">{{localVersion.status}} · {{localVersion.version}}</p>
-    <section class="settings-section" aria-labelledby="account-title">
-      <h2 id="account-title">账号</h2>
-      <p class="settings-username">{{access.session.username || '未登录'}} <span v-if="access.session.displayName">{{access.session.displayName}}</span></p>
-      <p class="settings-hint">{{access.session.authEnabled ? '当前已登录，可退出后使用其他账号登录。' : '当前使用本地账号，无需密码。'}}</p>
-      <button type="button" :disabled="leaving" @click="leave">{{leaving?'正在退出…':'退出登录'}}</button>
-      <p v-if="accountError" role="alert">{{accountError}}</p>
-    </section>
-    <section class="settings-section" aria-labelledby="api-title">
-      <h2 id="api-title">DeepSeek API</h2>
-      <p class="settings-hint">用于抱石照片的 AI 复核。密钥只保存在服务端，不会回显。</p>
-      <label for="vision-key">API 密钥 <span>{{loaded ? (configured?'已配置':'未配置') : '正在读取…'}}</span></label>
-      <input id="vision-key" v-model="apiKey" type="password" autocomplete="new-password" spellcheck="false" maxlength="512" :placeholder="configured?'输入新密钥可替换已保存的密钥':'输入 DeepSeek API 密钥'" :disabled="busy || !loaded" @input="message=''" />
-      <div class="settings-buttons"><button class="settings-primary" :disabled="busy || !loaded || !apiKey.trim()" @click="save">{{operation==='save'?'正在保存…':'保存密钥'}}</button><button :disabled="busy || !loaded || (!configured && !apiKey.trim())" @click="test">{{operation==='test'?'正在测试…':'测试连接'}}</button><button v-if="!loaded && message" @click="load">重新读取</button></div>
-      <p class="settings-hint">测试会发送一张系统测试图片，可能产生少量 API 用量。输入新密钥时测试当前输入，未输入时测试已保存密钥。</p>
-      <p v-if="message" class="settings-message" :class="{ 'is-error':failed }" role="status">{{message}}</p>
-    </section>
+    <header class="settings-heading">
+      <div><h1>设置</h1><p>账号与照片复核服务</p></div>
+      <span class="settings-status"><i />{{ localVersion.status }} · {{ localVersion.version }}</span>
+    </header>
+    <div class="settings-grid">
+      <section class="settings-card account-card" aria-labelledby="account-title">
+        <div class="settings-card-heading"><h2 id="account-title">账号</h2><span class="settings-status"><i />{{ access.session.authEnabled ? '当前已登录' : '本地账号' }}</span></div>
+        <div class="account-identity"><span class="account-avatar">{{ accountInitial }}</span><span><strong>{{ access.session.username || '未登录' }}</strong><small>{{ access.session.displayName || (access.session.authEnabled ? '当前账号' : '本地使用者') }}</small></span></div>
+        <p class="settings-copy">你的岩板、照片与线路按账号隔离。退出不会删除本机已保存内容。</p>
+        <button class="settings-danger" type="button" :disabled="leaving" @click="leave">{{ leaving ? '正在退出…' : '退出登录' }}</button>
+        <p v-if="accountError" class="settings-message is-error" role="alert">{{ accountError }}</p>
+      </section>
+
+      <section class="settings-card api-card" aria-labelledby="api-title">
+        <div class="settings-card-heading"><h2 id="api-title">DeepSeek API</h2><span class="settings-status"><i />{{ loaded ? (configured ? '已配置' : '未配置') : (message ? '读取失败' : '读取中') }}</span></div>
+        <p class="settings-copy">用于抱石照片的 AI 复核。密钥只保存在服务端，不会回显。</p>
+        <label class="settings-label" for="vision-key"><span>API 密钥</span><small>{{ configured ? '输入新密钥替换现有配置' : '填写服务密钥' }}</small></label>
+        <div class="settings-input-wrap">
+          <input id="vision-key" v-model="apiKey" :type="showKey ? 'text' : 'password'" autocomplete="new-password" spellcheck="false" maxlength="512" :placeholder="configured ? '••••••••••••••••' : '输入 DeepSeek API 密钥'" :disabled="busy || !loaded" @input="message = ''" />
+          <button type="button" :disabled="busy || !loaded" :aria-label="showKey ? '隐藏密钥' : '显示密钥'" @click="showKey = !showKey">{{ showKey ? '隐藏' : '显示' }}</button>
+        </div>
+        <div class="settings-buttons">
+          <button class="settings-primary" type="button" :disabled="busy || !loaded || !apiKey.trim()" @click="save">{{ operation === 'save' ? '正在保存…' : '保存密钥' }}</button>
+          <button type="button" :disabled="busy || !loaded || (!configured && !apiKey.trim())" @click="test">{{ operation === 'test' ? '正在测试…' : '测试连接' }}</button>
+          <button v-if="!loaded && message" type="button" @click="load">重新读取</button>
+        </div>
+        <aside class="settings-notice"><strong>测试前请注意</strong><span>会发送一张系统测试图片，可能产生少量 API 用量。新密钥测试通过后仍需单独保存。</span></aside>
+        <p v-if="message" class="settings-message" :class="{ 'is-error': failed }" role="status">{{ message }}</p>
+      </section>
+    </div>
   </section>
 </template>
 
 <script setup>
-import {computed,inject,onMounted,ref} from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 import api from '../services/apiClient'
 import localVersion from '../../../LOCAL_VERSION.json'
-const access=inject('pilotAccess'), apiKey=ref(''), configured=ref(false),loaded=ref(false),operation=ref(''),message=ref(''),failed=ref(false),leaving=ref(false),accountError=ref('')
-const busy=computed(()=>!!operation.value)
-async function load(){try{const {data}=await api.get('/api/settings/vision');configured.value=data.configured;loaded.value=true;message.value=''}catch{failed.value=true;message.value='无法读取配置，请检查连接后重试。'}}
-async function save(){operation.value='save';message.value='';try{const {data}=await api.put('/api/settings/vision',{api_key:apiKey.value.trim()});configured.value=data.configured;apiKey.value='';failed.value=false;message.value='密钥已保存，下次 AI 复核将使用此配置。'}catch{failed.value=true;message.value='密钥未保存，请检查输入和网络后重试。'}finally{operation.value=''}}
-async function test(){operation.value='test';message.value='';try{const {data}=await api.post('/api/settings/vision/test',{api_key:apiKey.value.trim()},{timeout:40000});failed.value=!data.connected;message.value=data.message+(data.connected && apiKey.value.trim()?' 新密钥尚未保存。':'')}catch{failed.value=true;message.value='测试未完成，请检查网络或稍后重试。'}finally{operation.value=''}}
+
+const access = inject('pilotAccess')
+const apiKey = ref(''), configured = ref(false), loaded = ref(false), operation = ref(''), message = ref(''), failed = ref(false), leaving = ref(false), accountError = ref(''), showKey = ref(false)
+const busy = computed(() => Boolean(operation.value))
+const accountInitial = computed(() => (access.session.username || 'O').trim().charAt(0).toUpperCase())
+
+async function load(){try{const {data}=await api.get('/api/settings/vision');configured.value=data.configured;loaded.value=true;failed.value=false;message.value=''}catch{failed.value=true;message.value='无法读取配置，请检查连接后重试。'}}
+async function save(){operation.value='save';message.value='';try{const {data}=await api.put('/api/settings/vision',{api_key:apiKey.value.trim()});configured.value=data.configured;apiKey.value='';showKey.value=false;failed.value=false;message.value='密钥已保存，下次 AI 复核将使用此配置。'}catch{failed.value=true;message.value='密钥未保存，请检查输入和网络后重试。'}finally{operation.value=''}}
+async function test(){operation.value='test';message.value='';try{const {data}=await api.post('/api/settings/vision/test',{api_key:apiKey.value.trim()},{timeout:40000});failed.value=!data.connected;message.value=data.message+(data.connected&&apiKey.value.trim()?' 新密钥尚未保存。':'')}catch{failed.value=true;message.value='测试未完成，请检查网络或稍后重试。'}finally{operation.value=''}}
 async function leave(){leaving.value=true;accountError.value='';try{await access.logout()}catch{accountError.value='退出未完成，请检查网络后重试。'}finally{leaving.value=false}}
 onMounted(load)
 </script>
 
 <style scoped>
-.settings-page{max-width:720px;margin:0 auto;padding:32px 24px 100px;color:var(--ink)}.settings-page h1{font-size:28px;margin:0 0 30px}.settings-section{padding:0 0 30px;margin-bottom:30px;border-bottom:1px solid var(--line)}.settings-section h2{font-size:19px;margin:0 0 16px}.settings-username{font-size:20px;overflow-wrap:anywhere}.settings-username span{font-size:14px;margin-left:12px;color:var(--ink-soft)}.settings-hint{color:var(--ink-soft);font-size:14px;line-height:1.7;max-width:65ch}.settings-section label{display:block;margin:22px 0 8px;font-weight:600}.settings-section label span{font-size:13px;font-weight:400;color:var(--ink-soft);margin-left:12px}.settings-section input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;background:white;color:var(--ink)}.settings-buttons{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}.settings-section button{min-height:44px;padding:10px 18px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);font:inherit;cursor:pointer}.settings-section .settings-primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}.settings-section button:hover{background:var(--brand-soft)}.settings-section button:disabled{opacity:.5;cursor:default}.settings-section :is(button,input):focus-visible{outline:3px solid var(--brand);outline-offset:2px}.settings-message{padding:12px;background:var(--brand-soft);line-height:1.6}.settings-message.is-error{color:#92392d;background:#fff0ed}@media(max-width:600px){.settings-page{padding:24px 18px 100px}}
+.settings-page{box-sizing:border-box;width:min(1200px,calc(100% - 64px));margin:0 auto;padding:48px 0 96px;color:var(--ui-ink)}.settings-heading{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:24px}.settings-heading h1{font-size:28px}.settings-heading p{margin-top:4px;color:var(--ui-ink-muted)}
+.settings-status{width:fit-content;min-height:32px;padding:6px 10px;border-radius:var(--ui-radius-small);background:var(--ui-brand-soft);color:var(--ui-brand-ink);display:inline-flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap}.settings-status i{width:7px;height:7px;border-radius:50%;background:var(--ui-success)}
+.settings-grid{margin-top:28px;display:grid;grid-template-columns:420px minmax(0,1fr);gap:24px;align-items:start}.settings-card{padding:28px;border-radius:var(--ui-radius-card);background:var(--ui-surface);box-shadow:var(--ui-shadow-float)}.settings-card-heading{min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:16px}.settings-card h2{font-size:20px}
+.account-card{min-height:420px;display:flex;flex-direction:column;gap:18px}.account-identity{display:flex;align-items:center;gap:14px}.account-avatar{width:48px;height:48px;flex:none;border-radius:var(--ui-radius-card);background:var(--ui-brand-soft);color:var(--ui-brand-ink);display:grid;place-items:center;font-size:20px;font-weight:600}.account-identity>span:last-child{min-width:0;display:grid;gap:2px}.account-identity strong{overflow-wrap:anywhere;font-size:20px}.account-identity small{color:var(--ui-ink-muted)}.settings-copy{max-width:65ch;color:var(--ui-ink-muted);line-height:1.65}
+.settings-danger{width:100%;min-height:46px;margin-top:auto;border:1px solid var(--ui-danger);border-radius:var(--ui-radius-control);background:var(--ui-surface);color:var(--ui-danger);font-weight:500;cursor:pointer}.api-card{min-height:520px;display:flex;flex-direction:column;gap:16px}.settings-label{margin-top:2px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px;font-weight:500}.settings-label small{color:var(--ui-ink-muted);font-weight:400}
+.settings-input-wrap{min-height:48px;border:1px solid var(--ui-line-strong);border-radius:var(--ui-radius-control);background:var(--ui-surface);display:flex;align-items:center;overflow:hidden}.settings-input-wrap:focus-within{outline:3px solid var(--ui-focus);outline-offset:2px}.settings-input-wrap input{min-width:0;height:46px;padding:0 14px;border:0;outline:0;background:transparent;color:var(--ui-ink);flex:1}.settings-input-wrap input::placeholder{color:var(--ui-ink-faint)}.settings-input-wrap button{min-width:64px;height:44px;border:0;background:transparent;color:var(--ui-ink-muted);cursor:pointer}
+.settings-buttons{display:flex;flex-wrap:wrap;gap:12px}.settings-buttons button{min-width:150px;min-height:46px;padding:0 18px;border:1px solid var(--ui-line-strong);border-radius:var(--ui-radius-control);background:var(--ui-surface);color:var(--ui-ink);font-weight:500;cursor:pointer}.settings-buttons .settings-primary{border-color:var(--ui-brand);background:var(--ui-brand);color:var(--ui-brand-ink)}.settings-notice{margin-top:auto;padding:14px;border-radius:var(--ui-radius-small);background:var(--ui-surface-subtle);display:grid;gap:4px}.settings-notice strong{font-size:13px}.settings-notice span{color:var(--ui-ink-muted);font-size:12px}
+.settings-message{padding:12px;border-radius:var(--ui-radius-small);background:var(--ui-brand-soft);line-height:1.6}.settings-message.is-error{color:#92392d;background:#fff0ed}.settings-card button:hover:not(:disabled){background:var(--ui-brand-soft)}.settings-card .settings-primary:hover:not(:disabled){background:var(--ui-brand-hover)}.settings-card button:disabled,.settings-card input:disabled{opacity:.5;cursor:default}.settings-card button:focus-visible{outline:3px solid var(--ui-focus);outline-offset:2px}
+@media(max-width:860px){.settings-page{width:100%;padding:16px 18px calc(34px + env(safe-area-inset-bottom));overflow:hidden}.settings-heading{min-height:auto;align-items:flex-start}.settings-heading h1{display:none}.settings-heading p{font-size:12px}.settings-heading .settings-status{display:none}.settings-grid{min-width:0;margin-top:14px;grid-template-columns:minmax(0,1fr);gap:14px}.settings-card{box-sizing:border-box;min-width:0;min-height:0;padding:18px 16px;box-shadow:none}.account-card{gap:12px}.account-identity{display:block}.account-avatar{display:none}.account-identity strong{font-size:20px}.settings-copy{overflow-wrap:anywhere}.settings-danger{min-height:46px;margin-top:0}.api-card{gap:12px}.settings-label{margin-top:4px}.settings-label small{display:none}.settings-buttons{display:grid}.settings-buttons button{box-sizing:border-box;width:100%;min-width:0}.settings-notice{margin-top:2px;padding:0;background:transparent}.settings-notice strong{display:none}}
 </style>

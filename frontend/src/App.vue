@@ -3,11 +3,12 @@
     :active="activePage"
     @update:active="changePage"
     :title="pageTitle"
-    :board-label="activePage === 'photo-routes' ? '30×20 抱石线路岩板' : studio.currentBoardSpec.label"
+    :board-label="activePage === 'photo-routes' ? '个人照片线路' : studio.currentBoardSpec.label"
     :hold-count="activePage === 'photo-routes' ? photoStatus.count : studio.placedHolds.length"
     :dirty="activePage === 'photo-routes' ? photoStatus.dirty : studio.unsavedChanges"
     :save-label="activePage === 'photo-routes' ? photoStatus.state : ''"
     :simulation-enabled="simulationEnabled"
+    @close-settings="closeSettings"
   >
     <div v-if="photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status))" class="photo-task-notice" role="status">
       <span>{{ photoWork.state.uploading ? '照片正在上传，可以继续使用其他功能' : photoWork.state.session.status === 'ready' ? (photoWork.state.session.viewed ? '当前线路进度已保存' : '线路已提取，进度已保存') : photoWork.state.session.stage }}</span>
@@ -176,11 +177,14 @@ import { useBoardPersistence } from './composables/useBoardPersistence'
 import { useHoldLibrary } from './composables/useHoldLibrary'
 import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
+import { appPageFromHash } from './utils/photoWorkflowRoute.js'
 import { DEFAULT_FONT_GRADE, FONT_GRADES, UNGRADED, calibrationLabel, confidenceLabel } from './constants/gradeSystem'
 import { ROUTE_TAG_GROUPS, boardSystemTags, boardTags, matchesTags, tagLabel } from './constants/routeTags'
 import standardBoardService from './services/standardBoardService'
 
-const activePage = ref(['photo-routes','settings'].includes(location.hash.slice(2)) ? location.hash.slice(2) : 'dashboard')
+const appPages = ['dashboard','studio','photo-routes','library','boards','standard-board','simulation','ai-lab','settings']
+const activePage = ref(appPageFromHash(location.hash, appPages))
+const settingsReturnPage = ref(activePage.value === 'settings' ? 'dashboard' : activePage.value)
 const photoAccess = inject('pilotAccess')
 const photoWork = createPhotoWorkflow(photoAccess.session.username || 'local')
 provide('photoWorkflow', photoWork)
@@ -191,9 +195,9 @@ async function returnPhotoWork() {
     if(photoWork.state.session?.status==='ready') await photoWork.change('viewed').catch(()=>{})
   }
 }
-function photoHashChanged() { if (['photo-routes','settings'].includes(location.hash.slice(2))) changePage(location.hash.slice(2)) }
-onMounted(() => { photoWork.init(); window.addEventListener('hashchange', photoHashChanged) })
-onBeforeUnmount(() => { photoWork.close(); window.removeEventListener('hashchange', photoHashChanged) })
+function appHashChanged() { changePage(appPageFromHash(location.hash, appPages), { fromHistory:true }) }
+onMounted(() => { photoWork.init(); window.addEventListener('hashchange', appHashChanged) })
+onBeforeUnmount(() => { photoWork.close(); window.removeEventListener('hashchange', appHashChanged) })
 const simulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION === 'true'
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
@@ -441,7 +445,7 @@ watch(activePage, () => {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
 })
 
-async function changePage(nextPage) {
+async function changePage(nextPage, { fromHistory=false, replace=false } = {}) {
   if (nextPage === 'simulation' && !simulationEnabled) return
   if (nextPage === activePage.value) return
   if (activePage.value === 'photo-routes' && !(await photoPage.value?.beforeLeave())) return
@@ -456,8 +460,13 @@ async function changePage(nextPage) {
       return
     }
   }
+  if (nextPage === 'settings' && activePage.value !== 'settings') settingsReturnPage.value = activePage.value
   activePage.value = nextPage
-  history.replaceState(null, '', nextPage === 'photo-routes' ? '#/photo-routes' : '#/' + nextPage)
+  if (!fromHistory) history[replace ? 'replaceState' : 'pushState'](null, '', nextPage === 'photo-routes' ? '#/photo-routes' : '#/' + nextPage)
+}
+
+function closeSettings() {
+  changePage(settingsReturnPage.value || 'dashboard', { replace: true })
 }
 
 function startBlankStudio() {
