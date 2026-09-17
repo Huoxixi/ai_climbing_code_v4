@@ -4,6 +4,7 @@ import test from 'node:test'
 const login = readFileSync(new URL('../src/components/PilotLogin.vue', import.meta.url), 'utf8')
 const root = readFileSync(new URL('../src/RootApp.vue', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('../src/components/AppShell.vue', import.meta.url), 'utf8')
+const chooser = readFileSync(new URL('../src/components/WorkspaceChooser.vue', import.meta.url), 'utf8')
 const settings = readFileSync(new URL('../src/components/SettingsPage.vue', import.meta.url), 'utf8')
 test('注册登录入口移除旧试用身份且不预填密码', () => {
   assert.doesNotMatch(login, /ma-trial|deng-trial|马老师|邓老师/)
@@ -14,8 +15,19 @@ test('注册登录入口移除旧试用身份且不预填密码', () => {
 })
 test('注册接入真实接口并在切换账号后重建个人工作区', () => {
   assert.match(root, /\/api\/auth\/register/)
-  assert.match(root, /:key="session.username"/)
+  assert.match(root, /:key="`\$\{session\.username\}:\$\{activeWorkspace\}`"/)
   assert.match(root, /registrationEnabled/)
+})
+test('登录起始先选择工作区且两套项目可随时切换', () => {
+  assert.match(root, /v-else-if="!activeWorkspace"/)
+  assert.match(root, /climbing-active-workspace/)
+  assert.match(root, /workspaceChooserHash = '#\/projects'/)
+  assert.match(root, /history\.pushState\(null, '', workspaceChooserHash\)/)
+  assert.match(chooser, /抱石项目/)
+  assert.match(chooser, /定线项目/)
+  assert.match(login, /更换项目/)
+  assert.match(shell, /href="#\/projects"/)
+  assert.match(shell, /返回项目选择/)
 })
 test('登录失效返回登录页并保留退出入口', () => {
   assert.match(root, /\/api\/auth\/session/)

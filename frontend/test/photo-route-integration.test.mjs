@@ -45,18 +45,32 @@ test('正式抱石流程接入应用壳并保留离开前保存保护', async ()
   assert.match(viewport, /\.photo-review-viewer__viewport\.is-zoomed \{ touch-action:none; \}/)
 })
 
-test('桌面保留抱石线路入口，移动端并入五项定线导航', async () => {
-  const shell = await source('components/AppShell.vue')
-  assert.match(shell, /key: 'photo-routes', label: '抱石线路'/)
+test('抱石与原定线项目使用互相隔离的导航', async () => {
+  const [shell, app, page] = await Promise.all([source('components/AppShell.vue'), source('App.vue'), source('components/PhotoRouteWorkflowPage.vue')])
+  assert.match(shell, /props\.workspace === 'boulder'/)
+  assert.match(shell, /key: 'photo-routes', label: '照片线路'/)
+  assert.match(shell, /key: 'photo-routes', short: '添加线路'/)
+  assert.match(shell, /key: 'photo-library', short: '线路库'/)
+  assert.match(shell, /props\.photoSection === 'library'/)
+  assert.match(shell, /const setterDesktopItems/)
+  assert.doesNotMatch(shell.match(/const setterDesktopItems = \[([\s\S]*?)\n\]/)?.[1] || '', /photo-routes/)
   assert.match(shell, /\['boards', 'library'\]\.includes/)
-  assert.match(shell, /\['studio', 'photo-routes'\]\.includes/)
-  assert.match(shell, /class="mobile-route-switch"/)
-  assert.match(shell, />岩板定线</)
-  assert.match(shell, />照片线路</)
-  assert.match(shell, /const mobileItems = \[[\s\S]*?\n\]/)
-  assert.equal((shell.match(/short:/g) || []).length, 5)
-  const mobileItems = shell.match(/const mobileItems = \[([\s\S]*?)\n\]/)?.[1] || ''
-  assert.doesNotMatch(mobileItems, /photo-routes/)
+  assert.match(app, /boulder: \['photo-routes', 'settings'\]/)
+  assert.match(app, /setter: \['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab', 'settings'\]/)
+  assert.match(app, /workspacePages\[props\.workspace\]\.includes/)
+  assert.match(app, /nextPage === 'photo-library'/)
+  assert.match(page, /defineExpose\(\{beforeLeave,openCurrent,returnCurrent,openLibrary\}\)/)
+})
+
+test('手机线路库使用双列照片画廊并以白色细荧光描出线路岩点', async () => {
+  const page = await source('components/PhotoRouteWorkflowPage.vue')
+  assert.match(page, /class="photo-work__library-grid"/)
+  assert.match(page, /photoV2AssetUrl\(libraryBoard\(route\)\.original_asset\)/)
+  assert.match(page, /v-for="obj in libraryRouteObjects\(route\)"/)
+  assert.match(page, /route\.updated_at \|\| route\.created_at/)
+  assert.match(page, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/)
+  assert.match(page, /stroke:#fff;stroke-width:1\.4/)
+  assert.match(page, /drop-shadow\(0 0 4px rgba\(255,255,255,\.8\)\)/)
 })
 
 test('抱石线路使用黄色设计变量与中性技术岩板，不再使用木纹或青绿色基调', async () => {

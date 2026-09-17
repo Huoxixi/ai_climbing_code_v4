@@ -223,8 +223,8 @@
 import { nextTick, watch, computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { UploadFilled, Collection, ArrowRight } from '@element-plus/icons-vue'
-import sampleOne from '../assets/boulder-samples/boulder-1.jpg?inline'
-import sampleTwo from '../assets/boulder-samples/boulder-2.jpg?inline'
+import sampleOne from '../assets/boulder-samples/boulder-1.jpg'
+import sampleTwo from '../assets/boulder-samples/boulder-2.jpg'
 import { photoSampleFile } from '../utils/photoSample.js'
 import PhotoRouteBoardCanvas from './PhotoRouteBoardCanvas.vue'
 import PhotoReviewViewport from './PhotoReviewViewport.vue'
@@ -383,7 +383,7 @@ async function uploadSample(sample) {
   if (!editable.value || uploading.value || jobBusy.value) return
   uploading.value = true; error.value = ''
   try {
-    const file = photoSampleFile(sample.url, sample.name)
+    const file = await photoSampleFile(sample.url, sample.name)
     await uploadFile(file, true)
   } catch { error.value = '样例照片准备失败，请刷新页面后重试。' }
   finally { uploading.value = false }

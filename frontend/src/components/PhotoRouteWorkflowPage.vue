@@ -32,8 +32,25 @@
         </aside>
       </div>
     </template>
-    <template v-else-if="view==='library'"><div class="photo-work__heading"><h2>线路库</h2><button @click="returnFromLibrary">返回上一页</button></div>
-      <button v-for="route in library" :key="route.id" class="photo-work__library-item" @click="openDetail(route)">{{route.name}} · {{route.difficulty || '未填写难度'}}</button><p v-if="!library.length">保存后的线路会出现在这里。</p>
+    <template v-else-if="view==='library'"><div class="photo-work__heading"><div><h2>线路库</h2><p>按保存时间查看你的抱石线路。</p></div><button @click="returnFromLibrary">返回上一页</button></div>
+      <div v-if="libraryLoading" class="photo-work__library-status" role="status"><span class="photo-work__spinner" aria-hidden="true"></span><p>正在载入线路照片…</p></div>
+      <p v-else-if="libraryError && !library.length" class="photo-work__error" role="alert">{{libraryError}}<button @click="openLibrary('replace')">重新载入</button></p>
+      <div v-else-if="library.length" class="photo-work__library-grid">
+        <button v-for="route in library" :key="route.id" class="photo-work__library-card" :aria-label="`查看线路：${route.name}，${formatRouteDate(route)}`" @click="openDetail(route)">
+          <span class="photo-work__library-photo">
+            <template v-if="libraryBoard(route)">
+              <img :src="photoV2AssetUrl(libraryBoard(route).original_asset)" :alt="`${route.name}线路照片`" loading="lazy" />
+              <svg :viewBox="`0 0 ${libraryBoard(route).width} ${libraryBoard(route).height}`" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <polygon v-for="obj in libraryRouteObjects(route)" :key="obj.id" :points="points(obj)" />
+              </svg>
+            </template>
+            <span v-else class="photo-work__library-missing">照片暂时无法显示</span>
+          </span>
+          <span class="photo-work__library-meta"><strong>{{route.name}}</strong><time :datetime="route.updated_at || route.created_at">{{formatRouteDate(route)}}</time></span>
+        </button>
+      </div>
+      <div v-else class="photo-work__library-empty"><h2>还没有保存的线路</h2><p>完成一条抱石线路后，照片会出现在这里。</p><button class="photo-work__primary" @click="returnFromLibrary">添加第一条线路</button></div>
+      <p v-if="libraryError && library.length" class="photo-work__library-warning" role="status">{{libraryError}}</p>
     </template>
     <template v-else-if="!session || ['saved','abandoned'].includes(session.status)">
       <input ref="cameraInput" class="photo-work__file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" @change="choose" />
@@ -48,7 +65,7 @@
       </div></div>
       <div v-else class="photo-work__upload"><div class="photo-work__upload-copy"><h2>记录一条刚刚爬过的线路</h2><p>拍下整面墙，系统识别岩点轮廓后由你确认。原始照片始终保留。</p></div><div class="photo-work__capture-actions"><button class="photo-work__primary" :disabled="!editable" @click="cameraInput.click()">拍摄墙面</button><button :disabled="!editable" @click="albumInput.click()">从相册选择</button></div></div>
       <p v-if="state.uploading" role="status">已上传 {{state.uploadProgress}}%<progress :value="state.uploadProgress" max="100" aria-label="照片上传进度" /></p>
-      <div v-if="!state.pending" class="photo-work__samples"><button v-for="sample in samples" :key="sample.name" :disabled="!editable || state.uploading" @click="chooseSample(sample)"><img :src="sample.url" :alt="sample.name" /><span>{{sample.name}}</span></button></div>
+      <div v-if="!state.pending" class="photo-work__samples"><button v-for="sample in samples" :key="sample.name" :disabled="!editable || state.uploading || samplePreparing" @click="chooseSample(sample)"><img :src="sample.url" :alt="sample.name" /><span>{{samplePreparing===sample.name?'正在准备…':sample.name}}</span></button></div>
     </template>
     <template v-else-if="session.status==='awaiting_color' && session.flow_version<2">
       <h2>需要使用专项模型重新识别</h2>
@@ -141,9 +158,10 @@ import { photoSampleFile } from '../utils/photoSample'
 import { pickPhotoObject } from '../utils/photoHitTest.js'
 import { photoObjectLabel } from '../utils/photoObjectLabel.js'
 import { isPhotoFlowScreen, parsePhotoWorkflowHash, photoWorkflowHash, photoWorkflowScreen } from '../utils/photoWorkflowRoute.js'
-import one from '../assets/boulder-samples/boulder-1.jpg?inline'
-import two from '../assets/boulder-samples/boulder-2.jpg?inline'
+import one from '../assets/boulder-samples/boulder-1.jpg'
+import two from '../assets/boulder-samples/boulder-2.jpg'
 const workflow=inject('photoWorkflow'), access=inject('pilotAccess'), state=workflow.state
+const emit=defineEmits(['section-change'])
 const session=computed(()=>state.session), board=computed(()=>session.value?.board)
 const editable=computed(()=>!access.session.authEnabled || access.lease.ownedByMe)
 const samples=[{name:'抱石路线1',url:one},{name:'抱石路线2',url:two}]
@@ -157,10 +175,10 @@ async function assignColor(){
   const value=await act('assign-color',{color:assignedColor.value,member_ids:[previewObject.value]})
   if(value){previewColor.value=assignedColor.value;previewObject.value='';assignedColor.value=''}
 }
-const cameraInput=ref(null), albumInput=ref(null), selected=ref(''), adding=ref(false), members=ref([]), failedMembers=ref(null), showOther=ref(false), showGlow=ref(true)
+const cameraInput=ref(null), albumInput=ref(null), selected=ref(''), adding=ref(false), members=ref([]), failedMembers=ref(null), showOther=ref(false), showGlow=ref(true), samplePreparing=ref('')
 const visibleObjects=computed(()=>board.value?.objects.filter(obj=>showOther.value || members.value.includes(obj.id)) || [])
 const contourInput=ref(''), localError=ref('')
-const view=ref('current'), library=ref([]), detail=ref(null), detailBoard=ref(null), noteObject=ref(''), noteState=ref('备注已保存')
+const view=ref('current'), library=ref([]), libraryBoards=ref({}), libraryLoading=ref(false), libraryError=ref(''), detail=ref(null), detailBoard=ref(null), noteObject=ref(''), noteState=ref('备注已保存')
 const noteSaveLabel=computed(()=>({
   '备注已保存':'已保存',
   '等待保存备注':'保存修改',
@@ -223,6 +241,7 @@ async function act(action,payload={}) {
   try{return await workflow.change(action,payload)}catch{return null}
 }
 function writePhotoLocation(screen,routeId='',mode='push'){
+  emit('section-change',['library','route'].includes(screen)?'library':'routes')
   const next=photoWorkflowHash(screen,routeId)
   if(location.hash===next)return
   const previous=location.hash
@@ -233,7 +252,13 @@ function navigateBack(fallback='home'){
   else{writePhotoLocation(fallback,'','replace');applyPhotoLocation()}
 }
 async function choose(event){const file=event.target.files?.[0];event.target.value='';if(file){await workflow.choose(file);if(state.pending)writePhotoLocation('confirm')}}
-async function chooseSample(sample){await workflow.choose(photoSampleFile(sample.url,sample.name));if(state.pending)writePhotoLocation('confirm')}
+async function chooseSample(sample){
+  if(samplePreparing.value)return
+  localError.value='';samplePreparing.value=sample.name
+  try{await workflow.choose(await photoSampleFile(sample.url,sample.name));if(state.pending)writePhotoLocation('confirm')}
+  catch{localError.value='示例照片暂时无法载入，请刷新页面后重试，或从相册选择照片。'}
+  finally{samplePreparing.value=''}
+}
 async function leaveConfirmation(){await workflow.discardPending();navigateBack('home')}
 
 async function persistMembers(ids) {if(!editable.value || state.saving)return;failedMembers.value=[...ids]; members.value=[...ids];const value=await act('members',{member_ids:ids});if(value){failedMembers.value=null;members.value=value.route.members.map(m=>m.object_id)}}
@@ -251,10 +276,30 @@ async function photoClick(event){
 async function contour(){if(!editable.value || state.saving)return;try{await service.patchObject(board.value.id,selected.value,{expected_version:selectedObject.value.object_version,contour:JSON.parse(contourInput.value)});await workflow.refresh()}catch{localError.value='轮廓未保存，请检查坐标'}}
 async function abandon(){if(!editable.value || state.saving)return;try{await ElMessageBox.confirm('放弃后可以开始下一条线路，已保存的线路不会改变。','放弃当前线路',{confirmButtonText:'放弃',cancelButtonText:'继续编辑'});await act('abandon')}catch{}}
 async function save(){if(!editable.value || state.saving)return;const result=await act('save',{member_ids:members.value});if(result)await openDetail(result.route)}
+function resetPageScroll(){window.requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))}
+async function openCurrent(){if(await beforeLeave()){detail.value=null;view.value='current';writePhotoLocation(photoWorkflowScreen(state));resetPageScroll()}}
 async function returnCurrent(){if(await beforeLeave()){detail.value=null;view.value='current';navigateBack(photoWorkflowScreen(state))}}
 async function returnFromLibrary(){if(await beforeLeave()){view.value='current';navigateBack(photoWorkflowScreen(state))}}
-async function openLibrary(historyMode='push'){if(!(await beforeLeave()))return;library.value=(await service.routes({status:'completed'}));detail.value=null;view.value='library';writePhotoLocation('library','',historyMode)}
+async function openLibrary(historyMode='push'){
+  if(!(await beforeLeave()))return
+  libraryLoading.value=true;libraryError.value='';detail.value=null;view.value='library';writePhotoLocation('library','',historyMode)
+  resetPageScroll()
+  try{
+    library.value=await service.routes({status:'completed'})
+    const boardIds=[...new Set(library.value.map(route=>route.board_version_id).filter(Boolean))]
+    const missing=boardIds.filter(id=>!libraryBoards.value[id])
+    const results=await Promise.allSettled(missing.map(id=>service.board(id)))
+    const loaded={...libraryBoards.value}
+    results.forEach((result,index)=>{if(result.status==='fulfilled')loaded[missing[index]]=result.value})
+    libraryBoards.value=loaded
+    if(results.some(result=>result.status==='rejected'))libraryError.value='部分线路照片暂时无法载入，请稍后重试。'
+  }catch{libraryError.value='线路库暂时无法载入，请检查网络后重试。'}
+  finally{libraryLoading.value=false}
+}
 async function openDetail(route,historyMode='push'){detail.value=JSON.parse(JSON.stringify(route));detailBoard.value=await service.board(route.board_version_id);noteObject.value='';noteState.value='备注已保存';writePhotoLocation('route',route.id,historyMode)}
+function libraryBoard(route){return libraryBoards.value[route.board_version_id]}
+function libraryRouteObjects(route){const board=libraryBoard(route);if(!board)return[];const ids=new Set(route.members.map(member=>member.object_id));return board.objects.filter(obj=>ids.has(obj.id))}
+function formatRouteDate(route){const value=route.updated_at||route.created_at;if(!value)return'日期未知';const date=new Date(value);if(Number.isNaN(date.getTime()))return'日期未知';return new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'}).format(date)}
 async function applyPhotoLocation(){
   if(!state.loaded)return
   const target=parsePhotoWorkflowHash(location.hash)
@@ -298,7 +343,7 @@ watch(()=>state.loaded,loaded=>{if(loaded)applyPhotoLocation()},{immediate:true}
 watch(editable,canEdit=>{if(canEdit && detail.value && noteState.value==='等待保存备注')queueNotes()})
 watch(()=>session.value?.status,status=>{if(!state.loaded||!status)return;const current=parsePhotoWorkflowHash(location.hash).screen;if(current==='confirm'||isPhotoFlowScreen(current))writePhotoLocation(photoWorkflowScreen(state),'','replace')})
 onBeforeUnmount(()=>{state.interacting=false;clearTimeout(notesTimer);window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('hashchange',applyPhotoLocation)})
-defineExpose({beforeLeave,returnCurrent})
+defineExpose({beforeLeave,openCurrent,returnCurrent,openLibrary})
 </script>
 
 <style scoped>
@@ -326,7 +371,8 @@ defineExpose({beforeLeave,returnCurrent})
 .photo-work__pending{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,420px);gap:28px;align-items:center}.photo-work__pending>img{width:100%;height:55dvh;object-fit:contain;background:#282826;border-radius:var(--ui-radius-card)}.photo-work__pending-sheet{display:flex;flex-direction:column;gap:16px}.photo-work__upload{display:grid;place-items:center;min-height:52dvh;padding:32px;text-align:center}.photo-work__upload-copy{max-width:520px}.photo-work__upload h2{font-size:clamp(26px,4vw,42px)}.photo-work__upload p{max-width:52ch;margin:14px auto 24px;color:var(--ui-ink-muted)}.photo-work__capture-actions{justify-content:center}.photo-work__capture-actions button{min-width:156px}
 .photo-work__samples{display:flex;gap:16px;justify-content:center;margin-top:24px}.photo-work__samples button{display:flex;flex-direction:column;gap:8px;max-width:180px;text-align:left}.photo-work__samples img{width:100%;height:150px;object-fit:cover;border-radius:8px}.photo-work__file{display:none}
 .photo-work__processing{box-sizing:border-box;display:flex;align-items:center;justify-content:center;flex-direction:column;width:min(100%,560px);min-height:calc(100dvh - 260px);margin:0 auto;padding:48px 20px;text-align:center}.photo-work__processing--center{margin:auto;text-align:center}.photo-work__processing h2{margin:20px 0 8px;font-size:clamp(24px,3vw,34px)}.photo-work__processing>p{max-width:52ch;color:var(--ui-ink-muted)}.photo-work__processing progress{display:block;width:min(100%,460px);height:9px;margin:28px 0 18px;overflow:hidden;border:0;border-radius:999px;background:var(--ui-line);accent-color:var(--ui-brand)}.photo-work__processing progress::-webkit-progress-bar{border-radius:999px;background:var(--ui-line)}.photo-work__processing progress::-webkit-progress-value{border-radius:999px;background:var(--ui-brand)}.photo-work__processing progress::-moz-progress-bar{border-radius:999px;background:var(--ui-brand)}.photo-work__spinner{display:inline-block;width:42px;height:42px;border:4px solid var(--ui-line);border-top-color:#9f7500;border-radius:50%;animation:photo-work-spin .9s linear infinite}.photo-work__stage-list{display:flex;flex-direction:column;width:min(100%,420px);gap:8px;margin:0;padding:0;list-style:none;font-size:14px;text-align:left}.photo-work__stage-list li{display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:10px;min-height:32px;padding:4px 0;color:var(--ui-ink-muted)}.photo-work__stage-list small{font-size:12px;color:inherit}.photo-work__stage-dot{width:8px;height:8px;border-radius:50%;background:var(--ui-line-strong)}.photo-work__stage-list li.is-current{color:var(--ui-ink);font-weight:650}.photo-work__stage-list li.is-current .photo-work__stage-dot{background:var(--ui-brand);box-shadow:0 2px 9px rgba(244,196,48,.55);animation:photo-stage-pulse 1.4s ease-in-out infinite}.photo-work__stage-list li.is-done{color:var(--ui-ink-muted)}.photo-work__stage-list li.is-done .photo-work__stage-dot{background:#5b6b55}.photo-work__recovery{justify-content:center;margin-top:28px}.photo-stage-enter-active{transition:opacity 220ms ease,transform 280ms cubic-bezier(.16,1,.3,1),clip-path 280ms cubic-bezier(.16,1,.3,1)}.photo-stage-enter-from{opacity:0;transform:translateY(8px);clip-path:inset(0 0 100% 0)}
-.photo-work__error{display:flex;justify-content:space-between;gap:12px;margin:0 0 14px;padding:12px;border-radius:var(--ui-radius-small);background:#fff0ed;color:#8c3027}.photo-work__inline-error{display:grid;gap:2px;padding:12px;border-radius:var(--ui-radius-small);background:#fff0ed;color:#8c3027}.photo-work__notice{padding:12px;border-radius:var(--ui-radius-small);background:var(--ui-brand-soft)}.photo-work__advanced,.photo-work__hold-list{margin-top:6px;padding-top:18px;border-top:1px solid var(--ui-line)}.photo-work__advanced summary,.photo-work__hold-list summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:600}.photo-work__hold-list>div{display:grid;gap:6px;padding-top:8px}.photo-work__hold-list button{width:100%;text-align:left}.photo-work__hold-list button.is-selected{border-color:#806000;background:var(--ui-brand-soft)}.photo-work__library-item{display:block;width:100%;margin:12px 0;text-align:left}
+.photo-work__error{display:flex;justify-content:space-between;gap:12px;margin:0 0 14px;padding:12px;border-radius:var(--ui-radius-small);background:#fff0ed;color:#8c3027}.photo-work__inline-error{display:grid;gap:2px;padding:12px;border-radius:var(--ui-radius-small);background:#fff0ed;color:#8c3027}.photo-work__notice{padding:12px;border-radius:var(--ui-radius-small);background:var(--ui-brand-soft)}.photo-work__advanced,.photo-work__hold-list{margin-top:6px;padding-top:18px;border-top:1px solid var(--ui-line)}.photo-work__advanced summary,.photo-work__hold-list summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:600}.photo-work__hold-list>div{display:grid;gap:6px;padding-top:8px}.photo-work__hold-list button{width:100%;text-align:left}.photo-work__hold-list button.is-selected{border-color:#806000;background:var(--ui-brand-soft)}
+.photo-work__library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:24px 18px}.photo-work .photo-work__library-card{display:block;min-width:0;min-height:0;padding:0;border:0;border-radius:var(--ui-radius-card);background:transparent;text-align:left}.photo-work .photo-work__library-card:hover{background:transparent}.photo-work__library-photo{position:relative;display:grid;place-items:center;width:100%;aspect-ratio:4/5;overflow:hidden;border:1px solid #4b4c4a;border-radius:var(--ui-radius-card);background:#232421;transition:transform 180ms cubic-bezier(.16,1,.3,1),box-shadow 180ms ease}.photo-work__library-card:hover .photo-work__library-photo{transform:translateY(-2px);box-shadow:0 12px 24px rgba(28,30,33,.16)}.photo-work__library-photo img,.photo-work__library-photo svg{position:absolute;inset:0;width:100%;height:100%}.photo-work__library-photo img{object-fit:contain}.photo-work__library-photo svg{overflow:visible}.photo-work__library-photo polygon{fill:transparent;stroke:#fff;stroke-width:1.4;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 1px rgba(255,255,255,.95)) drop-shadow(0 0 4px rgba(255,255,255,.8));pointer-events:none}.photo-work__library-meta{display:grid;gap:3px;padding:10px 2px 0}.photo-work__library-meta strong{overflow:hidden;font-size:15px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}.photo-work__library-meta time{color:var(--ui-ink-muted);font-size:12px;font-variant-numeric:tabular-nums}.photo-work__library-missing{max-width:12ch;color:#e7e5de;font-size:13px;line-height:1.5;text-align:center}.photo-work__library-status,.photo-work__library-empty{display:grid;place-items:center;align-content:center;min-height:45dvh;gap:12px;text-align:center}.photo-work__library-status .photo-work__spinner{width:32px;height:32px}.photo-work__library-empty p{color:var(--ui-ink-muted)}.photo-work__library-warning{margin-top:20px;color:#725315;font-size:13px}
 .photo-work__color{display:flex;align-items:center;gap:12px;text-align:left}.photo-work__color[aria-pressed=true]{border-color:#806000;background:var(--ui-brand-soft);box-shadow:inset 0 0 0 1px #806000}.photo-work__swatch{flex:none;width:22px;height:22px;border:1px solid #746e60;border-radius:50%}.photo-work__count{margin-left:auto;font-variant-numeric:tabular-nums}.photo-work__selection{padding:10px 12px;border-radius:var(--ui-radius-small);background:var(--ui-brand-soft)}
 .photo-work__toggle{flex-direction:row!important;align-items:center;justify-content:space-between;min-height:44px}.photo-work__toggle input{appearance:none;position:relative;width:48px!important;height:28px!important;margin:0;border-radius:14px;background:var(--ui-line-strong);transition:background-color 120ms ease}.photo-work__toggle input::after{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.18);content:"";transition:transform 140ms cubic-bezier(.2,.8,.2,1)}.photo-work__toggle input:checked{background:var(--ui-brand)}.photo-work__toggle input:checked::after{transform:translateX(20px)}
 .photo-work__mobile-command{display:none}
@@ -335,8 +381,8 @@ defineExpose({beforeLeave,returnCurrent})
 @media(max-width:860px){
   .photo-work{box-sizing:border-box;min-height:calc(100dvh - var(--ui-shell-top) - var(--ui-shell-bottom));padding:16px 12px calc(88px + env(safe-area-inset-bottom));overflow-x:hidden}
   .photo-work__header{margin-bottom:18px}.photo-work__header h1{font-size:26px}.photo-work__header p{font-size:13px;color:var(--ui-ink-muted)}
-  .photo-work--processing .photo-work__header,.photo-work--failed .photo-work__header,.photo-work--awaiting_color .photo-work__header,.photo-work--ready .photo-work__header,.photo-work--capture-preview .photo-work__header{display:none}
-  .photo-work__heading{align-items:flex-start;margin-bottom:14px}.photo-work__heading h2{font-size:22px}
+  .photo-work--processing .photo-work__header,.photo-work--failed .photo-work__header,.photo-work--awaiting_color .photo-work__header,.photo-work--ready .photo-work__header,.photo-work--capture-preview .photo-work__header,.photo-work--library .photo-work__header{display:none}
+  .photo-work__heading{align-items:flex-start;margin-bottom:14px}.photo-work__heading h2{font-size:22px}.photo-work__heading>div p{margin-top:4px;color:var(--ui-ink-muted);font-size:13px}
   .photo-work__offline,.photo-work__permission{align-items:flex-start;flex-direction:column;gap:2px}
   .photo-work__layout{display:flex;flex-direction:column;gap:0;height:auto;max-height:none}.photo-work__layout>:first-child{flex:none;width:calc(100% + 24px);height:58dvh;min-height:360px;margin-left:-12px;border-radius:0}.photo-work__layout>.photo-canvas-shell{height:auto}
   .photo-work__tools{position:relative;z-index:2;max-height:none;margin:-20px -12px 0;padding:18px 20px calc(22px + env(safe-area-inset-bottom));overflow:visible;border-radius:20px 20px 0 0;background:var(--ui-surface);box-shadow:0 -12px 28px rgba(28,30,33,.12)}
@@ -345,6 +391,7 @@ defineExpose({beforeLeave,returnCurrent})
   .photo-work__pending{display:flex;flex-direction:column;gap:0;margin:-16px -12px 0}.photo-work__pending>img{width:100%;height:60dvh;border-radius:0;object-fit:contain}.photo-work__pending-sheet{position:relative;margin-top:-20px;padding:20px 20px calc(24px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0;background:var(--ui-surface);box-shadow:0 -12px 28px rgba(28,30,33,.12)}.photo-work__actions{display:grid;grid-template-columns:1fr 1.6fr}.photo-work__actions button{width:100%}
   .photo-work__upload{min-height:48dvh;padding:18px 8px}.photo-work__upload h2{font-size:30px;line-height:1.18}.photo-work__capture-actions{display:grid;width:100%;max-width:350px;grid-template-columns:1fr}.photo-work__capture-actions button{width:100%;min-width:0}.photo-work__samples{display:grid;grid-template-columns:1fr 1fr;gap:10px}.photo-work__samples button{max-width:none;padding:8px}.photo-work__samples img{height:120px}
   .photo-work__processing{min-height:calc(100dvh - var(--ui-shell-bottom) - 32px);padding:32px 8px}.photo-work__processing.is-failed{padding-top:30px}.photo-work__stage-list{width:min(100%,340px)}.photo-work__recovery{display:grid;width:min(100%,340px);grid-template-columns:1fr}.photo-work__recovery button{width:100%}
+  .photo-work__library-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 10px}.photo-work .photo-work__library-card{border-radius:12px}.photo-work__library-photo{border-radius:12px}.photo-work__library-meta{padding-top:8px}.photo-work__library-meta strong{font-size:14px}.photo-work__library-empty{min-height:52dvh;padding:20px}
   .photo-work--ready{padding-bottom:calc(184px + env(safe-area-inset-bottom))}.photo-work--ready .photo-work__tools{padding-bottom:calc(132px + env(safe-area-inset-bottom))}
   .photo-work__desktop-review-action{display:none}
   .photo-work__mobile-command{position:fixed;z-index:90;right:12px;bottom:calc(var(--ui-shell-bottom) + 8px);left:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border:1px solid var(--ui-line);border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 12px 30px rgba(28,30,33,.2)}.photo-work__mobile-command>span{grid-column:1/-1;color:var(--ui-ink-muted);font-size:12px;text-align:center}.photo-work__mobile-command button{width:100%;min-height:48px;padding-inline:10px}

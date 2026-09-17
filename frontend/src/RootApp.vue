@@ -6,6 +6,13 @@
       <small>请稍候，不会影响已保存的数据。</small>
     </div>
   </div>
+  <WorkspaceChooser
+    v-else-if="!activeWorkspace"
+    :authenticated="session.authenticated"
+    :username="session.username"
+    :display-name="session.displayName"
+    @select="selectWorkspace"
+  />
   <div v-else-if="!session.authenticated && !session.authEnabled" class="pilot-loading">
     <div class="pilot-loading-card"><strong>已退出登录</strong><p>本地账号 owner · 负责人</p><p>照片和线路进度已保留。</p><el-button type="primary" :loading="loginSubmitting" @click="localLogin">登录本地账号</el-button><p v-if="loginError" role="alert">{{loginError}}</p></div>
   </div>
@@ -17,12 +24,14 @@
     :quick-login-enabled="session.quickLoginEnabled"
     :default-username="session.defaultUsername"
     :default-display-name="session.defaultDisplayName"
+    :workspace="activeWorkspace"
     @login="login"
     @register="register"
     @clear-error="loginError = ''"
     @quick-login="quickLogin"
+    @change-workspace="openWorkspaceChooser"
   />
-  <App v-else :key="session.username" />
+  <App v-else :key="`${session.username}:${activeWorkspace}`" :workspace="activeWorkspace" @change-workspace="openWorkspaceChooser" />
 </template>
 
 <script setup>
@@ -30,8 +39,13 @@ import { onBeforeUnmount, onMounted, provide, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import App from './App.vue'
 import PilotLogin from './components/PilotLogin.vue'
+import WorkspaceChooser from './components/WorkspaceChooser.vue'
 import apiClient from './services/apiClient'
 
+const workspaceStorageKey = 'climbing-active-workspace'
+const workspaceChooserHash = '#/projects'
+const storedWorkspace = sessionStorage.getItem(workspaceStorageKey)
+const activeWorkspace = ref(location.hash === workspaceChooserHash ? '' : (['boulder', 'setter'].includes(storedWorkspace) ? storedWorkspace : ''))
 const loading = ref(true)
 const loginSubmitting = ref(false)
 const loginError = ref('')
@@ -139,6 +153,40 @@ async function logout() {
   if (!authEnabled) sessionStorage.setItem('local-account-signed-out','true')
   applyLease({})
   applySession({ authenticated: false, auth_enabled: authEnabled })
+  resetWorkspace()
+}
+
+function selectWorkspace(workspace) {
+  if (!['boulder', 'setter'].includes(workspace)) return
+  activeWorkspace.value = workspace
+  sessionStorage.setItem(workspaceStorageKey, workspace)
+  const targetHash = workspace === 'boulder' ? '#/photo-routes' : '#/dashboard'
+  if (location.hash !== targetHash) history.pushState(null, '', targetHash)
+}
+
+function openWorkspaceChooser() {
+  activeWorkspace.value = ''
+  if (location.hash !== workspaceChooserHash) history.pushState(null, '', workspaceChooserHash)
+}
+
+function resetWorkspace() {
+  activeWorkspace.value = ''
+  sessionStorage.removeItem(workspaceStorageKey)
+  history.replaceState(null, '', workspaceChooserHash)
+}
+
+function handleRootHashChange() {
+  if (location.hash === workspaceChooserHash) {
+    activeWorkspace.value = ''
+    return
+  }
+  const savedWorkspace = sessionStorage.getItem(workspaceStorageKey)
+  if (!['boulder', 'setter'].includes(savedWorkspace)) return
+  const requestedPage = String(location.hash || '').replace(/^#\/?/, '').split('/')[0]
+  const setterPages = ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab']
+  const restoredWorkspace = requestedPage === 'photo-routes' ? 'boulder' : (setterPages.includes(requestedPage) ? 'setter' : savedWorkspace)
+  activeWorkspace.value = restoredWorkspace
+  sessionStorage.setItem(workspaceStorageKey, restoredWorkspace)
 }
 
 async function localLogin() {
@@ -227,6 +275,7 @@ onMounted(() => {
     },
   )
   loadSession()
+  window.addEventListener('hashchange', handleRootHashChange)
   heartbeatTimer = window.setInterval(heartbeat, 30_000)
   statusTimer = window.setInterval(refreshLease, 10_000)
 })
@@ -234,6 +283,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearInterval(heartbeatTimer)
   window.clearInterval(statusTimer)
+  window.removeEventListener('hashchange', handleRootHashChange)
   if (responseInterceptor !== null) {
     apiClient.interceptors.response.eject(responseInterceptor)
   }
