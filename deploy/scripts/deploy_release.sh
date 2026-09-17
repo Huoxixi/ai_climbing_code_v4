@@ -105,9 +105,6 @@ rsync -a "${SOURCE_ROOT}/frontend/dist/" "${building_release}/frontend/dist/"
 
 python3.12 -m venv "${building_release}/backend/.venv"
 "${building_release}/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "${building_release}/backend/requirements-production.lock"
-"${building_release}/backend/.venv/bin/python" -m pip install \
-  --disable-pip-version-check --no-build-isolation --no-deps \
-  'detectron2 @ git+https://github.com/facebookresearch/detectron2.git@a2f4a8771ab77e8411c26b27f24f9489a28a2453'
 "${building_release}/backend/.venv/bin/python" -c \
   'import torch, torchvision, detectron2; print(torch.__version__, torchvision.__version__, detectron2.__version__)'
 mkdir -p "${temporary_root}/test-data"

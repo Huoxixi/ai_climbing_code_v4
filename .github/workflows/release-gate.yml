@@ -18,10 +18,7 @@ jobs:
           cache: pip
       - name: Install locked backend dependencies
         working-directory: backend
-        run: |
-          pip install -r requirements-production.lock
-          pip install --no-build-isolation --no-deps \
-            'detectron2 @ git+https://github.com/facebookresearch/detectron2.git@a2f4a8771ab77e8411c26b27f24f9489a28a2453'
+        run: pip install -r requirements-production.lock
       - name: Verify climbing model runtime imports
         working-directory: backend
         run: python -c "import torch, torchvision, detectron2; print(torch.__version__, torchvision.__version__, detectron2.__version__)"
