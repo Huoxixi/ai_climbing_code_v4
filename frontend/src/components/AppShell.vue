@@ -10,7 +10,7 @@
           <button v-for="item in desktopItems" :key="item.key" :class="{ active: active === item.key }" :aria-current="active === item.key ? 'page' : undefined" @click="$emit('update:active', item.key)">{{ item.label }}</button>
         </nav>
         <div class="header-actions">
-          <span class="sync-state" :class="{ dirty }"><i />{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span>
+          <span class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
           <el-button v-if="active !== 'settings' && !pilotAccess.lease.ownedByMe" size="small" type="primary" :loading="pilotAccess.lease.loading" @click="pilotAccess.acquireLease">开始编辑</el-button>
           <el-button v-else-if="active !== 'settings'" size="small" :loading="pilotAccess.lease.loading" @click="pilotAccess.releaseLease">释放编辑权</el-button>
           <button v-if="active !== 'settings'" class="settings-trigger" type="button" aria-label="设置" title="设置" @click="$emit('update:active', 'settings')"><Setting /></button>
@@ -19,11 +19,15 @@
       </div>
       <div class="mobile-context-row">
         <div><h1>{{ title }}</h1><span v-if="active !== 'settings'">{{ boardLabel }} · {{ holdCount }} 岩点</span></div>
-        <span class="sync-state" :class="{ dirty }"><i />{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span>
+        <span class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
       </div>
     </header>
 
     <main class="shell-main">
+      <div v-if="['studio', 'photo-routes'].includes(active)" class="mobile-route-switch" aria-label="定线方式">
+        <button :class="{ active: active === 'studio' }" @click="$emit('update:active', 'studio')">岩板定线</button>
+        <button :class="{ active: active === 'photo-routes' }" @click="$emit('update:active', 'photo-routes')">照片线路</button>
+      </div>
       <div v-if="['boards', 'library'].includes(active)" class="mobile-asset-switch" aria-label="资产分类">
         <button :class="{ active: active === 'boards' }" @click="$emit('update:active', 'boards')">岩板</button>
         <button :class="{ active: active === 'library' }" @click="$emit('update:active', 'library')">岩点</button>
@@ -41,7 +45,7 @@
 
 <script setup>
 import { computed, inject } from 'vue'
-import { Collection, DataBoard, Grid, Histogram, Picture, Platform, Setting } from '@element-plus/icons-vue'
+import { Collection, DataBoard, Grid, Histogram, Platform, Setting } from '@element-plus/icons-vue'
 
 const props = defineProps({
   active: { type: String, required: true }, title: { type: String, required: true }, boardLabel: { type: String, default: '未选择岩板' },
@@ -56,10 +60,13 @@ const desktopItems = computed(() => ([
 ]).filter((item) => item.key !== 'simulation' || props.simulationEnabled))
 const mobileItems = [
   { key: 'dashboard', short: '首页', icon: DataBoard }, { key: 'studio', short: '定线', icon: Platform },
-  { key: 'photo-routes', short: '抱石线路', icon: Picture },
   { key: 'standard-board', short: '板库', icon: Grid }, { key: 'boards', short: '资产', icon: Collection }, { key: 'ai-lab', short: 'AI', icon: Histogram },
 ]
-const mobileActive = computed(() => (['boards', 'library'].includes(props.active) ? 'boards' : props.active))
+const mobileActive = computed(() => {
+  if (['studio', 'photo-routes'].includes(props.active)) return 'studio'
+  if (['boards', 'library'].includes(props.active)) return 'boards'
+  return props.active
+})
 </script>
 
 <style scoped>

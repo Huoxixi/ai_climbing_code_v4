@@ -21,9 +21,9 @@ function pendingStore(user, value, write = false) {
 }
 
 export function createPhotoWorkflow(user) {
-  const state=reactive({session:null,pending:null,pendingChange:null,preview:'',uploading:false,uploadProgress:0,saving:false,error:'',loaded:false,connectionLost:false})
+  const state=reactive({session:null,pending:null,pendingChange:null,preview:'',uploading:false,uploadProgress:0,saving:false,interacting:false,error:'',loaded:false,connectionLost:false})
   const recoveryKey='photo-route-change:'+user
-  let timer, disposed=false, reading=false, mutation=Promise.resolve(), generation=0, queued=0
+  let timer, disposed=false, reading=false, mutation=Promise.resolve(), pendingWrite=Promise.resolve(), generation=0, queued=0
   const busy=computed(()=>state.uploading || state.session?.status==='processing')
   function apply(value) {
     if (disposed) return
@@ -32,7 +32,7 @@ export function createPhotoWorkflow(user) {
   }
   function preview(file) { if(state.preview) URL.revokeObjectURL(state.preview); state.preview=file?URL.createObjectURL(file):'' }
   async function refresh() {
-    if(reading || state.uploading || state.saving || disposed) return
+    if(reading || state.uploading || state.saving || state.interacting || disposed) return
     reading=true
     const started=generation
     try {
@@ -61,17 +61,27 @@ export function createPhotoWorkflow(user) {
   }
   async function choose(file) {
     if(state.uploading || (state.session && !['saved','abandoned'].includes(state.session.status))) return
+    if(!file || !file.size) { state.error='照片内容为空，请重新选择照片。'; return }
     generation++
     state.session=null; state.error=''; state.pending={id:crypto.randomUUID(),file}; preview(file)
-    try { await pendingStore(user,state.pending,true) } catch { state.error='照片已选中，但浏览器暂存失败；请保持页面打开直到确认上传。' }
+    pendingWrite=pendingStore(user,state.pending,true)
+    try { await pendingWrite } catch { state.error='照片已选中，但浏览器暂存失败；请保持页面打开直到确认上传。' }
+  }
+  async function discardPending() {
+    if(state.uploading || !state.pending) return
+    generation++; state.pending=null; preview(null); state.error=''
+    await pendingWrite.catch(()=>{})
+    pendingWrite=pendingStore(user,null,true)
+    try { await pendingWrite } catch { state.error='已返回，但照片草稿未能清除；重新打开页面时可能需要再次返回。' }
   }
   async function upload() {
     if(!state.pending || state.uploading) return
+    if(!state.pending.file || !state.pending.file.size) { state.error='照片内容为空，请返回并重新选择照片。'; return }
     state.uploading=true; state.uploadProgress=0; state.error=''; generation++
     try {
       const body=new FormData(); body.append('photo',state.pending.file); body.append('request_id',state.pending.id)
       apply((await api.post(root+'/upload',body,{timeout:60000,onUploadProgress:event=>{if(event.total)state.uploadProgress=Math.round(event.loaded/event.total*100)}})).data)
-      state.pending=null; preview(null); try { await pendingStore(user,null,true) } catch { /* Server already owns the uploaded photo. */ }
+      state.pending=null; preview(null); await pendingWrite.catch(()=>{}); try { await pendingStore(user,null,true) } catch { /* Server already owns the uploaded photo. */ }
     } catch(error) { state.error=typeof error.response?.data?.detail==='string'?error.response.data.detail:'上传未完成，照片已保留，请重试'; }
     finally { state.uploading=false }
   }
@@ -100,5 +110,5 @@ export function createPhotoWorkflow(user) {
   }
   async function beforeLeave() { try { await mutation; return true } catch { return false } }
   function close() { disposed=true; clearInterval(timer); if(state.preview)URL.revokeObjectURL(state.preview) }
-  return {state,busy,init,refresh,choose,upload,change,beforeLeave,close}
+  return {state,busy,init,refresh,choose,discardPending,upload,change,beforeLeave,close}
 }
