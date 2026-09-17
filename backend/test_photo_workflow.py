@@ -17,7 +17,10 @@ class WorkflowTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.store=PhotoRouteV2Store(Path(self.tmp.name));self.flow=PhotoWorkflow(self.store,start=False)
     def tearDown(self):self.flow.close();self.tmp.cleanup()
     def palette(self):
-        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes());self.flow.process(value['id']);return self.flow.get(value['id'],'owner')
+        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=lambda path,root,**kw:analyze_board_photo(path,root,coarse_only=True)):
+            self.flow.process(value['id'])
+        return self.flow.get(value['id'],'owner')
     def ready(self):
         value=self.palette();value=self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
         def local(path,root,**kwargs):
@@ -37,7 +40,7 @@ class WorkflowTests(unittest.TestCase):
         self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
         with self.assertRaises(HTTPException):self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
     def test_ready_default_members_save_without_holes_roles_setter(self):
-        value=self.ready();self.assertEqual(value['status'],'ready');self.assertTrue(value['route']['members']);self.assertEqual(value['ai']['status'],'unavailable')
+        value=self.ready();self.assertEqual(value['status'],'ready');self.assertTrue(value['route']['members']);self.assertEqual(value['ai']['status'],'not_requested')
         done=self.flow.update(value['id'],'owner',Change(version=value['version']),'save')
         self.assertEqual(done['status'],'saved');self.assertEqual(done['route']['status'],'completed');self.assertIsNone(self.flow.current('owner'))
         result=self.flow.notes(done['route_id'],'owner',Notes(version=done['route']['version'],name='黄色测试',notes='类型和动作自由填写',members=done['route']['members']))
@@ -55,6 +58,36 @@ class WorkflowTests(unittest.TestCase):
         retried=self.flow.update(value['id'],'owner',Change(version=value['version']),'retry')
         with patch.dict('os.environ',{'DEEPSEEK_API_KEY':'','PHOTO_ROUTE_VISION_KEY':''}):self.flow.process(value['id'])
         result=self.flow.get(value['id'],'owner');self.assertEqual(result['route_id'],value['route_id']);self.assertEqual(len(result['route']['members']),1)
+    def test_failed_add_can_return_to_editor_without_losing_route(self):
+        value=self.ready(); original=value['route']; objects=value['board']['objects']
+        with self.store.transaction() as db:
+            db.execute('UPDATE photo_work_sessions SET flow_version=1 WHERE id=?',(value['id'],))
+        self.flow.update(value['id'],'owner',Change(version=value['version'],point=(.99,.99)),'add')
+        with self.store.transaction() as db:
+            db.execute("UPDATE photo_work_sessions SET status='failed',error='这个位置暂未找到可靠岩点' WHERE id=?",(value['id'],))
+        failed=self.flow.get(value['id'],'owner')
+        change=Change(version=failed['version'],request_id='return-once')
+        with self.assertRaises(HTTPException): self.flow.update(value['id'],'other',change,'resume')
+        result=self.flow.update(value['id'],'owner',change,'resume')
+        self.assertEqual(result['status'],'ready'); self.assertIsNone(result['error'])
+        self.assertEqual(result['route'],original); self.assertEqual(result['board']['objects'],objects)
+        self.assertEqual(self.flow.update(value['id'],'owner',change,'resume')['version'],result['version'])
+        with self.store.connect() as db:
+            self.assertIsNone(db.execute('SELECT point_json FROM photo_work_sessions WHERE id=?',(value['id'],)).fetchone()[0])
+        recovered=PhotoWorkflow(self.store,start=False)
+        try:
+            self.assertEqual(recovered.current('owner')['status'],'ready')
+            saved=recovered.update(value['id'],'owner',Change(version=result['version']),'save')
+            self.assertEqual(saved['status'],'saved')
+        finally: recovered.close()
+
+    def test_resume_rejects_processing_or_missing_draft(self):
+        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        with self.assertRaises(HTTPException): self.flow.update(value['id'],'owner',Change(version=value['version']),'resume')
+        with self.store.transaction() as db:
+            db.execute("UPDATE photo_work_sessions SET status='failed' WHERE id=?",(value['id'],))
+        with self.assertRaises(HTTPException): self.flow.update(value['id'],'owner',Change(version=value['version']),'resume')
+
     def test_abandon_preserves_photo_and_prevents_late_result(self):
         value=self.palette();abandoned=self.flow.update(value['id'],'owner',Change(version=value['version']),'abandon')
         self.flow.process(value['id']);self.assertEqual(self.flow.get(value['id'],'owner')['status'],'abandoned');self.assertTrue(self.store.asset_path(value['board']['original_asset']['filename']).exists())
@@ -69,6 +102,7 @@ class WorkflowTests(unittest.TestCase):
     def test_manual_add_is_atomic_and_does_not_require_calibration(self):
         value=self.ready(); count=len(value['board']['objects'])
         with self.store.transaction() as db:
+            db.execute('UPDATE photo_work_sessions SET flow_version=1 WHERE id=?',(value['id'],))
             db.execute('UPDATE board_versions SET calibration_json=NULL WHERE id=?',(value['board_id'],))
         value=self.flow.update(value['id'],'owner',Change(version=value['version'],point=(.99,.99)),'add')
         with patch('core.photo_route_workflow.segment_point',return_value=[[100,100],[140,100],[140,140],[100,140]]):
@@ -76,6 +110,13 @@ class WorkflowTests(unittest.TestCase):
         result=self.flow.get(value['id'],'owner')
         self.assertEqual(result['status'],'ready');self.assertEqual(len(result['board']['objects']),count+1)
         self.assertEqual(len(result['route']['members']),count+1)
+
+    def test_full_model_flow_rejects_legacy_mobilesam_add(self):
+        value=self.ready()
+        with self.assertRaises(HTTPException) as error:
+            self.flow.update(value['id'],'owner',Change(version=value['version'],point=(.5,.5)),'add')
+        self.assertEqual(error.exception.status_code,409)
+        self.assertIn('专项模型',error.exception.detail)
 
     def test_restart_after_local_result_does_not_run_segmentation_again(self):
         value=self.ready()
@@ -110,6 +151,8 @@ class WorkflowTests(unittest.TestCase):
     def test_interrupted_add_rolls_back_and_can_resume_once(self):
         import sqlite3
         value=self.ready();count=len(value['board']['objects'])
+        with self.store.transaction() as db:
+            db.execute('UPDATE photo_work_sessions SET flow_version=1 WHERE id=?',(value['id'],))
         value=self.flow.update(value['id'],'owner',Change(version=value['version'],point=(.99,.99)),'add')
         with self.store.transaction() as db:
             db.execute("CREATE TRIGGER interrupt_add BEFORE UPDATE ON photo_work_sessions WHEN NEW.status='ready' BEGIN SELECT RAISE(ABORT,'simulated interruption'); END")
@@ -119,6 +162,73 @@ class WorkflowTests(unittest.TestCase):
             with self.store.transaction() as db:db.execute('DROP TRIGGER interrupt_add')
             self.flow.process(value['id'])
         self.assertEqual(len(self.flow.get(value['id'],'owner')['board']['objects']),count+1)
+
+    def test_preview_members_match_confirmation_without_inference(self):
+        value=self.palette();group=next(g for g in value['color_groups'] if g['color']=='黄色')
+        payload=Change(version=value['version'],color='黄色',request_id='confirm-once')
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=AssertionError('no inference')), patch('core.photo_route_workflow.review_objects',side_effect=AssertionError('no network')):
+            result=self.flow.select(value['id'],'owner',payload)
+            repeated=self.flow.select(value['id'],'owner',payload)
+        self.assertEqual(result['board_id'],value['board_id'])
+        self.assertEqual(set(group['member_ids']),{m['object_id'] for m in result['route']['members']})
+        self.assertEqual(repeated['route_id'],result['route_id'])
+        with self.store.connect() as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM routes').fetchone()[0],1)
+
+    def test_assign_color_persists_and_isolates_owners(self):
+        value=self.palette();oid=value['board']['objects'][0]['id']
+        payload=Change(version=value['version'],color='蓝色',member_ids=[oid],request_id='assign-once')
+        with self.assertRaises(HTTPException):self.flow.update(value['id'],'other',payload,'assign-color')
+        updated=self.flow.update(value['id'],'owner',payload,'assign-color')
+        replay=self.flow.update(value['id'],'owner',payload,'assign-color')
+        self.assertEqual(updated['version'],replay['version'])
+        restored=PhotoWorkflow(self.store,start=False).current('owner')
+        self.assertIn(oid,next(g for g in restored['color_groups'] if g['color']=='蓝色')['member_ids'])
+        with self.assertRaises(HTTPException):self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
+
+    def test_legacy_task_keeps_legacy_confirmation(self):
+        value=self.palette()
+        with self.store.transaction() as db:db.execute('UPDATE photo_work_sessions SET flow_version=1 WHERE id=?',(value['id'],))
+        result=self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
+        self.assertEqual(result['status'],'processing');self.assertNotEqual(result['board_id'],value['board_id'])
+
+    def test_legacy_preview_reprocesses_with_full_model_without_deleting_old_board(self):
+        value=self.palette(); old_board=value['board']; calls=[]
+        with self.store.transaction() as db:db.execute('UPDATE photo_work_sessions SET flow_version=1 WHERE id=?',(value['id'],))
+        legacy=self.flow.get(value['id'],'owner')
+        reprocessing=self.flow.update(value['id'],'owner',Change(version=legacy['version'],request_id='upgrade-once'),'reprocess')
+        self.assertEqual(reprocessing['flow_version'],2); self.assertEqual(reprocessing['status'],'processing')
+        self.assertNotEqual(reprocessing['board_id'],old_board['id'])
+        self.assertEqual(self.store.get_board(old_board['id'],'owner')['objects'],old_board['objects'])
+        def full_model(path,root,**kwargs):
+            calls.append(kwargs)
+            return analyze_board_photo(path,root,coarse_only=True)
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=full_model): self.flow.process(value['id'])
+        upgraded=self.flow.get(value['id'],'owner')
+        self.assertEqual(upgraded['status'],'awaiting_color')
+        self.assertTrue(calls[0]['require_climbing_model']); self.assertFalse(calls[0]['coarse_only'])
+
+    def test_reprocess_rejects_a_current_full_model_flow(self):
+        value=self.palette()
+        with self.assertRaises(HTTPException) as error:
+            self.flow.update(value['id'],'owner',Change(version=value['version']),'reprocess')
+        self.assertEqual(error.exception.status_code,409)
+
+    def test_new_upload_requires_full_model_analysis(self):
+        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=ValueError('model unavailable')) as analyze:
+            with self.assertRaises(ValueError):self.flow.process(value['id'])
+        self.assertTrue(analyze.call_args.kwargs['require_climbing_model'])
+        self.assertNotIn('require_mobilesam',analyze.call_args.kwargs)
+        self.assertFalse(analyze.call_args.kwargs['coarse_only'])
+        self.assertEqual(analyze.call_args.kwargs['color_version'],'interior-v4')
+
+    def test_confirmation_rejects_changed_preview(self):
+        value=self.palette()
+        for extra in [{'member_ids':[]},{'board_version':value['board']['version']+1}]:
+            with self.assertRaises(HTTPException) as error:
+                self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色',**extra))
+            self.assertEqual(error.exception.status_code,409)
+        self.assertIsNone(self.flow.get(value['id'],'owner')['route'])
 
 
 class VisionTests(unittest.TestCase):

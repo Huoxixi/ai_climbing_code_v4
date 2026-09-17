@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "runs_per_combination": 2,
+  "development_truth_objects": 179,
+  "constants": {
+    "model": "current climbing Mask R-CNN candidate",
+    "score_threshold": 0.4,
+    "max_size_test": 2000,
+    "color_version": "interior-v4",
+    "threads": 2,
+    "memory_scope": "cold process-tree peak including model load, two-image inference, color classification, and review-asset generation"
+  },
+  "rows": [
+    {
+      "min_size": 1200,
+      "candidate_cap": 300,
+      "peak_resident_mib_runs": [2938.2, 2952.6],
+      "conservative_peak_resident_mib": 2952.6,
+      "predictions": 157,
+      "matched": 148,
+      "precision": 0.9426751592,
+      "recall": 0.8268156425,
+      "f1": 0.8809523810,
+      "boundary_f1": 0.7619007586
+    },
+    {
+      "min_size": 1200,
+      "candidate_cap": 200,
+      "peak_resident_mib_runs": [2939.5, 2942.6],
+      "conservative_peak_resident_mib": 2942.6,
+      "predictions": 157,
+      "matched": 148,
+      "precision": 0.9426751592,
+      "recall": 0.8268156425,
+      "f1": 0.8809523810,
+      "boundary_f1": 0.7619007586
+    },
+    {
+      "min_size": 1024,
+      "candidate_cap": 300,
+      "peak_resident_mib_runs": [2208.3, 2208.8],
+      "conservative_peak_resident_mib": 2208.8,
+      "predictions": 145,
+      "matched": 138,
+      "precision": 0.9517241379,
+      "recall": 0.7709497207,
+      "f1": 0.8518518519,
+      "boundary_f1": 0.7394472418
+    },
+    {
+      "min_size": 1024,
+      "candidate_cap": 200,
+      "peak_resident_mib_runs": [2208.7, 2208.5],
+      "conservative_peak_resident_mib": 2208.7,
+      "predictions": 145,
+      "matched": 138,
+      "precision": 0.9517241379,
+      "recall": 0.7709497207,
+      "f1": 0.8518518519,
+      "boundary_f1": 0.7394472418
+    },
+    {
+      "min_size": 960,
+      "candidate_cap": 300,
+      "peak_resident_mib_runs": [2340.6, 2334.2],
+      "conservative_peak_resident_mib": 2340.6,
+      "predictions": 149,
+      "matched": 138,
+      "precision": 0.9261744966,
+      "recall": 0.7709497207,
+      "f1": 0.8414634146,
+      "boundary_f1": 0.7353744581
+    },
+    {
+      "min_size": 960,
+      "candidate_cap": 200,
+      "peak_resident_mib_runs": [2335.1, 2333.5],
+      "conservative_peak_resident_mib": 2335.1,
+      "predictions": 149,
+      "matched": 138,
+      "precision": 0.9261744966,
+      "recall": 0.7709497207,
+      "f1": 0.8414634146,
+      "boundary_f1": 0.7353744581
+    }
+  ],
+  "conclusion": {
+    "candidate_cap_effect": "No quality effect and no material memory reduction because neither image reached 200 predictions at threshold 0.4.",
+    "best_low_memory_candidate": "min1024-cap200",
+    "memory_reduction_vs_min1200_cap300": 0.2519487909,
+    "precision_change_percentage_points": 0.9048978695,
+    "recall_change_percentage_points": -5.5865923588,
+    "matched_object_change": -10,
+    "formal_acceptance": false
+  },
+  "limitations": [
+    "Results use two public development images, not an independent holdout.",
+    "Local Windows CPU peaks do not replace a target-server measurement.",
+    "The 1024 candidate reduces recall and boundary F1 relative to the current 1200 baseline."
+  ]
+}

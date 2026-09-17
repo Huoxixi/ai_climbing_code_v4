@@ -50,6 +50,20 @@
       <p v-if="state.uploading" role="status">已上传 {{state.uploadProgress}}%<progress :value="state.uploadProgress" max="100" aria-label="照片上传进度" /></p>
       <div v-if="!state.pending" class="photo-work__samples"><button v-for="sample in samples" :key="sample.name" :disabled="!editable || state.uploading" @click="chooseSample(sample)"><img :src="sample.url" :alt="sample.name" /><span>{{sample.name}}</span></button></div>
     </template>
+    <template v-else-if="session.status==='awaiting_color' && session.flow_version<2">
+      <h2>需要使用专项模型重新识别</h2>
+      <div class="photo-work__layout">
+        <PhotoReviewViewport :width="board.width" :height="board.height" :image-key="board.id">
+          <img class="photo-work__plain" :src="photoV2AssetUrl(board.original_asset)" alt="等待专项模型重新识别的原始照片" />
+        </PhotoReviewViewport>
+        <aside class="photo-work__tools">
+          <p><strong>这张照片来自旧版颜色初筛，不能作为正式岩点识别结果。</strong></p>
+          <p>重新识别会先完整运行岩点专项实例分割模型，再进入点击岩点选线路。原始照片和已保存线路不会被覆盖。</p>
+          <button class="photo-work__primary" :disabled="state.saving || !editable" @click="act('reprocess')">使用专项模型重新识别</button>
+          <button :disabled="state.saving || !editable" @click="abandon">放弃当前线路</button>
+        </aside>
+      </div>
+    </template>
     <template v-else-if="session.status==='awaiting_color'">
       <h2>点击岩点选择线路颜色</h2>
       <div class="photo-work__layout">
@@ -72,7 +86,7 @@
             <button :disabled="!assignedColor || state.saving || !editable" @click="assignColor">保存岩点颜色</button>
           </template>
           <p v-else-if="previewColor==='待确认'">点击照片中的岩点，为它指定颜色后再提取。</p>
-          <button class="photo-work__primary" :disabled="!previewObjects.length || previewColor==='待确认' || state.saving || !editable" @click="act('color',{color:previewColor,member_ids:previewObjects.map(obj=>obj.id),board_version:board.version})">提取{{previewColor && previewColor!=='待确认' ? previewColor : ''}}线路</button>
+          <button class="photo-work__primary" :disabled="!previewObjects.length || previewColor==='待确认' || state.saving || !editable" @click="act('color',{color:previewColor,member_ids:previewObjects.map(obj=>obj.id),board_version:board.version})">确认{{previewColor && previewColor!=='待确认' ? previewColor : '这条'}}线路</button>
           <button :disabled="state.saving || !editable" @click="abandon">放弃当前线路</button>
         </aside>
       </div>
@@ -81,7 +95,7 @@
       <div class="photo-work__processing" :class="{'is-failed':session.status==='failed'}">
         <span v-if="session.status==='processing'" class="photo-work__spinner" aria-hidden="true"></span>
         <h2>{{session.status==='failed'?'这次没有识别完成':session.stage}}</h2>
-        <p>{{session.error || '照片和已完成的步骤已保存，可以继续使用其他功能。'}}</p>
+        <p>{{session.error || (session.flow_version>=2 ? '正在先完成整墙岩点实例分割和轮廓分色；全部完成后才会进入点击选线。可以离开此页，进度会自动保存。' : '照片和已完成的步骤已保存，可以继续使用其他功能。')}}</p>
         <p v-if="session.status==='failed' && session.route">已有岩点和线路已保留，可以返回编辑，换个位置补选。</p>
         <progress v-if="session.status==='processing'" :value="session.progress" max="100" :aria-label="session.stage" />
         <TransitionGroup v-if="session.status==='processing'" name="photo-stage" tag="ol" class="photo-work__stage-list" aria-label="识别步骤">
@@ -103,7 +117,7 @@
           <p>黄线是识别到的岩点边缘；放大后点按，可将岩点加入或移出线路。</p><p role="status">{{selected ? (members.includes(selected) ? "已选中线路中的岩点" : "已选中其他候选岩点") : "请先点击一个岩点"}}</p><label class="photo-work__toggle"><span>显示荧光轮廓</span><input v-model="showGlow" type="checkbox" /></label><label class="photo-work__checkbox-row"><input v-model="showOther" type="checkbox" /> 显示其他候选岩点</label>
           <details class="photo-work__hold-list"><summary>岩点列表（{{visibleObjects.length}}）</summary><div><button v-for="obj in visibleObjects" :key="obj.id" :class="{'is-selected':selected===obj.id}" :aria-pressed="selected===obj.id" @click="selected=obj.id">{{ photoObjectLabel(obj, board, { member: members.includes(obj.id) }) }}</button></div></details>
           <button class="photo-work__desktop-review-action" :disabled="!selected || state.saving || !editable" @click="toggle">{{!selected || members.includes(selected)?'移出当前线路':'加入线路'}}</button>
-          <button :aria-pressed="adding" :disabled="state.saving || !editable" @click="adding=!adding">{{adding?'请点击照片中的遗漏岩点':'添加遗漏岩点'}}</button>
+          <button v-if="session.flow_version<2" :aria-pressed="adding" :disabled="state.saving || !editable" @click="adding=!adding">{{adding?'请点击照片中的遗漏岩点':'添加遗漏岩点'}}</button>
           <button class="photo-work__primary photo-work__desktop-review-action" :disabled="!members.length || state.saving || !editable" @click="save">保存线路</button>
           <details v-if="selectedObject" class="photo-work__advanced"><summary>轮廓修正</summary><p>仅在识别边缘不准确时修改所选岩点轮廓。</p><label>轮廓坐标<textarea v-model="contourInput" rows="3" :disabled="!editable" /></label><button :disabled="state.saving || !editable" @click="contour">保存轮廓修正</button></details><button :disabled="state.saving || !editable" @click="abandon">放弃当前线路</button>
         </aside>
@@ -167,14 +181,20 @@ const surfaceState=computed(()=>{
   return session.value.status
 })
 const processingSteps=[
-  {label:'上传照片',start:0,complete:20},
-  {label:'检查照片',start:20,complete:45},
-  {label:'识别岩点轮廓',start:45,complete:80},
+  {label:'校验整墙照片',start:0,complete:20},
+  {label:'运行岩点专项模型',start:20,complete:65},
+  {label:'整理轮廓与颜色',start:65,complete:90},
+  {label:'进入点击选线',start:90,complete:100},
+]
+const legacyProcessingSteps=[
+  {label:'检查照片',start:0,complete:30},
+  {label:'恢复旧版任务',start:30,complete:80},
   {label:'准备人工复核',start:80,complete:100},
 ]
 const visibleProcessingSteps=computed(()=>{
   const progress=Number(session.value?.progress || 0)
-  return processingSteps.filter(step=>progress>=step.start)
+  const steps=session.value?.flow_version>=2?processingSteps:legacyProcessingSteps
+  return steps.filter(step=>progress>=step.start)
 })
 let notesTimer, notesPromise
 const noteKey='photo-route-notes:'+(access.session.username || 'local')

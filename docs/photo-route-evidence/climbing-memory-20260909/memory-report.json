@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "scope": "cold process-tree imports, model load, inference, interior-v4 color classification, and review-asset generation",
+  "excludes": [
+    "upload transfer",
+    "other server services",
+    "swap",
+    "human review"
+  ],
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+    "logical_cpus": 16,
+    "python": "3.12.14"
+  },
+  "config_sha256": "b356ef01a603d7b90d1d252318d46b11bab13d27ecc82002fb10a5b1e1a1d5b4",
+  "checkpoint_sha256": "995960a74819e21bd66d7be56ae6e1c8124ec0a06fece4fae13812887d86ebea",
+  "runs": [
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 13.0,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3128.8,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\blue-replica.jpg",
+      "image_sha256": "de0a05b82854b3c0f98a9696f35a620a9fe22150f5f522a3ade70fd800dd1f6e",
+      "algorithm_seconds": 11.86,
+      "candidate_count": 11,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          1080,
+          1920
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 12.719,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3121.5,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\blue-replica.jpg",
+      "image_sha256": "de0a05b82854b3c0f98a9696f35a620a9fe22150f5f522a3ade70fd800dd1f6e",
+      "algorithm_seconds": 11.578,
+      "candidate_count": 11,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          1080,
+          1920
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 13.313,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3119.8,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\blue-replica.jpg",
+      "image_sha256": "de0a05b82854b3c0f98a9696f35a620a9fe22150f5f522a3ade70fd800dd1f6e",
+      "algorithm_seconds": 12.188,
+      "candidate_count": 11,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          1080,
+          1920
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 14.578,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3214.5,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\yellow-overlay.jpg",
+      "image_sha256": "e1676b1352c3b3704d674bc7b1e0230b7580301bf08f7d3e7c22b15087f6363a",
+      "algorithm_seconds": 13.391,
+      "candidate_count": 75,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          810,
+          1440
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 14.172,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3214.9,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\yellow-overlay.jpg",
+      "image_sha256": "e1676b1352c3b3704d674bc7b1e0230b7580301bf08f7d3e7c22b15087f6363a",
+      "algorithm_seconds": 13.063,
+      "candidate_count": 75,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          810,
+          1440
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    },
+    {
+      "status": "completed",
+      "returncode": 0,
+      "wall_seconds": 14.141,
+      "timeout_seconds": 180.0,
+      "peak_resident_mib": 3133.0,
+      "memory_scope": "sampled sum of inference process-tree peak RSS/working sets; excludes supervisor, other services and swap",
+      "image": "D:\\ai_climbing_code\\worktrees\\ai_climbing_code_v4-photo-yellow-release\\docs\\photo-route-evidence\\yellow-overlay.jpg",
+      "image_sha256": "e1676b1352c3b3704d674bc7b1e0230b7580301bf08f7d3e7c22b15087f6363a",
+      "algorithm_seconds": 12.985,
+      "candidate_count": 75,
+      "model_version": "indoor-maskrcnn-995960a74819+interior-v4+boundary-off",
+      "processing_config": {
+        "detector": "climbing-mask-rcnn",
+        "segmentation_model": "indoor-maskrcnn-995960a74819",
+        "color_version": "interior-v4",
+        "boundary_version": "off",
+        "working_size": [
+          810,
+          1440
+        ],
+        "max_seconds": 180,
+        "automatic_mask_parameters": null
+      }
+    }
+  ],
+  "peak_resident_mib": 3214.9,
+  "memory_limit_mib": null,
+  "measurement_complete": true,
+  "memory_gate_passed": false,
+  "target_hardware_verified": false
+}

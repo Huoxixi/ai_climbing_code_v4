@@ -17,18 +17,34 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from core.photo_route_inference_lock import serialized_inference
+
 import cv2
 import numpy as np
 
 from core.photo_route_processing import PhotoProcessingError, decode_photo
+from core.photo_route_colors import classify_mask_color, BASELINE_COLOR_VERSION, COLOR_VERSIONS
+from core.photo_route_boundaries import refine_boundary, separate_mask_components
 
 
-BOARD_WIDTH_MM = 6200
-BOARD_HEIGHT_MM = 4100
-GRID_COLUMNS = 30
-GRID_ROWS = 20
+BOARD_WIDTH_MM = 4100
+BOARD_HEIGHT_MM = 6200
+GRID_COLUMNS = 20
+GRID_ROWS = 30
 HOLE_SPACING_MM = 200
 MAX_WORKING_EDGE = 1920
+PRODUCTION_CLIMBING_MIN_SIZE = 1200
+PRODUCTION_CLIMBING_CANDIDATE_CAP = 300
+PACKAGED_CLIMBING_MODEL_CONFIG = (
+    Path(__file__).resolve().parents[1]
+    / "model_assets"
+    / "climbing-mask-rcnn-r50-fpn-1200.yaml"
+)
+PRODUCTION_CLIMBING_MODEL_CHECKPOINT = Path(
+    "/var/lib/ai-climbing/models/climbing/verified-model_final.pth"
+)
+AUTOMATIC_MASK_PARAMETERS = dict(points_per_side=24, points_per_batch=2,
+    pred_iou_thresh=.84, stability_score_thresh=.9, box_nms_thresh=.7, min_mask_region_area=45)
 
 
 @dataclass(frozen=True)
@@ -96,6 +112,21 @@ def map_point(matrix: list[list[float]], x: float, y: float) -> tuple[float, flo
     if abs(value[2]) < 1e-9:
         raise ValueError("标定矩阵产生了无效坐标")
     return float(value[0] / value[2]), float(value[1] / value[2])
+
+
+def projected_bbox_scale_mm_per_px(matrix: list[list[float]], bbox: list[float] | tuple[float, float, float, float]) -> float:
+    """Calculate photo-to-board scale at the object's position on the wall."""
+    x, y, width, height = map(float, bbox)
+    if width <= 0 or height <= 0:
+        raise ValueError("对象边界尺寸必须大于零")
+    top_left = map_point(matrix, x, y)
+    top_right = map_point(matrix, x + width, y)
+    bottom_right = map_point(matrix, x + width, y + height)
+    bottom_left = map_point(matrix, x, y + height)
+    distance = lambda a, b: math.hypot(a[0] - b[0], a[1] - b[1])
+    mapped_width = (distance(top_left, top_right) + distance(bottom_left, bottom_right)) / 2
+    mapped_height = (distance(top_left, bottom_left) + distance(top_right, bottom_right)) / 2
+    return math.sqrt((mapped_width / width) * (mapped_height / height))
 
 
 def nearest_hole(x_mm: float, y_mm: float) -> tuple[dict, float]:
@@ -201,7 +232,7 @@ def _candidate_masks(image: np.ndarray) -> list[np.ndarray]:
 
 
 def _mobilesam_masks(image: np.ndarray, deadline: float,
-                     cancelled: Callable[[], bool]) -> tuple[list[np.ndarray], str] | None:
+                     cancelled: Callable[[], bool], progress=lambda stage,value:None) -> tuple[list[np.ndarray], str] | None:
     """Use an explicitly installed local MobileSAM; never download a model."""
     repo = Path(os.getenv("PHOTO_ROUTE_MOBILESAM_REPO", ""))
     checkpoint = Path(os.getenv("PHOTO_ROUTE_MOBILESAM_CHECKPOINT", ""))
@@ -213,53 +244,228 @@ def _mobilesam_masks(image: np.ndarray, deadline: float,
     import torch
     from mobile_sam import SamAutomaticMaskGenerator, sam_model_registry
     torch.set_num_threads(2); torch.manual_seed(0); cv2.setNumThreads(1)
+    progress("载入本地分割模型",22)
     model = sam_model_registry["vit_t"]()
     model.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True))
     model.eval()
     class LocalGenerator(SamAutomaticMaskGenerator):
+        batches=0
         def _process_batch(self, *args, **kwargs):
             if cancelled(): raise InterruptedError("任务已取消")
             if time.monotonic() > deadline: raise TimeoutError("识别任务超过 180 秒")
-            return super()._process_batch(*args, **kwargs)
-    generator = LocalGenerator(model, points_per_side=24, points_per_batch=2,
-                               pred_iou_thresh=.84, stability_score_thresh=.9,
-                               box_nms_thresh=.7, min_mask_region_area=45)
+            result=super()._process_batch(*args, **kwargs)
+            self.batches+=1
+            progress("全图轮廓识别",25+min(35,round(self.batches/288*35)))
+            return result
+    generator = LocalGenerator(model, **AUTOMATIC_MASK_PARAMETERS)
     with torch.inference_mode(): proposals = generator.generate(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV); area = image.shape[0] * image.shape[1]
+    area = image.shape[0] * image.shape[1]
     masks = []
-    for proposal in proposals:
-        mask = proposal["segmentation"].astype(np.uint8) * 255
+    for mask in (part for proposal in sorted(proposals, key=lambda p: p['predicted_iou'], reverse=True)
+                 for part in separate_mask_components(proposal['segmentation'], max(45, area * .000025))):
         x, y, width, height = cv2.boundingRect(mask); size = int(np.count_nonzero(mask))
         if not max(45, area * .000025) <= size <= area * .08 or min(width, height) < 8:
             continue
-        if x <= 1 or y <= 1 or x + width >= image.shape[1]-1 or y + height >= image.shape[0]-1:
-            continue
-        pixels = hsv[mask > 0]
-        if len(pixels) == 0 or (np.median(pixels[:, 1]) < 35 and np.median(pixels[:, 2]) > 70):
-            continue
+        # Low saturation may be chalk or a neutral hold; retain for confirmation.
+        def duplicate(other):
+            overlap=np.count_nonzero((mask>0)&(other>0)); other_size=np.count_nonzero(other)
+            return overlap/max(1,size+other_size-overlap)>.65 or (overlap/max(1,min(size,other_size))>.9 and min(size,other_size)/max(size,other_size)>.65)
+        if any(duplicate(other) for other in masks): continue
         masks.append(mask)
     digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12]
-    return masks, f"mobilesam-vit-t-{digest}+local-rules-v2"
+    return masks, f"mobilesam-vit-t-{digest}+interior-colors-v3-boundaries"
 
 
-def _detect_grid_points(image: np.ndarray) -> list[list[float]]:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
-    min_dist = max(8, round(min(image.shape[:2]) / 60))
-    circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1.3, minDist=min_dist,
-                               param1=90, param2=18, minRadius=2, maxRadius=max(4, min_dist // 2))
-    if circles is None:
-        return []
-    return [[round(float(x), 2), round(float(y), 2)] for x, y, _ in circles[0][:1000]]
+def _climbing_model_masks(image: np.ndarray, deadline: float,
+                          cancelled: Callable[[], bool], progress=lambda stage, value: None):
+    """Return hold masks from the configured climbing-specific instance model."""
+    config_value = os.getenv(
+        "PHOTO_ROUTE_CLIMBING_MODEL_CONFIG", str(PACKAGED_CLIMBING_MODEL_CONFIG)
+    )
+    checkpoint_value = os.getenv(
+        "PHOTO_ROUTE_CLIMBING_MODEL_CHECKPOINT",
+        str(PRODUCTION_CLIMBING_MODEL_CHECKPOINT),
+    )
+    config_path, checkpoint = Path(config_value), Path(checkpoint_value)
+    if not config_path.is_file() or not checkpoint.is_file():
+        raise PhotoProcessingError("岩点专项模型未配置，请检查本地配置和权重后重试")
+    try:
+        import torch
+        from detectron2.config import get_cfg
+        from detectron2.data.transforms import ResizeShortestEdge
+        from detectron2.modeling import build_model
+    except (ImportError, OSError) as exc:
+        raise PhotoProcessingError("岩点专项模型运行环境不可用，请检查本地依赖") from exc
+    if cancelled():
+        raise InterruptedError("任务已取消")
+    if time.monotonic() > deadline:
+        raise TimeoutError("识别任务超过 180 秒")
+    torch.set_num_threads(2)
+    torch.manual_seed(0)
+    cv2.setNumThreads(1)
+    cfg = get_cfg()
+    cfg.merge_from_file(str(config_path))
+    cfg.MODEL.DEVICE = "cpu"
+    cfg.MODEL.WEIGHTS = ""
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = .4
+    # The local and production runtime intentionally have one accepted profile.
+    # Force it after loading the model architecture so stale comparison configs
+    # cannot silently select a lower inference size or candidate cap.
+    _apply_production_climbing_profile(cfg)
+    if cfg.MODEL.ROI_HEADS.NUM_CLASSES != 2 or not cfg.MODEL.MASK_ON:
+        raise PhotoProcessingError("岩点专项模型配置与现有识别流程不兼容")
+    cfg.freeze()
+    progress("载入岩点专项模型", 25)
+    model = build_model(cfg)
+    weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    model.load_state_dict(weights["model"], strict=True)
+    del weights
+    model.eval()
+    transform = ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
+    resized = transform.get_transform(image).apply_image(image)
+    tensor = torch.as_tensor(np.ascontiguousarray(resized.transpose(2, 0, 1)).astype("float32"))
+    progress("识别岩点轮廓", 45)
+    with torch.inference_mode():
+        instances = model([{"image": tensor, "height": image.shape[0], "width": image.shape[1]}])[0]["instances"].to("cpu")
+    if cancelled():
+        raise InterruptedError("任务已取消")
+    if time.monotonic() > deadline:
+        raise TimeoutError("识别任务超过 180 秒")
+    classes = instances.pred_classes.numpy()
+    keep = classes == 0
+    masks = [(mask.astype(np.uint8) * 255) for mask in instances.pred_masks.numpy()[keep]]
+    scores = [float(value) for value in instances.scores.numpy()[keep]]
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12]
+    return masks, scores, (
+        f"indoor-maskrcnn-{digest}"
+        f"+min{PRODUCTION_CLIMBING_MIN_SIZE}-cap{PRODUCTION_CLIMBING_CANDIDATE_CAP}"
+    )
 
 
+def _apply_production_climbing_profile(cfg) -> None:
+    """Lock every production caller to the accepted 1200 / 300 profile."""
+    cfg.INPUT.MIN_SIZE_TEST = PRODUCTION_CLIMBING_MIN_SIZE
+    cfg.INPUT.MAX_SIZE_TEST = max(PRODUCTION_CLIMBING_MIN_SIZE, int(cfg.INPUT.MAX_SIZE_TEST))
+    cfg.TEST.DETECTIONS_PER_IMAGE = PRODUCTION_CLIMBING_CANDIDATE_CAP
+
+
+def detect_photo_hole_grid(image: np.ndarray, source_ratio: float = 1.0) -> dict | None:
+    """Fit the real 20×30 wall lattice from repeated dark hole evidence.
+
+    A single dark blob is weak evidence on a textured climbing wall. The complete
+    lattice is strong evidence: all 600 predicted intersections must improve
+    together while the six affine parameters are adjusted. Holds may hide some
+    holes without pulling the grid away from the remaining rows and columns.
+    """
+    if image is None or image.ndim != 3 or min(image.shape[:2]) < 320 or source_ratio <= 0:
+        return None
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    height, width = gray.shape
+    dark_response = np.maximum(
+        cv2.GaussianBlur(gray, (0, 0), 2.8) - cv2.GaussianBlur(gray, (0, 0), .55), 0,
+    )
+    # origin_x, origin_y, column_dx, column_dy, row_dx, row_dy
+    params = np.asarray([
+        .03 * width, .035 * height,
+        .94 * width / (GRID_COLUMNS - 1), .04 * height / (GRID_COLUMNS - 1),
+        -.09 * width / (GRID_ROWS - 1), .88 * height / (GRID_ROWS - 1),
+    ], dtype=np.float64)
+
+    def responses(candidate: np.ndarray) -> np.ndarray:
+        values = []
+        for row in range(GRID_ROWS):
+            for column in range(GRID_COLUMNS):
+                x, y = candidate[:2] + column * candidate[2:4] + row * candidate[4:6]
+                px, py = int(round(x)), int(round(y))
+                if 2 <= px < width - 2 and 2 <= py < height - 2:
+                    values.append(min(55.0, float(dark_response[py-2:py+3, px-2:px+3].max())))
+                else:
+                    values.append(0.0)
+        return np.asarray(values, dtype=np.float64)
+
+    def score(candidate: np.ndarray) -> float:
+        values = responses(candidate)
+        ordered = np.sort(values)
+        return float(values.sum() + .2 * ordered[100:400].sum())
+
+    best_score = score(params)
+    steps = np.asarray([20, 20, 2.5, 1.2, 1.2, 2.5], dtype=np.float64) * max(width / 810, height / 1440)
+    for _ in range(14):
+        improved = True
+        while improved:
+            improved = False
+            for index in range(len(params)):
+                for direction in (-1, 1):
+                    candidate = params.copy()
+                    candidate[index] += direction * steps[index]
+                    candidate_score = score(candidate)
+                    if candidate_score > best_score:
+                        params, best_score, improved = candidate, candidate_score, True
+        steps *= .65
+
+    phase_scores = []
+    for offset in (params[2:4] * .5, params[4:6] * .5, (params[2:4] + params[4:6]) * .5):
+        shifted = params.copy()
+        shifted[:2] += offset
+        phase_scores.append(score(shifted))
+    contrast = max(0.0, best_score / max(1.0, max(phase_scores)) - 1.0)
+    values = responses(params)
+    support_count = int(np.count_nonzero(values >= 8.0))
+    confidence = min(.94, .45 + min(.34, contrast * 3.5) + min(.15, support_count / 1200))
+    if contrast < .025 or support_count < 60:
+        return None
+
+    origin = params[:2] / source_ratio
+    column_vector = params[2:4] / source_ratio
+    row_vector = params[4:6] / source_ratio
+    photo_points = np.float32([
+        origin,
+        origin + (GRID_COLUMNS - 1) * column_vector,
+        origin + (GRID_ROWS - 1) * row_vector,
+    ])
+    board_points = np.float32([
+        [200, BOARD_HEIGHT_MM - 300],
+        [200 + (GRID_COLUMNS - 1) * HOLE_SPACING_MM, BOARD_HEIGHT_MM - 300],
+        [200, 100],
+    ])
+    affine = cv2.getAffineTransform(photo_points, board_points)
+    matrix = np.vstack([affine, [0.0, 0.0, 1.0]])
+    return {
+        "matrix": matrix.tolist(),
+        "method": "detected-hole-grid-affine-v1",
+        "status": "needs_review",
+        "confidence": round(float(confidence), 4),
+        "detected_hole_count": support_count,
+        "photo_grid": {
+            "origin": [round(float(value), 3) for value in origin],
+            "column_vector": [round(float(value), 5) for value in column_vector],
+            "row_vector": [round(float(value), 5) for value in row_vector],
+            "columns": GRID_COLUMNS,
+            "rows": GRID_ROWS,
+            "center_column": GRID_COLUMNS // 2,
+        },
+    }
+
+
+@serialized_inference
 def analyze_board_photo(photo_path: Path, storage_root: Path, *,
                         cancelled: Callable[[], bool] | None = None,
                         deadline: float | None = None, seed: tuple[float, float] | None = None,
                         color_group: str | None = None, calibration: dict | None = None,
-                        progress: Callable[[str, int], None] | None = None, coarse_only: bool = False) -> dict:
+                        progress: Callable[[str, int], None] | None = None, coarse_only: bool = False,
+                        require_mobilesam: bool = False, require_climbing_model: bool = False,
+                        color_version: str = BASELINE_COLOR_VERSION, boundary_refinement: bool | None = None) -> dict:
     """Produce local object, colour, hole and initial anchor proposals."""
     cancelled = cancelled or (lambda: False)
+    if color_version not in COLOR_VERSIONS:
+        raise ValueError(f"未知分色版本：{color_version}")
+    if coarse_only and (require_mobilesam or require_climbing_model):
+        raise ValueError("粗略识别不能同时要求完整模型")
+    if require_mobilesam and require_climbing_model:
+        raise ValueError("一次识别只能选择一个轮廓模型")
+    refine_edges = require_mobilesam if boundary_refinement is None else boundary_refinement
+    if require_climbing_model:
+        refine_edges = False
     deadline = deadline or time.monotonic() + 180
     progress = progress or (lambda stage, percent: None)
     progress("检查照片与工作尺寸", 12)
@@ -269,17 +475,29 @@ def analyze_board_photo(photo_path: Path, storage_root: Path, *,
         raise PhotoProcessingError("；".join(quality.issues))
     original_height, original_width = image.shape[:2]
     work, ratio = _working_image(image)
+    if require_mobilesam and max(work.shape[:2])>1280:
+        ratio=1280/max(image.shape[:2])
+        work=cv2.resize(image,(round(original_width*ratio),round(original_height*ratio)),interpolation=cv2.INTER_AREA)
     height, width = work.shape[:2]
     matrix = compute_homography(
         [[0, original_height], [original_width, original_height], [original_width, 0], [0, 0]],
         [[0, 0], [BOARD_WIDTH_MM, 0], [BOARD_WIDTH_MM, BOARD_HEIGHT_MM], [0, BOARD_HEIGHT_MM]],
     )
+    detected_calibration = None
     if calibration and calibration.get("matrix"):
         matrix = calibration["matrix"]
+    elif not require_climbing_model:
+        detected_calibration = detect_photo_hole_grid(work, ratio)
+        if detected_calibration:
+            matrix = detected_calibration["matrix"]
     proposals = []
-    lab = cv2.cvtColor(work, cv2.COLOR_BGR2LAB)
+    candidate_scores = None
     progress("全图候选识别", 20)
-    if seed is not None:
+    if require_climbing_model:
+        work = image
+        ratio = 1.0
+        candidate_masks, candidate_scores, model_version = _climbing_model_masks(image, deadline, cancelled, progress)
+    elif seed is not None:
         repo, checkpoint = mobilesam_paths()
         sys.path.insert(0, str(repo))
         from core.photo_route_mobilesam import extract_with_mobilesam
@@ -292,56 +510,85 @@ def analyze_board_photo(photo_path: Path, storage_root: Path, *,
             raise PhotoProcessingError("该采样颜色未找到可靠对象，请换一个颜色清晰的位置重试；原版本已保留")
         model_version = "mobilesam-vit-t-" + hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12] + "+color-refine-v6"
     else:
-        mobile = None if coarse_only else _mobilesam_masks(work, deadline, cancelled)
+        mobile = None if coarse_only else _mobilesam_masks(work, deadline, cancelled, progress)
+        if mobile is None and require_mobilesam:
+            raise PhotoProcessingError("全图识别需要本地 MobileSAM 模型，请检查模型配置后重试")
         candidate_masks, model_version = mobile if mobile is not None else (_candidate_masks(work), "local-rules-v3-no-mobilesam")
-    progress("整理轮廓与颜色，生成复核素材", 65)
+    ratio=work.shape[1]/original_width
+    height,width=work.shape[:2]
+    progress("原图边缘精修与内部分色" if refine_edges else "从轮廓内部取样分色", 65)
     for index, mask in enumerate(candidate_masks, 1):
         if cancelled():
             raise InterruptedError("任务已取消")
         if time.monotonic() > deadline:
             raise TimeoutError("识别任务超过 180 秒")
+        source_ratio = ratio
+        source_image = work
+        offset_x = offset_y = 0
+        if refine_edges:
+            offset_x, offset_y, mask = refine_boundary(image, mask)
+            source_image = image[offset_y:offset_y+mask.shape[0], offset_x:offset_x+mask.shape[1]]
+            source_ratio = 1
+            progress("原图边缘精修与内部分色",65+round(index/max(1,len(candidate_masks))*20))
         ys, xs = np.where(mask > 0)
         x, y, right, bottom = int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)
         crop_mask = mask[y:bottom, x:right]
-        crop = work[y:bottom, x:right].copy()
+        crop = source_image[y:bottom, x:right].copy()
         rgba = cv2.cvtColor(crop, cv2.COLOR_BGR2BGRA)
         rgba[:, :, 3] = crop_mask
         mask_ref = _write_asset(storage_root, _encode_png(crop_mask), "png", right - x, bottom - y)
         cutout_ref = _write_asset(storage_root, _encode_png(rgba), "png", right - x, bottom - y)
-        median_lab = np.median(lab[mask > 0], axis=0).astype(np.uint8)
-        colour = color_group if seed is not None else _colour_name(median_lab)
-        source_cx, source_cy = (x + right) / (2 * ratio), (y + bottom) / (2 * ratio)
+        colour = classify_mask_color(source_image,mask,version=color_version)
+        source_cx, source_cy = (offset_x + (x + right) / 2) / source_ratio, (offset_y + (y + bottom) / 2) / source_ratio
         board_x, board_y = map_point(matrix, source_cx, source_cy)
-        hole, distance = nearest_hole(board_x, board_y)
-        anchor_confidence = max(0.0, 1.0 - distance / 150.0)
-        object_confidence = min(.96, .58 + (len(xs) / max((right - x) * (bottom - y), 1)) * .38)
+        anchors = []
+        if not require_climbing_model:
+            hole, distance = nearest_hole(board_x, board_y)
+            anchors = [{"hole_id": hole["id"], "x_mm": hole["x_mm"], "y_mm": hole["y_mm"],
+                        "confidence": round(max(0.0, 1.0 - distance / 150.0), 4), "confirmed": False}]
+        object_confidence = (candidate_scores[index - 1] if candidate_scores is not None else
+            min(.96, .58 + (len(xs) / max((right - x) * (bottom - y), 1)) * .38))
         proposals.append({
             "id": f"object-{index:03d}",
-            "kind": "volume" if len(xs) > work.shape[0] * work.shape[1] * .012 else "hold",
+            "kind": "hold" if require_climbing_model else
+                ("volume" if len(xs) / source_ratio**2 > original_height * original_width * .012 else "hold"),
             "color_group": colour,
-            "contour": [[round(float((px + x) / ratio), 2), round(float((py + y) / ratio), 2)]
+            "contour": [[round(float((px + x + offset_x) / source_ratio), 2), round(float((py + y + offset_y) / source_ratio), 2)]
                         for px, py in cv2.approxPolyDP(max(cv2.findContours(crop_mask, cv2.RETR_EXTERNAL,
-                            cv2.CHAIN_APPROX_SIMPLE)[0], key=cv2.contourArea), 2.0, True)[:, 0]],
-            "source_bbox_px": [round(x / ratio), round(y / ratio), round((right - x) / ratio), round((bottom - y) / ratio)],
+                            cv2.CHAIN_APPROX_SIMPLE)[0], key=cv2.contourArea), .65 if refine_edges else 2.0, True)[:, 0]],
+            "source_bbox_px": [round((x+offset_x) / source_ratio), round((y+offset_y) / source_ratio), round((right - x) / source_ratio), round((bottom - y) / source_ratio)],
             "cutout": cutout_ref,
             "mask": mask_ref,
             "center_x_mm": round(board_x, 3), "center_y_mm": round(board_y, 3),
             "rotation_deg": 0.0,
-            "scale_mm_per_px": round((BOARD_WIDTH_MM / width) * ratio, 8),
+            "scale_mm_per_px": round(projected_bbox_scale_mm_per_px(matrix, [
+                (x + offset_x) / source_ratio,
+                (y + offset_y) / source_ratio,
+                (right - x) / source_ratio,
+                (bottom - y) / source_ratio,
+            ]), 8),
             "confidence": round(object_confidence, 4),
             "review_status": "needs_review",
-            "anchors": [{"hole_id": hole["id"], "x_mm": hole["x_mm"], "y_mm": hole["y_mm"],
-                         "confidence": round(anchor_confidence, 4),
-                         "confirmed": False}],
+            "anchors": anchors,
         })
-    grid_points = _detect_grid_points(work)
+    detector = "climbing-mask-rcnn" if require_climbing_model else ("sam-proposals" if model_version.startswith("mobilesam") else "local-rules")
+    processing_config = {"detector": detector,
+        "segmentation_model": model_version.split('+',1)[0], "color_version": color_version,
+        "boundary_version": "grabcut-band-v1" if refine_edges else "off",
+        "working_size": [width, height], "max_seconds": 180,
+        "min_size_test": PRODUCTION_CLIMBING_MIN_SIZE if require_climbing_model else None,
+        "detections_per_image": PRODUCTION_CLIMBING_CANDIDATE_CAP if require_climbing_model else None,
+        "automatic_mask_parameters": dict(AUTOMATIC_MASK_PARAMETERS) if seed is None and model_version.startswith('mobilesam') else None}
+    if color_version != BASELINE_COLOR_VERSION or boundary_refinement is not None:
+        model_version += f"+{color_version}+boundary-{'on' if refine_edges else 'off'}"
     return {
+        "processing_config": processing_config,
         "quality": {"accepted": quality.accepted, "issues": quality.issues, "metrics": quality.metrics},
-        "calibration": calibration or {
+        "calibration": calibration or detected_calibration or {
             "matrix": matrix,
-            "method": "visible-hole-hybrid" if len(grid_points) >= 20 else "board-boundary-provisional",
-            "detected_hole_count": len(grid_points),
-            "confidence": round(min(.94, .45 + len(grid_points) / 160), 4),
+            "method": "board-boundary-provisional",
+            "detected_hole_count": 0,
+            "confidence": .35,
             "status": "needs_review",
         },
         "objects": proposals,

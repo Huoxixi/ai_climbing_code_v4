@@ -6,6 +6,8 @@ SOURCE_ROOT="/root/ai_climbing_code"
 RELEASE_ROOT="/opt/ai-climbing/releases"
 CURRENT_LINK="/opt/ai-climbing/current"
 RELEASE_TAG="${1:-}"
+CLIMBING_MODEL_CHECKPOINT="/var/lib/ai-climbing/models/climbing/verified-model_final.pth"
+CLIMBING_MODEL_SHA256="995960a74819e21bd66d7be56ae6e1c8124ec0a06fece4fae13812887d86ebea"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Release deployment must run as root." >&2
@@ -40,6 +42,15 @@ grep -q '^PILOT_COOKIE_SECURE=true$' /etc/ai-climbing/backend.env
   echo "/etc/ai-climbing/pilot-users.json is missing or unreadable."
   exit 1
 }
+[[ -r "${CLIMBING_MODEL_CHECKPOINT}" ]] || {
+  echo "Climbing model checkpoint is missing: ${CLIMBING_MODEL_CHECKPOINT}" >&2
+  exit 1
+}
+printf '%s  %s\n' "${CLIMBING_MODEL_SHA256}" "${CLIMBING_MODEL_CHECKPOINT}" |
+  sha256sum --check --status || {
+    echo "Climbing model checkpoint hash verification failed." >&2
+    exit 1
+  }
 
 temporary_root="$(mktemp -d /tmp/ai_climbing_code_v4.XXXXXX)"
 building_release="${RELEASE_ROOT}/.${RELEASE_TAG}.building"
@@ -94,6 +105,11 @@ rsync -a "${SOURCE_ROOT}/frontend/dist/" "${building_release}/frontend/dist/"
 
 python3.12 -m venv "${building_release}/backend/.venv"
 "${building_release}/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "${building_release}/backend/requirements-production.lock"
+"${building_release}/backend/.venv/bin/python" -m pip install \
+  --disable-pip-version-check --no-build-isolation --no-deps \
+  'detectron2 @ git+https://github.com/facebookresearch/detectron2.git@a2f4a8771ab77e8411c26b27f24f9489a28a2453'
+"${building_release}/backend/.venv/bin/python" -c \
+  'import torch, torchvision, detectron2; print(torch.__version__, torchvision.__version__, detectron2.__version__)'
 mkdir -p "${temporary_root}/test-data"
 rsync -a "${temporary_root}/ai_climbing_code_v4/backend/data/" "${temporary_root}/test-data/"
 ln -s "${temporary_root}/test-data" "${building_release}/backend/data"

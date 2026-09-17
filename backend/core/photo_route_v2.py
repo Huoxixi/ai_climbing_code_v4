@@ -338,10 +338,13 @@ class PhotoRouteV2Store:
     def set_analysis_result(self, board_id: str, result: dict) -> None:
         now = utcnow()
         with self.transaction() as db:
-            board = db.execute("SELECT status FROM board_versions WHERE id=?", (board_id,)).fetchone()
+            board = db.execute("SELECT status,quality_json FROM board_versions WHERE id=?", (board_id,)).fetchone()
             if not board or board["status"] != "processing": return
-            db.execute("UPDATE board_versions SET status=?,calibration_json=?,model_version=?,updated_at=? WHERE id=?",
-                       ("review", self._json(result["calibration"]), result["model_version"], now, board_id))
+            quality = json.loads(board['quality_json'])
+            if 'processing_config' in result:
+                quality['processing_config'] = result['processing_config']
+            db.execute("UPDATE board_versions SET status=?,calibration_json=?,model_version=?,quality_json=?,updated_at=? WHERE id=?",
+                       ("review", self._json(result["calibration"]), result["model_version"], self._json(quality), now, board_id))
             for item in result["objects"]:
                 object_id = f"{board_id[:8]}-{item['id']}"
                 db.execute("INSERT INTO board_objects VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?)",
@@ -811,8 +814,9 @@ class PhotoRouteJobManager:
         board = self.store.get_board(job["board_version_id"], job["owner"])
         path = self.store.asset_path(board["original_asset"]["filename"])
         result = analyze_board_photo(path, self.store.root, cancelled=lambda: cancel.is_set(),
-            deadline=started + self.timeout_seconds, seed=job["payload"].get("seed"),
+            deadline=started + self.timeout_seconds,
             color_group=job["payload"].get("color_group"), calibration=job["payload"].get("calibration"),
+            require_climbing_model=True, color_version="interior-v4", boundary_refinement=False,
             progress=lambda stage, percent: self.store.mark_job(job["id"], "running", stage, percent)
                 if not cancel.is_set() else None)
         for index, item in enumerate(job["payload"].get("preserved_objects", [])):

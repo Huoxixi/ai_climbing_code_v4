@@ -3,6 +3,8 @@ import base64
 import json
 import os
 
+from core.photo_route_inference_lock import serialized_inference
+
 import cv2
 import httpx
 import numpy as np
@@ -58,6 +60,7 @@ def review_objects(image, objects, asset_path, *, client=None, key=None):
         if owned: client.close()
 
 
+@serialized_inference
 def segment_point(image, point, *, color=None):
     """Local point prompt returns a real contour, never a fabricated box."""
     import sys

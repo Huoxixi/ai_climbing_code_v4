@@ -135,7 +135,7 @@
         <div class="route-v2__editor-grid">
           <section class="route-v2__canvas-wrap">
             <div v-if="background" class="route-v2__clean-result"><img :src="photoV2AssetUrl(background.composite_asset)" alt="净化墙面结果，目标路线像素来自原图" /><p>净化结果不会覆盖原图；人物、告示牌和贴纸默认保留。</p></div>
-            <PhotoRouteBoardCanvas v-else :objects="routeObjects" :selected-id="selectedId" :mode="interactionMode" :editable="routeEditable"
+            <PhotoRouteBoardCanvas v-else :objects="routeObjects" :selected-id="selectedId" :calibration-matrix="board.calibration?.matrix" :mode="interactionMode" :editable="routeEditable"
               snapping :snap-preview="snapPreview" :asset-url="photoV2AssetUrl" @select="selectRouteObject" @begin="beginDrag"
               @move="moveDrag" @end="endDrag" @nudge="nudge" />
           </section>
@@ -206,7 +206,7 @@
         <section class="route-v2__overlay">
           <div class="route-v2__section-heading"><h2>同板线路叠加</h2><span>{{ overlayRoutes.length }} 条</span></div>
           <div v-if="overlayRoutes.length" class="route-v2__overlay-legend"><span v-for="item in overlayRoutes" :key="item.id"><i :style="{ background:routeDisplayColor(item) }"></i>{{ item.name }}</span></div>
-          <PhotoRouteBoardCanvas v-if="overlayObjects.length" :objects="overlayObjects" mode="browse" :editable="false" :asset-url="photoV2AssetUrl" />
+          <PhotoRouteBoardCanvas v-if="overlayObjects.length" :objects="overlayObjects" :calibration-matrix="board?.calibration?.matrix" mode="browse" :editable="false" :asset-url="photoV2AssetUrl" />
           <p v-else class="route-v2__empty">勾选同一岩板版本中的线路进行叠加查看。</p>
         </section>
       </div>
@@ -429,7 +429,7 @@ async function openBoard(id) {
     if (stage.value === 'upload') { activeJob.value = board.value.latest_job || null; if (jobBusy.value) watchJob() }
   } catch (cause) { error.value = detail(cause, '无法打开照片，请重试。') }
 }
-function startCalibration() { if (!editable.value) return; refineMode.value = false; addMode.value = false; calibrationMode.value = !calibrationMode.value; calibrationPoints.value = []; if (calibrationMode.value) error.value = '请依次点击最外侧四个孔位：左下 A1、右下 AD1、右上 AD20、左上 A20（不是岩板外边缘）。' }
+function startCalibration() { if (!editable.value) return; refineMode.value = false; addMode.value = false; calibrationMode.value = !calibrationMode.value; calibrationPoints.value = []; if (calibrationMode.value) error.value = '请依次点击最外侧四个孔位：左下 A1、右下 T1、右上 T30、左上 A30（不是岩板外边缘）。' }
 function editObject(patch) { if (!selectedObject.value) return; mutate(() => Object.assign(selectedObject.value, patch)) }
 function editAnchors(value) {
   const ids = [...new Set(value.toUpperCase().split(/[,，\s]+/).filter(Boolean))]
@@ -469,7 +469,7 @@ async function addAtPhoto(event) {
   if (calibrationMode.value) {
     calibrationPoints.value = [...calibrationPoints.value, [x,y]]
     if (calibrationPoints.value.length === 4) {
-      try { board.value = await service.calibrate(board.value.id, { photo_points:calibrationPoints.value, board_hole_ids:['A1','AD1','AD20','A20'] }); savedSnapshot = snapshot(); error.value = '' }
+      try { board.value = await service.calibrate(board.value.id, { photo_points:calibrationPoints.value, board_hole_ids:['A1','T1','T30','A30'] }); savedSnapshot = snapshot(); error.value = '' }
       catch (cause) { error.value = detail(cause, '标定失败，请重新选择四个角点。') }
       finally { calibrationMode.value = false }
     }
@@ -522,7 +522,7 @@ function moveDrag({ id, dx, dy }) {
   if (!dragBaseline) return
   const base = dragBaseline.board.objects.find(item => item.id === id); if (!base) return
   const moved = translateObjects([base], dx, dy)[0]
-  const index = board.value.objects.findIndex(item => item.id === id); board.value.objects[index] = { ...board.value.objects[index], center_x_mm:moved.center_x_mm, center_y_mm:moved.center_y_mm }
+  const index = board.value.objects.findIndex(item => item.id === id); board.value.objects[index] = { ...board.value.objects[index], center_x_mm:moved.center_x_mm, center_y_mm:moved.center_y_mm, anchors:[] }
   const hole = nearestPhotoHole(moved.center_x_mm, moved.center_y_mm)
   snapPreview.value = hole ? { ...hole, fromX:moved.center_x_mm, fromY:moved.center_y_mm } : null
 }

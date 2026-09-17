@@ -12,9 +12,11 @@ foreach ($portNumber in @(4176,8004)) {
     finally { $listener.Dispose() }
 }
 if (-not (Test-Path -LiteralPath $pythonRuntime)) { throw 'Bundled Python runtime is unavailable.' }
-$env:PYTHONPATH = (@('boulder-python','boulder-model-python','boulder-app-python') | ForEach-Object { Join-Path $workspaceDirectory ".tools/$_" }) -join ';'
-$env:PHOTO_ROUTE_MOBILESAM_REPO = Join-Path $workspaceDirectory 'photo-route-experiments/MobileSAM'
-$env:PHOTO_ROUTE_MOBILESAM_CHECKPOINT = Join-Path $env:PHOTO_ROUTE_MOBILESAM_REPO 'weights/mobile_sam.pt'
+$climbingModelRoot = Join-Path $workspaceDirectory 'photo-route-experiments/indoor-climbing-20260906'
+$pythonPaths = @('boulder-python','boulder-model-python','boulder-app-python') | ForEach-Object { Join-Path $workspaceDirectory ".tools/$_" }
+$env:PYTHONPATH = ($pythonPaths + @((Join-Path $climbingModelRoot 'detectron-deps'),(Join-Path $climbingModelRoot 'detectron2-source'))) -join ';'
+$env:PHOTO_ROUTE_CLIMBING_MODEL_CONFIG = Join-Path $projectDirectory '.local/quality-selection-20260907/config-1200.yml'
+$env:PHOTO_ROUTE_CLIMBING_MODEL_CHECKPOINT = Join-Path $climbingModelRoot 'model/verified-model_final.pth'
 $env:HF_HUB_OFFLINE = '1'
 function Wait-PhotoService($process, $url) {
     $deadline = (Get-Date).AddSeconds(30)
@@ -26,7 +28,7 @@ function Wait-PhotoService($process, $url) {
     }
     throw "Local service did not become ready. See $logDirectory. The URL will not be changed."
 }
-$backendProcess = Start-Process -FilePath $pythonRuntime -ArgumentList '-m uvicorn photo_local_server:app --host 127.0.0.1 --port 8004' -WorkingDirectory (Join-Path $projectDirectory 'backend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory 'backend.out.log') -RedirectStandardError (Join-Path $logDirectory 'backend.err.log') -PassThru
+$backendProcess = Start-Process -FilePath $pythonRuntime -ArgumentList '-m uvicorn photo_local_server:app --host 127.0.0.1 --port 8004 --workers 1' -WorkingDirectory (Join-Path $projectDirectory 'backend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory 'backend.out.log') -RedirectStandardError (Join-Path $logDirectory 'backend.err.log') -PassThru
 Wait-PhotoService $backendProcess 'http://127.0.0.1:8004/api/photo-routes/workflow/current'
 $frontendProcess = Start-Process -FilePath $nodeRuntime -ArgumentList 'node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4176 --strictPort' -WorkingDirectory (Join-Path $projectDirectory 'frontend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory 'frontend.out.log') -RedirectStandardError (Join-Path $logDirectory 'frontend.err.log') -PassThru
 @{backend=$backendProcess.Id;frontend=$frontendProcess.Id} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $logDirectory 'processes.json')

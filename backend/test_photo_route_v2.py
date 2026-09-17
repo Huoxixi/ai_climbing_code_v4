@@ -11,8 +11,8 @@ import numpy as np
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.photo_route_analysis import (assess_capture_quality, board_holes, compute_homography,
-                                       map_point, nearest_hole)
+from core.photo_route_analysis import (assess_capture_quality, board_holes, compute_homography, detect_photo_hole_grid,
+                                       map_point, nearest_hole, projected_bbox_scale_mm_per_px)
 from core.photo_route_v2 import (ColorRouteCreate, PhotoRouteV2Store, RouteMemberInput,
                                  RouteUpdate, create_photo_route_v2_router)
 
@@ -60,7 +60,7 @@ class PhotoRouteV2Tests(unittest.TestCase):
         ref_data = photo_bytes(120, 80)
         ref = self.store.save_asset(ref_data, 'jpg', 120, 80)
         self.store.set_analysis_result(board_id, {
-            'calibration': {'matrix': [[6.2,0,0],[0,-5.125,4100],[0,0,1]], 'status':'confirmed'},
+            'calibration': {'matrix': [[3.4167,0,0],[0,-7.75,6200],[0,0,1]], 'status':'confirmed'},
             'model_version': 'test',
             'objects': [{
                 'id':'object-001','kind':'hold','color_group':color,
@@ -76,11 +76,40 @@ class PhotoRouteV2Tests(unittest.TestCase):
     def test_grid_and_homography_are_deterministic(self):
         holes = board_holes()
         self.assertEqual(len(holes), 600)
-        self.assertEqual((holes[0]['id'], holes[-1]['id']), ('A1', 'AD20'))
+        self.assertEqual((holes[0]['id'], holes[-1]['id']), ('A1', 'T30'))
         matrix = compute_homography([[0,0],[100,0],[100,100],[0,100]],
-                                    [[0,4100],[6200,4100],[6200,0],[0,0]])
-        self.assertAlmostEqual(map_point(matrix, 50, 50)[0], 3100, places=4)
+                                    [[0,6200],[4100,6200],[4100,0],[0,0]])
+        self.assertAlmostEqual(map_point(matrix, 50, 50)[0], 2050, places=4)
         self.assertEqual(nearest_hole(205, 103)[0]['id'], 'A1')
+        self.assertAlmostEqual(projected_bbox_scale_mm_per_px([[2,0,0],[0,-8,1000],[0,0,1]], [10,20,100,50]), 4)
+
+    def test_real_hole_lattice_fit_survives_missing_and_occluded_points(self):
+        image = np.full((1200, 720, 3), 188, np.uint8)
+        origin = np.asarray([22.0, 43.0]); column = np.asarray([34.0, 2.0]); row = np.asarray([-1.8, 36.0])
+        for y in range(30):
+            for x in range(20):
+                if not (6 <= x <= 11 and 8 <= y <= 14):
+                    point = origin + x * column + y * row
+                    cv2.circle(image, tuple(np.rint(point).astype(int)), 2, (38,38,38), -1)
+        cv2.rectangle(image, (205,330), (410,575), (235,205,30), -1)
+        fitted = detect_photo_hole_grid(image)
+        self.assertIsNotNone(fitted)
+        self.assertGreater(fitted['detected_hole_count'], 250)
+        mapped = map_point(fitted['matrix'], *origin)
+        self.assertLess(abs(mapped[0]-200), 35)
+        self.assertLess(abs(mapped[1]-5900), 35)
+
+    def test_processing_config_persists_without_rewriting_completed_results(self):
+        board=self.create_board()['board']; original=board['quality']
+        config={'color_version':'interior-v3','boundary_version':'grabcut-band-v1'}
+        self.store.set_analysis_result(board['id'],{'calibration':{},'model_version':'test',
+            'processing_config':config,'objects':[]})
+        reopened=PhotoRouteV2Store(Path(self.tmp.name)).get_board(board['id'],'owner')
+        self.assertEqual(reopened['quality']['processing_config'],config)
+        for key,value in original.items():self.assertEqual(reopened['quality'][key],value)
+        self.store.set_analysis_result(board['id'],{'calibration':{},'model_version':'new',
+            'processing_config':{'color_version':'interior-v4'},'objects':[]})
+        self.assertEqual(self.store.get_board(board['id'],'owner')['quality']['processing_config'],config)
 
     def test_capture_gate_rejects_blur_and_upload_queues_job(self):
         blur = np.full((800, 1200, 3), 170, np.uint8)
