@@ -31,6 +31,12 @@ export const photoRouteV2Service = {
   retryJob: (id) => apiClient.post(`/api/photo-routes/v2/jobs/${id}/retry`).then(r => r.data),
   routes: (params = {}) => apiClient.get('/api/photo-routes/v2/routes', { params }).then(r => r.data),
   route: (id) => apiClient.get(`/api/photo-routes/v2/routes/${id}`).then(r => r.data),
+  uploadMedia: (id, file, onProgress) => {
+    const body = new FormData(); body.append('media', file)
+    return apiClient.post(`/api/photo-routes/v2/routes/${id}/media`, body, {
+      onUploadProgress: (event) => onProgress?.(event.total ? Math.round(event.loaded * 100 / event.total) : 0),
+    }).then(r => r.data)
+  },
   fromColor: (payload) => apiClient.post('/api/photo-routes/v2/routes/from-color', payload).then(r => r.data),
   saveRoute: (route) => apiClient.put(`/api/photo-routes/v2/routes/${route.id}`, {
     expected_version: route.version, name: route.name, difficulty: route.difficulty,

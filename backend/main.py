@@ -27,6 +27,8 @@ from agent.experiments import run_ai_experiment
 from core.board_readiness import apply_board_readiness
 from core.photo_route_drafts import PhotoRouteStore, create_photo_route_router
 from core.photo_route_v2 import PhotoRouteJobManager, PhotoRouteV2Store, create_photo_route_v2_router
+from core.climb_replay import (ClimbReplayManager, ClimbReplayStore,
+                               VlmRunReplayAnalyzer, create_climb_replay_router)
 from core.hold_image_processing import (
     PROCESSING_VERSION,
     SUPPORTED_IMAGE_SUFFIXES,
@@ -128,6 +130,7 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 
 SIMULATION_ENABLED = env_flag("ENABLE_SIMULATION", default=APP_ENV != "production")
+CLIMB_REPLAY_ENABLED = env_flag("ENABLE_CLIMB_REPLAY", default=True)
 
 
 def docs_url_for_environment(app_env: str, path: str) -> str | None:
@@ -169,6 +172,15 @@ app.include_router(create_photo_route_router(photo_route_store))
 photo_route_v2_store = PhotoRouteV2Store(PHOTO_ROUTE_DATA_ROOT)
 photo_route_jobs = PhotoRouteJobManager(photo_route_v2_store)
 app.include_router(create_photo_route_v2_router(photo_route_v2_store, photo_route_jobs))
+climb_replay_manager = None
+if CLIMB_REPLAY_ENABLED:
+    climb_replay_store = ClimbReplayStore(PHOTO_ROUTE_DATA_ROOT / "climb_replay")
+    climb_replay_manager = ClimbReplayManager(climb_replay_store, VlmRunReplayAnalyzer())
+    app.include_router(create_climb_replay_router(
+        climb_replay_store,
+        climb_replay_manager,
+        route_lookup=photo_route_v2_store.get_route,
+    ))
 from core.photo_route_workflow import PhotoWorkflow, workflow_router
 photo_workflow = PhotoWorkflow(photo_route_v2_store)
 app.include_router(workflow_router(photo_workflow))

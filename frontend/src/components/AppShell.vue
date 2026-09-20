@@ -11,16 +11,15 @@
         </nav>
         <div class="header-actions">
           <a class="workspace-back-link" href="#/projects" aria-label="返回项目选择" @click.prevent="$emit('change-workspace')"><ArrowLeft /><span class="desktop-switch-label">返回项目选择</span><span class="mobile-switch-label">项目</span></a>
-          <span class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
-          <el-button v-if="active !== 'settings' && !pilotAccess.lease.ownedByMe" size="small" type="primary" :loading="pilotAccess.lease.loading" @click="pilotAccess.acquireLease">开始编辑</el-button>
-          <el-button v-else-if="active !== 'settings'" size="small" :loading="pilotAccess.lease.loading" @click="pilotAccess.releaseLease">释放编辑权</el-button>
+          <span v-if="showSync" class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
+          <el-button v-if="needsEditAccess && active !== 'settings' && !pilotAccess.lease.ownedByMe" size="small" type="primary" :loading="pilotAccess.lease.loading" @click="pilotAccess.acquireLease">开始编辑</el-button>
           <button v-if="active !== 'settings'" class="settings-trigger" type="button" aria-label="设置" title="设置" @click="$emit('update:active', 'settings')"><Setting /></button>
           <button v-else class="settings-done" type="button" @click="$emit('close-settings')">完成</button>
         </div>
       </div>
       <div class="mobile-context-row">
-        <div><h1>{{ title }}</h1><span v-if="active !== 'settings'">{{ boardLabel }} · {{ holdCount }} 岩点</span></div>
-        <span class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
+        <div><h1>{{ title }}</h1><span v-if="active !== 'settings'">{{ contextLabel || `${boardLabel} · ${holdCount} 岩点` }}</span></div>
+        <span v-if="showSync" class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
       </div>
     </header>
 
@@ -32,7 +31,7 @@
       <slot />
     </main>
 
-    <nav v-if="active !== 'settings' && mobileItems.length > 1" class="mobile-tabs" aria-label="移动端导航">
+    <nav v-if="active !== 'settings' && mobileItems.length > 1" class="mobile-tabs" aria-label="移动端导航" :style="{ '--mobile-tab-count': mobileItems.length }">
       <button v-for="item in mobileItems" :key="item.key" :class="{ active: mobileActive === item.key }" :aria-current="mobileActive === item.key ? 'page' : undefined" @click="$emit('update:active', item.key)">
         <component :is="item.icon" /><span>{{ item.short }}</span>
       </button>
@@ -42,13 +41,15 @@
 
 <script setup>
 import { computed, inject } from 'vue'
-import { ArrowLeft, Collection, DataBoard, Grid, Histogram, Platform, Setting } from '@element-plus/icons-vue'
+import { ArrowLeft, Camera, Collection, DataBoard, Grid, Histogram, Platform, Setting, User, VideoCamera } from '@element-plus/icons-vue'
 
 const props = defineProps({
   active: { type: String, required: true }, title: { type: String, required: true }, boardLabel: { type: String, default: '未选择岩板' },
   holdCount: { type: Number, default: 0 }, dirty: { type: Boolean, default: false }, saveLabel: { type: String, default: '' }, simulationEnabled: { type: Boolean, default: false },
   workspace: { type: String, required: true },
-  photoSection: { type: String, default: 'routes' },
+  contextLabel: { type: String, default: '' },
+  showSync: { type: Boolean, default: true },
+  needsEditAccess: { type: Boolean, default: true },
 })
 defineEmits(['update:active', 'close-settings', 'change-workspace'])
 const pilotAccess = inject('pilotAccess')
@@ -59,21 +60,22 @@ const setterDesktopItems = [
   { key: 'standard-board', label: '板库' }, { key: 'boards', label: '资产' },
   { key: 'simulation', label: '仿真审核' }, { key: 'ai-lab', label: 'AI 实验室' },
 ]
+const boulderItems = computed(() => [
+  { key: 'photo-routes', label: '拍照定线', short: '拍照定线', icon: Camera },
+  { key: 'my-records', label: '我的记录', short: '我的记录', icon: Collection },
+  { key: 'climb-replay', label: 'AI 复盘', short: 'AI 复盘', icon: VideoCamera },
+  { key: 'account', label: '我的账号', short: '我的账号', icon: User },
+])
 const desktopItems = computed(() => (props.workspace === 'boulder'
-  ? [{ key: 'photo-routes', label: '照片线路' }]
+  ? boulderItems.value
   : setterDesktopItems.filter((item) => item.key !== 'simulation' || props.simulationEnabled)))
 const setterMobileItems = [
   { key: 'dashboard', short: '首页', icon: DataBoard }, { key: 'studio', short: '定线', icon: Platform },
   { key: 'standard-board', short: '板库', icon: Grid }, { key: 'boards', short: '资产', icon: Collection }, { key: 'ai-lab', short: 'AI', icon: Histogram },
 ]
-const mobileItems = computed(() => props.workspace === 'boulder'
-  ? [
-      { key: 'photo-routes', short: '添加线路', icon: Grid },
-      { key: 'photo-library', short: '线路库', icon: Collection },
-    ]
-  : setterMobileItems)
+const mobileItems = computed(() => props.workspace === 'boulder' ? boulderItems.value : setterMobileItems)
 const mobileActive = computed(() => {
-  if (props.workspace === 'boulder') return props.photoSection === 'library' ? 'photo-library' : 'photo-routes'
+  if (props.workspace === 'boulder') return props.active
   if (props.active === 'studio') return 'studio'
   if (['boards', 'library'].includes(props.active)) return 'boards'
   return props.active

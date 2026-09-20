@@ -242,7 +242,7 @@
   .mobile-context-row > div > span { display: block; max-width: 250px; overflow: hidden; color: var(--ink-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .shell-main { padding-top: 116px; padding-bottom: 72px; }
   .page { padding: 20px 16px 30px; }
-  .mobile-tabs { position: fixed; z-index: 100; right: 0; bottom: 0; left: 0; height: 72px; padding: 7px 9px max(7px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,255,255,.98); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .mobile-tabs { position: fixed; z-index: 100; right: 0; bottom: 0; left: 0; height: 72px; padding: 7px 9px max(7px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,255,255,.98); display: grid; grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr)); }
   .mobile-tabs button { position: relative; min-width: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); display: grid; place-items: center; align-content: center; gap: 3px; font-size: 10px; font-weight: 700; }
   .mobile-tabs button svg { width: 20px; height: 20px; }
   .mobile-tabs button.active { color: var(--ink); background: var(--brand-soft); }
@@ -440,7 +440,7 @@
 .board-frame { border-width: 2px; border-radius: 3px; }
 .board-hole.is-readonly:hover::after { box-shadow: none; }
 @media (max-width: 760px) {
-  .mobile-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-columns: auto; overflow-x: hidden; }
+  .mobile-tabs { grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr)); grid-auto-columns: auto; overflow-x: hidden; }
   .mobile-tabs button { min-width: 0; font-size: 10px; }
   .mobile-asset-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .studio-canvas-wrap > .canvas-wrap { height: 560px; padding: 30px 20px 30px 30px; }

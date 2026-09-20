@@ -1,19 +1,21 @@
 <template>
   <section class="photo-work" :class="[`photo-work--${surfaceState}`, {'is-busy':state.saving || state.uploading}]">
-    <header class="photo-work__header"><div><h1>抱石线路</h1><p v-if="surfaceState === 'awaiting_color'">点一个岩点，整理出一条线路。</p></div><button @click="openLibrary">线路库</button></header>
+    <header v-if="view !== 'library' && !detail" class="photo-work__header"><div><h1>拍照定线</h1><p v-if="surfaceState === 'awaiting_color'">点一个岩点，整理出一条线路。</p></div><button @click="goRecords">我的记录</button></header>
     <p v-if="state.connectionLost" class="photo-work__offline" role="status"><strong>当前离线</strong><span>照片和未完成修改仍保留在本机，恢复网络后会继续同步。</span></p>
     <p v-if="!editable" class="photo-work__permission" role="status"><strong>当前为只读模式</strong><span>照片与线路可以查看，取得编辑权后才能修改。</span></p>
     <p v-if="(state.error && !state.pending) || localError" class="photo-work__error" role="alert">{{ localError || state.error }}<button v-if="failedMembers" :disabled="!editable" @click="persistMembers(failedMembers)">重试保存</button></p>
     <button v-if="state.pendingChange && !state.saving" :disabled="!editable" @click="act(state.pendingChange.action,state.pendingChange.payload)">重试未完成的修改</button>
     <div v-if="!state.loaded" class="photo-work__processing photo-work__processing--center" role="status"><span class="photo-work__spinner" aria-hidden="true"></span><h2>正在恢复进度</h2><p>照片、轮廓和未完成的修改都会保留。</p></div>
     <template v-else-if="detail">
-      <div class="photo-work__heading"><h2>{{ detail.name }}</h2><button @click="returnCurrent">返回上一页</button></div>
-      <p role="status">{{ noteState }}</p>
+      <div class="record-detail__top">
+        <button class="photo-work__back" type="button" aria-label="返回我的记录" @click="returnToRecords"><span aria-hidden="true">←</span><span>我的记录</span></button>
+        <div><span class="record-status">{{ routeStatus(detail) }}</span><h2>{{ detail.name || '未命名线路' }}</h2><p>{{ detail.color_group }} · {{ detail.difficulty || '未定级' }} · {{ detail.members.length }} 个岩点</p></div>
+      </div>
       <div class="photo-work__layout">
         <PhotoReviewViewport v-if="detailBoard" :width="detailBoard.width" :height="detailBoard.height" :image-key="detail.id">
           <div class="photo-work__image"><img :src="photoV2AssetUrl(detailBoard.original_asset)" alt="已保存线路原图" /><svg :viewBox="`0 0 ${detailBoard.width} ${detailBoard.height}`"><polygon v-for="obj in detailObjects" :key="obj.id" class="is-route-contour is-glow" :class="{'is-selected':noteObject===obj.id}" :points="points(obj)" tabindex="0" role="button" :aria-label="photoObjectLabel(obj, detailBoard, { member: true, action: 'view' })" @click="noteObject=obj.id" @keydown.enter="noteObject=obj.id" @keydown.space.prevent="noteObject=obj.id" /></svg></div>
         </PhotoReviewViewport>
-        <aside class="photo-work__tools"><h2>线路已保存</h2><p>下面的信息都可以留空，以后再补充。</p><p class="photo-work__quiet-note">删除只移出当前线路，原图和岩点识别结果仍会保留。</p>
+        <aside class="photo-work__tools"><h2>线路信息</h2><p>名称、难度和动作想法可以随时补充。</p><p class="photo-work__quiet-note">修改只影响这条个人记录，完整线路照片始终保留。</p>
           <div class="photo-work__save-bar">
             <button class="photo-work__primary" :disabled="noteState==='正在保存备注' || noteState==='备注已保存' || !editable" @click="saveNotes">
               <span v-if="noteState==='正在保存备注'" class="photo-work__button-spinner" aria-hidden="true"></span>{{ noteSaveLabel }}
@@ -31,12 +33,33 @@
           <button v-if="noteState==='备注保存失败'" :disabled="!editable" @click="saveNotes">重试保存备注</button>
         </aside>
       </div>
+      <section class="record-media" aria-labelledby="record-media-title">
+        <div class="record-media__heading"><div><h2 id="record-media-title">照片与视频</h2><p>{{ mediaSummary(detail) }}</p></div><button class="photo-work__primary record-media__add" type="button" :disabled="mediaUploading" @click="mediaPickerOpen=true">＋ 添加媒体</button></div>
+        <input ref="mediaPhotoInput" class="photo-work__file" type="file" multiple accept="image/jpeg,image/png,image/webp" @change="uploadSelectedMedia" />
+        <input ref="mediaVideoInput" class="photo-work__file" type="file" multiple accept="video/mp4,video/quicktime,video/webm" @change="uploadSelectedMedia" />
+        <div v-if="mediaUploading" class="record-media__progress" role="status"><div><strong>正在上传 {{ mediaUploadName }}</strong><span>{{ mediaUploadProgress }}%</span></div><progress :value="mediaUploadProgress" max="100" /></div>
+        <p v-if="mediaError" class="photo-work__error" role="alert">{{ mediaError }}</p>
+        <div v-if="detail.media?.length" class="record-media__grid">
+          <article v-for="item in detail.media" :key="item.id" class="record-media__item">
+            <img v-if="item.kind==='photo'" :src="photoV2AssetUrl(item.asset)" :alt="`${detail.name}的攀岩照片`" loading="lazy" />
+            <video v-else :src="photoV2AssetUrl(item.asset)" controls preload="metadata">你的浏览器暂不支持播放这个视频。</video>
+            <div><span>{{ item.kind==='photo' ? '照片' : '视频' }}</span><time :datetime="item.created_at">{{ formatMediaDate(item) }}</time></div>
+          </article>
+        </div>
+        <div v-else class="record-media__empty"><strong>还没有攀爬影像</strong><p>可以为同一条线路保存多张照片和多个视频。</p><button type="button" @click="mediaPickerOpen=true">添加第一份媒体</button></div>
+      </section>
+      <div v-if="mediaPickerOpen" class="media-picker" role="presentation" @click.self="mediaPickerOpen=false">
+        <section role="dialog" aria-modal="true" aria-labelledby="media-picker-title"><div class="media-picker__top"><div><h2 id="media-picker-title">添加到这条线路</h2><p>照片最多 8 张，视频最多 2 个。</p></div><button type="button" aria-label="关闭" @click="mediaPickerOpen=false">×</button></div>
+          <div class="media-picker__choices"><button type="button" @click="chooseMedia('photo')"><span class="media-picker__icon" aria-hidden="true">▧</span><strong>添加照片</strong><small>JPG、PNG 或 WebP</small></button><button type="button" @click="chooseMedia('video')"><span class="media-picker__icon media-picker__icon--play" aria-hidden="true">▶</span><strong>添加视频</strong><small>MP4、MOV 或 WebM</small></button></div>
+        </section>
+      </div>
     </template>
-    <template v-else-if="view==='library'"><div class="photo-work__heading"><div><h2>线路库</h2><p>按保存时间查看你的抱石线路。</p></div><button @click="returnFromLibrary">返回上一页</button></div>
+    <template v-else-if="view==='library'"><div class="photo-work__heading record-list__heading"><div><h2>我的记录</h2><p>完整保存每条线路和对应的攀爬影像。</p></div><button class="photo-work__primary" @click="startCapture">＋ 记录新线路</button></div>
+      <div class="record-list__controls"><label><span class="sr-only">搜索记录</span><input v-model.trim="recordSearch" type="search" placeholder="搜索线路名称、难度或备注" /></label><div role="group" aria-label="记录状态"><button :aria-pressed="recordFilter==='all'" @click="recordFilter='all'">全部</button><button :aria-pressed="recordFilter==='draft'" @click="recordFilter='draft'">草稿</button></div></div>
       <div v-if="libraryLoading" class="photo-work__library-status" role="status"><span class="photo-work__spinner" aria-hidden="true"></span><p>正在载入线路照片…</p></div>
       <p v-else-if="libraryError && !library.length" class="photo-work__error" role="alert">{{libraryError}}<button @click="openLibrary('replace')">重新载入</button></p>
-      <div v-else-if="library.length" class="photo-work__library-grid">
-        <button v-for="route in library" :key="route.id" class="photo-work__library-card" :aria-label="`查看线路：${route.name}，${formatRouteDate(route)}`" @click="openDetail(route)">
+      <div v-else-if="filteredLibrary.length" class="photo-work__library-grid">
+        <button v-for="route in filteredLibrary" :key="route.id" class="photo-work__library-card" :aria-label="`查看线路：${route.name}，${formatRouteDate(route)}`" @click="openDetail(route)">
           <span class="photo-work__library-photo">
             <template v-if="libraryBoard(route)">
               <img :src="photoV2AssetUrl(libraryBoard(route).original_asset)" :alt="`${route.name}线路照片`" loading="lazy" />
@@ -46,10 +69,10 @@
             </template>
             <span v-else class="photo-work__library-missing">照片暂时无法显示</span>
           </span>
-          <span class="photo-work__library-meta"><strong>{{route.name}}</strong><time :datetime="route.updated_at || route.created_at">{{formatRouteDate(route)}}</time></span>
+          <span class="photo-work__library-meta"><span class="photo-work__library-title"><strong>{{route.name || '未命名线路'}}</strong><span class="record-status">{{ routeStatus(route) }}</span></span><span>{{ route.color_group }} · {{ route.difficulty || '未定级' }}</span><span>{{ route.members.length }} 个岩点 · {{ mediaCount(route,'photo') }} 张照片 · {{ mediaCount(route,'video') }} 个视频</span><time :datetime="route.updated_at || route.created_at">{{formatRouteDate(route)}}</time></span><span class="record-list__arrow" aria-hidden="true">›</span>
         </button>
       </div>
-      <div v-else class="photo-work__library-empty"><h2>还没有保存的线路</h2><p>完成一条抱石线路后，照片会出现在这里。</p><button class="photo-work__primary" @click="returnFromLibrary">添加第一条线路</button></div>
+      <div v-else class="photo-work__library-empty"><h2>{{ library.length ? '没有符合条件的记录' : '还没有保存的线路' }}</h2><p>{{ library.length ? '换一个关键词，或查看全部状态。' : '拍下整面墙，保存你的第一条完整线路。' }}</p><button v-if="!library.length" class="photo-work__primary" @click="startCapture">添加第一条线路</button></div>
       <p v-if="libraryError && library.length" class="photo-work__library-warning" role="status">{{libraryError}}</p>
     </template>
     <template v-else-if="!session || ['saved','abandoned'].includes(session.status)">
@@ -161,9 +184,10 @@ import { isPhotoFlowScreen, parsePhotoWorkflowHash, photoWorkflowHash, photoWork
 import one from '../assets/boulder-samples/boulder-1.jpg'
 import two from '../assets/boulder-samples/boulder-2.jpg'
 const workflow=inject('photoWorkflow'), access=inject('pilotAccess'), state=workflow.state
-const emit=defineEmits(['section-change'])
+const props=defineProps({entry:{type:String,default:'capture'}})
+const emit=defineEmits(['navigate'])
 const session=computed(()=>state.session), board=computed(()=>session.value?.board)
-const editable=computed(()=>!access.session.authEnabled || access.lease.ownedByMe)
+const editable=computed(()=>true)
 const samples=[{name:'抱石路线1',url:one},{name:'抱石路线2',url:two}]
 const previewColor=ref(''), previewObject=ref(''), assignedColor=ref('')
 const assignableColors=['红色','橙色','黄色','绿色','蓝色','紫色','粉色','黑色','白色','灰色']
@@ -179,6 +203,8 @@ const cameraInput=ref(null), albumInput=ref(null), selected=ref(''), adding=ref(
 const visibleObjects=computed(()=>board.value?.objects.filter(obj=>showOther.value || members.value.includes(obj.id)) || [])
 const contourInput=ref(''), localError=ref('')
 const view=ref('current'), library=ref([]), libraryBoards=ref({}), libraryLoading=ref(false), libraryError=ref(''), detail=ref(null), detailBoard=ref(null), noteObject=ref(''), noteState=ref('备注已保存')
+const recordSearch=ref(''), recordFilter=ref('all')
+const mediaPickerOpen=ref(false), mediaPhotoInput=ref(null), mediaVideoInput=ref(null), mediaUploading=ref(false), mediaUploadProgress=ref(0), mediaUploadName=ref(''), mediaError=ref('')
 const noteSaveLabel=computed(()=>({
   '备注已保存':'已保存',
   '等待保存备注':'保存修改',
@@ -226,6 +252,12 @@ onMounted(async()=>{
 const selectedObject=computed(()=>board.value?.objects.find(obj=>obj.id===selected.value))
 const noteMember=computed(()=>detail.value?.members.find(m=>m.object_id===noteObject.value))
 const detailObjects=computed(()=>detailBoard.value?.objects.filter(obj=>detail.value?.members.some(m=>m.object_id===obj.id)) || [])
+const filteredLibrary=computed(()=>library.value.filter(route=>{
+  if(recordFilter.value==='draft' && route.status!=='draft')return false
+  if(!recordSearch.value)return true
+  const haystack=[route.name,route.difficulty,route.notes,route.color_group,route.setter].join(' ').toLocaleLowerCase('zh-CN')
+  return haystack.includes(recordSearch.value.toLocaleLowerCase('zh-CN'))
+}))
 watch(()=>session.value?.route,route=>{if(!failedMembers.value) members.value=route?.members.map(m=>m.object_id)||[]},{immediate:true})
 watch(()=>session.value?.id,()=>{selected.value='';failedMembers.value=null;previewColor.value='';previewObject.value='';assignedColor.value=''})
 watch(selectedObject,obj=>{contourInput.value=JSON.stringify(obj?.contour||[])})
@@ -241,7 +273,6 @@ async function act(action,payload={}) {
   try{return await workflow.change(action,payload)}catch{return null}
 }
 function writePhotoLocation(screen,routeId='',mode='push'){
-  emit('section-change',['library','route'].includes(screen)?'library':'routes')
   const next=photoWorkflowHash(screen,routeId)
   if(location.hash===next)return
   const previous=location.hash
@@ -279,13 +310,15 @@ async function save(){if(!editable.value || state.saving)return;const result=awa
 function resetPageScroll(){window.requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))}
 async function openCurrent(){if(await beforeLeave()){detail.value=null;view.value='current';writePhotoLocation(photoWorkflowScreen(state));resetPageScroll()}}
 async function returnCurrent(){if(await beforeLeave()){detail.value=null;view.value='current';navigateBack(photoWorkflowScreen(state))}}
-async function returnFromLibrary(){if(await beforeLeave()){view.value='current';navigateBack(photoWorkflowScreen(state))}}
+async function goRecords(){if(await beforeLeave())emit('navigate','my-records')}
+async function startCapture(){if(await beforeLeave())emit('navigate','photo-routes')}
+async function returnToRecords(){if(await beforeLeave()){detail.value=null;await openLibrary('replace')}}
 async function openLibrary(historyMode='push'){
   if(!(await beforeLeave()))return
   libraryLoading.value=true;libraryError.value='';detail.value=null;view.value='library';writePhotoLocation('library','',historyMode)
   resetPageScroll()
   try{
-    library.value=await service.routes({status:'completed'})
+    library.value=await service.routes()
     const boardIds=[...new Set(library.value.map(route=>route.board_version_id).filter(Boolean))]
     const missing=boardIds.filter(id=>!libraryBoards.value[id])
     const results=await Promise.allSettled(missing.map(id=>service.board(id)))
@@ -296,10 +329,36 @@ async function openLibrary(historyMode='push'){
   }catch{libraryError.value='线路库暂时无法载入，请检查网络后重试。'}
   finally{libraryLoading.value=false}
 }
-async function openDetail(route,historyMode='push'){detail.value=JSON.parse(JSON.stringify(route));detailBoard.value=await service.board(route.board_version_id);noteObject.value='';noteState.value='备注已保存';writePhotoLocation('route',route.id,historyMode)}
+async function openDetail(route,historyMode='push'){
+  detail.value=JSON.parse(JSON.stringify(route));detailBoard.value=await service.board(route.board_version_id);noteObject.value='';noteState.value='备注已保存';writePhotoLocation('route',route.id,historyMode)
+  if(props.entry==='capture' && historyMode!=='replace' && location.hash.startsWith('#/my-records/'))emit('navigate','my-records',{fromHistory:true})
+}
 function libraryBoard(route){return libraryBoards.value[route.board_version_id]}
 function libraryRouteObjects(route){const board=libraryBoard(route);if(!board)return[];const ids=new Set(route.members.map(member=>member.object_id));return board.objects.filter(obj=>ids.has(obj.id))}
+function mediaCount(route,kind){return (route.media || []).filter(item=>item.kind===kind).length}
+function mediaSummary(route){return `${mediaCount(route,'photo')} 张照片 · ${mediaCount(route,'video')} 个视频`}
+function routeStatus(route){return route.status==='completed'?'已完成':'草稿'}
 function formatRouteDate(route){const value=route.updated_at||route.created_at;if(!value)return'日期未知';const date=new Date(value);if(Number.isNaN(date.getTime()))return'日期未知';return new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'}).format(date)}
+function formatMediaDate(item){const date=new Date(item.created_at);if(Number.isNaN(date.getTime()))return'刚刚';return new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(date)}
+function chooseMedia(kind){mediaPickerOpen.value=false;(kind==='photo'?mediaPhotoInput.value:mediaVideoInput.value)?.click()}
+function mediaFailure(error){const detail=error?.response?.data?.detail;return typeof detail==='string'?detail:'上传没有完成，文件仍保留在你的设备中，请重试。'}
+async function uploadSelectedMedia(event){
+  const files=[...(event.target.files || [])];event.target.value=''
+  if(!detail.value || !files.length)return
+  mediaPickerOpen.value=false;mediaError.value='';mediaUploading.value=true
+  let uploaded=false
+  try{
+    for(const file of files){
+      mediaUploadName.value=file.name;mediaUploadProgress.value=0
+      await service.uploadMedia(detail.value.id,file,value=>{mediaUploadProgress.value=value})
+      uploaded=true
+    }
+  }catch(error){mediaError.value=mediaFailure(error)}
+  finally{
+    if(uploaded)detail.value=await service.route(detail.value.id).catch(()=>detail.value)
+    mediaUploading.value=false;mediaUploadName.value='';mediaUploadProgress.value=0
+  }
+}
 async function applyPhotoLocation(){
   if(!state.loaded)return
   const target=parsePhotoWorkflowHash(location.hash)
@@ -395,5 +454,18 @@ defineExpose({beforeLeave,openCurrent,returnCurrent,openLibrary})
   .photo-work--ready{padding-bottom:calc(184px + env(safe-area-inset-bottom))}.photo-work--ready .photo-work__tools{padding-bottom:calc(132px + env(safe-area-inset-bottom))}
   .photo-work__desktop-review-action{display:none}
   .photo-work__mobile-command{position:fixed;z-index:90;right:12px;bottom:calc(var(--ui-shell-bottom) + 8px);left:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border:1px solid var(--ui-line);border-radius:14px;background:rgba(255,255,255,.98);box-shadow:0 12px 30px rgba(28,30,33,.2)}.photo-work__mobile-command>span{grid-column:1/-1;color:var(--ui-ink-muted);font-size:12px;text-align:center}.photo-work__mobile-command button{width:100%;min-height:48px;padding-inline:10px}
+}
+.record-detail__top{display:flex;align-items:flex-start;gap:20px;margin-bottom:18px}.record-detail__top>div{display:grid;gap:4px}.record-detail__top h2{font-size:26px}.record-detail__top p,.record-media__heading p{color:var(--ui-ink-muted);font-size:13px}.record-status{display:inline-flex;align-items:center;justify-content:center;width:max-content;min-height:24px;padding:2px 9px;border:1px solid #e2c249;border-radius:999px;background:#fff7c7;color:#674f00;font-size:12px;font-weight:700}
+.record-list__controls{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.record-list__controls label{flex:1;max-width:520px}.record-list__controls input{box-sizing:border-box;width:100%;min-height:44px;padding:0 14px;border:1px solid var(--ui-line-strong);border-radius:999px;background:var(--ui-surface);color:var(--ui-ink);font:inherit}.record-list__controls>div{display:flex;gap:6px}.record-list__controls button{min-height:38px;padding:7px 14px;border-color:transparent;border-radius:999px;background:transparent}.record-list__controls button[aria-pressed=true]{border-color:#e2c249;background:#fff7c7;color:#574400;font-weight:700}
+.photo-work__library-grid{display:grid;grid-template-columns:1fr;gap:12px}.photo-work .photo-work__library-card{position:relative;display:grid;grid-template-columns:190px minmax(0,1fr) 28px;align-items:center;gap:18px;width:100%;padding:12px;border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-surface);text-align:left;box-shadow:0 1px 0 rgba(28,30,33,.03)}.photo-work .photo-work__library-card:hover{border-color:#d5b532;background:#fffdf4;box-shadow:0 10px 24px rgba(28,30,33,.08);transform:translateY(-1px)}.photo-work__library-photo{width:190px;aspect-ratio:16/10;border:0;border-radius:11px;background:#242522}.photo-work__library-card:hover .photo-work__library-photo{transform:none;box-shadow:none}.photo-work__library-meta{display:grid;gap:5px;padding:0}.photo-work__library-meta>span:not(.photo-work__library-title),.photo-work__library-meta time{color:var(--ui-ink-muted);font-size:13px}.photo-work__library-title{display:flex;align-items:center;gap:10px}.photo-work__library-title strong{font-size:17px}.record-list__arrow{color:var(--ui-ink-muted);font-size:30px;font-weight:300;text-align:center}
+.record-media{margin-top:32px;padding-top:24px;border-top:1px solid var(--ui-line)}.record-media__heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.record-media__heading>div{display:grid;gap:4px}.record-media__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.record-media__item{min-width:0;overflow:hidden;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface)}.record-media__item img,.record-media__item video{display:block;width:100%;aspect-ratio:4/3;background:#222;object-fit:cover}.record-media__item>div{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;color:var(--ui-ink-muted);font-size:12px}.record-media__item>div span{color:var(--ui-ink);font-weight:700}.record-media__empty{display:grid;place-items:center;gap:7px;min-height:190px;padding:24px;border:1px dashed var(--ui-line-strong);border-radius:16px;background:rgba(255,255,255,.45);text-align:center}.record-media__empty p{color:var(--ui-ink-muted);font-size:13px}.record-media__progress{display:grid;gap:8px;margin:0 0 14px;padding:12px 14px;border:1px solid #ecd66f;border-radius:12px;background:#fff9d8}.record-media__progress>div{display:flex;justify-content:space-between;gap:12px;font-size:13px}.record-media__progress progress{width:100%}
+.media-picker{position:fixed;z-index:220;inset:0;display:grid;place-items:center;padding:20px;background:rgba(25,26,24,.42);backdrop-filter:blur(2px)}.media-picker>section{width:min(520px,100%);padding:22px;border:1px solid var(--ui-line);border-radius:20px;background:var(--ui-surface);box-shadow:0 24px 70px rgba(20,21,19,.24)}.media-picker__top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.media-picker__top p{color:var(--ui-ink-muted);font-size:13px}.media-picker__top>button{min-width:44px;padding:6px;border-color:transparent;border-radius:50%;font-size:24px}.media-picker__choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.media-picker__choices button{display:grid;justify-items:start;gap:5px;min-height:150px;padding:18px;border-radius:16px;text-align:left}.media-picker__choices strong{font-size:17px}.media-picker__choices small{color:var(--ui-ink-muted)}.media-picker__icon{display:grid;place-items:center;width:42px;height:42px;margin-bottom:6px;border-radius:13px;background:#fff4a8;color:#584400;font-size:22px}.media-picker__icon--play{padding-left:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:860px){
+  .record-detail__top{gap:8px;margin-bottom:12px}.record-detail__top>.photo-work__back{min-width:44px;padding-inline:8px}.record-detail__top>.photo-work__back span:last-child{display:none}.record-detail__top h2{font-size:22px}
+  .record-list__heading{align-items:center}.record-list__heading h2{display:none}.record-list__heading .photo-work__primary{min-height:40px;padding:8px 12px}.record-list__controls{display:grid;justify-content:stretch;gap:10px}.record-list__controls label{width:100%;max-width:none}.record-list__controls>div{overflow-x:auto}
+  .photo-work__library-grid{grid-template-columns:1fr;gap:10px}.photo-work .photo-work__library-card{grid-template-columns:118px minmax(0,1fr) 18px;gap:12px;padding:10px;border-radius:14px}.photo-work__library-photo{width:118px;aspect-ratio:4/3;border-radius:10px}.photo-work__library-title{align-items:flex-start;flex-direction:column;gap:5px}.photo-work__library-title strong{font-size:15px}.photo-work__library-meta>span:not(.photo-work__library-title),.photo-work__library-meta time{font-size:11px}.record-list__arrow{font-size:24px}
+  .record-media{margin-top:24px;padding-top:20px}.record-media__heading{align-items:flex-start}.record-media__add{min-height:40px;padding:8px 11px}.record-media__grid{grid-template-columns:1fr 1fr;gap:10px}.record-media__item img,.record-media__item video{aspect-ratio:1}.record-media__item>div{display:grid;gap:2px}.record-media__empty{min-height:170px}
+  .media-picker{align-items:end;padding:0}.media-picker>section{box-sizing:border-box;width:100%;padding:20px 16px calc(22px + env(safe-area-inset-bottom));border-radius:22px 22px 0 0}.media-picker__choices{grid-template-columns:1fr}.media-picker__choices button{grid-template-columns:46px 1fr;align-items:center;min-height:88px}.media-picker__choices button small{grid-column:2}.media-picker__icon{grid-row:1/3;margin:0}
 }
 </style>

@@ -190,6 +190,28 @@ class PhotoRouteV2Tests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/photo-routes/v2/routes').json(), [])
         self.assertEqual(self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/restore").status_code, 200)
 
+    def test_route_accepts_multiple_private_photos_and_videos_with_v1_limits(self):
+        created = self.create_board(); board = self.seed_analysis(created['board']['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色', name='黄色横移'))
+        photo = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                 files={'media': ('try-1.jpg', photo_bytes(120, 80), 'image/jpeg')})
+        self.assertEqual(photo.status_code, 200, photo.text)
+        videos = []
+        for index in range(2):
+            response = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                        files={'media': (f'try-{index}.mp4', b'local-test-video-'+bytes([index]), 'video/mp4')})
+            self.assertEqual(response.status_code, 200, response.text); videos.append(response.json())
+        overflow = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                    files={'media': ('try-3.mp4', b'another-video', 'video/mp4')})
+        self.assertEqual(overflow.status_code, 422)
+        saved = self.client.get(f"/api/photo-routes/v2/routes/{route['id']}").json()
+        self.assertEqual([item['kind'] for item in saved['media']].count('photo'), 1)
+        self.assertEqual([item['kind'] for item in saved['media']].count('video'), 2)
+        asset_url = f"/api/photo-routes/v2/assets/{videos[0]['asset']['filename']}"
+        self.assertEqual(self.client.get(asset_url).status_code, 200)
+        self.assertEqual(self.client.get(asset_url, headers={'x-test-owner':'another-owner'}).status_code, 404)
+
     def test_cancel_retry_and_restart_recovery(self):
         created = self.create_board(); job = created['job']
         cancelled = self.client.post(f"/api/photo-routes/v2/jobs/{job['id']}/cancel")

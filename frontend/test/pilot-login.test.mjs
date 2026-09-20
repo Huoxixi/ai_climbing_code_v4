@@ -6,6 +6,7 @@ const root = readFileSync(new URL('../src/RootApp.vue', import.meta.url), 'utf8'
 const shell = readFileSync(new URL('../src/components/AppShell.vue', import.meta.url), 'utf8')
 const chooser = readFileSync(new URL('../src/components/WorkspaceChooser.vue', import.meta.url), 'utf8')
 const settings = readFileSync(new URL('../src/components/SettingsPage.vue', import.meta.url), 'utf8')
+const account = readFileSync(new URL('../src/components/AccountPage.vue', import.meta.url), 'utf8')
 test('注册登录入口移除旧试用身份且不预填密码', () => {
   assert.doesNotMatch(login, /ma-trial|deng-trial|马老师|邓老师/)
   assert.match(login, /邀请码/)
@@ -42,4 +43,10 @@ test('登录和设置页使用攀岩助手响应式原型且保留服务入口',
   assert.match(shell, /close-settings/)
   assert.match(settings, /DeepSeek API/)
   assert.match(settings, /settings-grid/)
+})
+test('普通抱石账号页只展示身份与隐私，不暴露服务密钥', () => {
+  assert.match(account, /我的账号/)
+  assert.match(account, /默认私密/)
+  assert.match(account, /退出当前账号/)
+  assert.doesNotMatch(account, /DeepSeek|API 密钥|测试连接/)
 })

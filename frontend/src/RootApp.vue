@@ -44,8 +44,12 @@ import apiClient from './services/apiClient'
 
 const workspaceStorageKey = 'climbing-active-workspace'
 const workspaceChooserHash = '#/projects'
+const boulderPageKeys = ['photo-routes', 'my-records', 'climb-replay', 'account']
+const setterPageKeys = ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab']
 const storedWorkspace = sessionStorage.getItem(workspaceStorageKey)
-const activeWorkspace = ref(location.hash === workspaceChooserHash ? '' : (['boulder', 'setter'].includes(storedWorkspace) ? storedWorkspace : ''))
+const initialPage = String(location.hash || '').replace(/^#\/?/, '').split('/')[0]
+const inferredWorkspace = boulderPageKeys.includes(initialPage) ? 'boulder' : (setterPageKeys.includes(initialPage) ? 'setter' : '')
+const activeWorkspace = ref(location.hash === workspaceChooserHash ? '' : (inferredWorkspace || (['boulder', 'setter'].includes(storedWorkspace) ? storedWorkspace : '')))
 const loading = ref(true)
 const loginSubmitting = ref(false)
 const loginError = ref('')
@@ -183,8 +187,7 @@ function handleRootHashChange() {
   const savedWorkspace = sessionStorage.getItem(workspaceStorageKey)
   if (!['boulder', 'setter'].includes(savedWorkspace)) return
   const requestedPage = String(location.hash || '').replace(/^#\/?/, '').split('/')[0]
-  const setterPages = ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab']
-  const restoredWorkspace = requestedPage === 'photo-routes' ? 'boulder' : (setterPages.includes(requestedPage) ? 'setter' : savedWorkspace)
+  const restoredWorkspace = boulderPageKeys.includes(requestedPage) ? 'boulder' : (setterPageKeys.includes(requestedPage) ? 'setter' : savedWorkspace)
   activeWorkspace.value = restoredWorkspace
   sessionStorage.setItem(workspaceStorageKey, restoredWorkspace)
 }

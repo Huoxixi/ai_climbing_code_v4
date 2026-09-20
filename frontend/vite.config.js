@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
+const backendTarget = process.env.CLIMB_PREVIEW_BACKEND_TARGET || 'http://127.0.0.1:8004'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -15,15 +16,15 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/photo-route-assets': {
-        target: 'http://127.0.0.1:8004',
+        target: backendTarget,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://127.0.0.1:8004',
+        target: backendTarget,
         changeOrigin: true,
       },
       '/images': {
-        target: 'http://127.0.0.1:8004',
+        target: backendTarget,
         changeOrigin: true,
       },
     },

@@ -179,6 +179,12 @@ CREATE TABLE IF NOT EXISTS background_variants(
  route_version INTEGER NOT NULL, original_fingerprint TEXT NOT NULL, member_fingerprint TEXT NOT NULL,
  removal_mask_asset TEXT NOT NULL, preserve_mask_asset TEXT, background_asset TEXT NOT NULL,
  composite_asset TEXT NOT NULL, method TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS route_media(
+ id TEXT PRIMARY KEY, route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL CHECK(kind IN ('photo','video')), asset_json TEXT NOT NULL,
+ original_name TEXT NOT NULL, mime_type TEXT NOT NULL, size_bytes INTEGER NOT NULL,
+ created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_route_media_route ON route_media(route_id, created_at DESC);
 """
 
 
@@ -200,6 +206,7 @@ class PhotoRouteV2Store:
             if "UNIQUE(owner, board_key, version)" in table_sql:
                 self._rebuild_board_versions_v3(db)
             db.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(3, ?)", (utcnow(),))
+            db.execute("INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES(4, ?)", (utcnow(),))
         self.recover_interrupted_jobs()
         self.import_legacy_drafts()
 
@@ -274,7 +281,11 @@ class PhotoRouteV2Store:
         path = (self.assets / filename).resolve()
         if not path.is_relative_to(self.assets) or not path.is_file():
             raise HTTPException(404, "素材不存在")
-        if hashlib.sha256(path.read_bytes()).hexdigest() != filename.split(".")[0]:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != filename.split(".")[0]:
             raise HTTPException(422, "素材指纹校验失败")
         return path
 
@@ -572,7 +583,24 @@ class PhotoRouteV2Store:
         result["members"] = [{**dict(item), "roles": self._load(item["roles_json"], []),
                               "tags": self._load(item["tags_json"], [])} for item in members]
         for member in result["members"]: member.pop("roles_json"); member.pop("tags_json")
+        media = db.execute("SELECT * FROM route_media WHERE route_id=? ORDER BY created_at DESC", (row["id"],)).fetchall()
+        result["media"] = [{**dict(item), "asset": self._load(item["asset_json"], {})} for item in media]
+        for item in result["media"]: item.pop("asset_json")
         return result
+
+    def add_route_media(self, route_id: str, owner: str, *, kind: str, asset: dict,
+                        original_name: str, mime_type: str, size_bytes: int):
+        self.get_route(route_id, owner)
+        limit = 8 if kind == "photo" else 2
+        with self.transaction() as db:
+            count = db.execute("SELECT COUNT(*) FROM route_media WHERE route_id=? AND kind=?", (route_id, kind)).fetchone()[0]
+            if count >= limit:
+                label = "照片" if kind == "photo" else "视频"
+                raise HTTPException(422, f"同一条线路最多保存 {limit} 个{label}")
+            media_id, created_at = uuid.uuid4().hex, utcnow()
+            db.execute("INSERT INTO route_media VALUES(?,?,?,?,?,?,?,?)",
+                       (media_id, route_id, kind, self._json(asset), original_name[:255], mime_type, size_bytes, created_at))
+        return next(item for item in self.get_route(route_id, owner)["media"] if item["id"] == media_id)
 
     def create_route_from_color(self, owner: str, payload: ColorRouteCreate):
         board = self.get_board(payload.board_version_id, owner)
@@ -932,6 +960,51 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
     @router.get("/routes/{route_id}")
     def route(route_id: str, request: Request): return store.get_route(route_id, owner(request))
 
+    @router.post("/routes/{route_id}/media")
+    async def upload_route_media(route_id: str, request: Request, media: UploadFile = File(...)):
+        route = store.get_route(route_id, owner(request))
+        content_type = (media.content_type or "").lower()
+        allowed = {
+            "image/jpeg": ("photo", "jpg", 25 * 1024 * 1024),
+            "image/png": ("photo", "png", 25 * 1024 * 1024),
+            "image/webp": ("photo", "webp", 25 * 1024 * 1024),
+            "video/mp4": ("video", "mp4", 500 * 1024 * 1024),
+            "video/quicktime": ("video", "mov", 500 * 1024 * 1024),
+            "video/webm": ("video", "webm", 500 * 1024 * 1024),
+        }
+        if content_type not in allowed:
+            raise HTTPException(422, "仅支持 JPG、PNG、WebP 照片和 MP4、MOV、WebM 视频")
+        kind, suffix, size_limit = allowed[content_type]
+        kind_limit = 8 if kind == "photo" else 2
+        if sum(item["kind"] == kind for item in route["media"]) >= kind_limit:
+            label = "照片" if kind == "photo" else "视频"
+            raise HTTPException(422, f"同一条线路最多保存 {kind_limit} 个{label}")
+        temp = store.assets / f".route-media-{uuid.uuid4().hex}.tmp"
+        digest, size = hashlib.sha256(), 0
+        try:
+            with temp.open("wb") as target:
+                while chunk := await media.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > size_limit:
+                        raise HTTPException(413, "照片不能超过 25MB，视频不能超过 500MB")
+                    digest.update(chunk)
+                    target.write(chunk)
+            if not size:
+                raise HTTPException(422, "文件内容为空")
+            filename = f"{digest.hexdigest()}.{suffix}"
+            final = store.assets / filename
+            with store._lock:
+                if final.exists():
+                    temp.unlink(missing_ok=True)
+                else:
+                    os.replace(temp, final)
+            asset = {"filename": filename, "sha256": digest.hexdigest(), "size_bytes": size}
+            return store.add_route_media(route_id, owner(request), kind=kind, asset=asset,
+                                         original_name=media.filename or filename,
+                                         mime_type=content_type, size_bytes=size)
+        finally:
+            temp.unlink(missing_ok=True)
+
     @router.put("/routes/{route_id}")
     def update_route(route_id: str, payload: RouteUpdate, request: Request): return store.update_route(route_id, owner(request), payload)
 
@@ -964,9 +1037,10 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
         # Ownership is checked by requiring the digest to occur in an owner-visible record.
         needle = f'"filename":"{filename}"'
         with store.connect() as db:
-            visible = db.execute("SELECT 1 FROM board_versions WHERE owner=? AND original_asset LIKE ? UNION SELECT 1 FROM board_objects o JOIN board_versions b ON b.id=o.board_version_id WHERE b.owner=? AND (o.cutout_asset LIKE ? OR o.mask_asset LIKE ?) UNION SELECT 1 FROM background_variants v JOIN routes r ON r.id=v.route_id WHERE r.owner=? AND (v.removal_mask_asset LIKE ? OR v.preserve_mask_asset LIKE ? OR v.background_asset LIKE ? OR v.composite_asset LIKE ?) LIMIT 1",
+            visible = db.execute("SELECT 1 FROM board_versions WHERE owner=? AND original_asset LIKE ? UNION SELECT 1 FROM board_objects o JOIN board_versions b ON b.id=o.board_version_id WHERE b.owner=? AND (o.cutout_asset LIKE ? OR o.mask_asset LIKE ?) UNION SELECT 1 FROM background_variants v JOIN routes r ON r.id=v.route_id WHERE r.owner=? AND (v.removal_mask_asset LIKE ? OR v.preserve_mask_asset LIKE ? OR v.background_asset LIKE ? OR v.composite_asset LIKE ?) UNION SELECT 1 FROM route_media m JOIN routes r ON r.id=m.route_id WHERE r.owner=? AND m.asset_json LIKE ? LIMIT 1",
                                  (owner(request), f"%{needle}%", owner(request), f"%{needle}%", f"%{needle}%",
-                                  owner(request), f"%{needle}%", f"%{needle}%", f"%{needle}%", f"%{needle}%")).fetchone()
+                                  owner(request), f"%{needle}%", f"%{needle}%", f"%{needle}%", f"%{needle}%",
+                                  owner(request), f"%{needle}%")).fetchone()
         if not visible: raise HTTPException(404, "未找到该素材")
         return FileResponse(store.asset_path(filename), headers={"Cache-Control": "private, no-cache"})
 

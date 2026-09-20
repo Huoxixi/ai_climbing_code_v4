@@ -36,6 +36,7 @@ grep -q '^APP_ENV=production$' /etc/ai-climbing/backend.env
 grep -q '^LOCAL_ONLY=true$' /etc/ai-climbing/backend.env
 grep -q '^DISABLE_SUPABASE=true$' /etc/ai-climbing/backend.env
 grep -q '^ENABLE_SIMULATION=false$' /etc/ai-climbing/backend.env
+grep -q '^ENABLE_CLIMB_REPLAY=true$' /etc/ai-climbing/backend.env
 grep -q '^PILOT_AUTH_ENABLED=true$' /etc/ai-climbing/backend.env
 grep -q '^PILOT_COOKIE_SECURE=true$' /etc/ai-climbing/backend.env
 [[ -r /etc/ai-climbing/pilot-users.json ]] || {
@@ -126,6 +127,12 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_photo_route_benchmark \
   test_photo_route_drafts \
   test_photo_route_processing \
+  test_photo_route_v2 \
+  test_photo_route_evaluation \
+  test_photo_route_experiments \
+  test_photo_route_instance_masks \
+  test_hole_grid_topology \
+  test_climb_replay \
   test_photo_wall_processing \
   test_pilot_access \
   test_member_accounts \
@@ -137,7 +144,7 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_standard_board_local_first \
   test_standard_board_tags
 
-APP_ENV=production LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false RELEASE_SHA="${release_sha}" \
+APP_ENV=production LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false ENABLE_CLIMB_REPLAY=true RELEASE_SHA="${release_sha}" \
   "${building_release}/backend/.venv/bin/python" -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1 \
   >"${temporary_root}/smoke.log" 2>&1 &
 smoke_pid=$!
