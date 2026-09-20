@@ -1,4 +1,5 @@
 import apiClient, { API_BASE_URL } from './apiClient'
+import { uploadInChunks } from './chunkUpload'
 export const photoAssetUrl = (asset) => asset ? `${API_BASE_URL}/photo-route-assets/${asset.filename}` : ''
 export const photoV2AssetUrl = (asset) => asset ? `${API_BASE_URL}/api/photo-routes/v2/assets/${asset.filename}` : ''
 export default {
@@ -32,10 +33,16 @@ export const photoRouteV2Service = {
   routes: (params = {}) => apiClient.get('/api/photo-routes/v2/routes', { params }).then(r => r.data),
   route: (id) => apiClient.get(`/api/photo-routes/v2/routes/${id}`).then(r => r.data),
   uploadMedia: (id, file, onProgress) => {
-    const body = new FormData(); body.append('media', file)
-    return apiClient.post(`/api/photo-routes/v2/routes/${id}/media`, body, {
-      onUploadProgress: (event) => onProgress?.(event.total ? Math.round(event.loaded * 100 / event.total) : 0),
-    }).then(r => r.data)
+    const root = `/api/photo-routes/v2/routes/${id}/media/uploads`
+    return uploadInChunks({
+      file,
+      create: () => apiClient.post(root, { filename:file.name, content_type:file.type, size_bytes:file.size }).then(r => r.data),
+      append: (uploadId, offset, chunk) => apiClient.put(`${root}/${uploadId}`, chunk, {
+        timeout:120000, headers:{ 'Content-Type':'application/octet-stream', 'X-Upload-Offset':String(offset) },
+      }).then(r => r.data),
+      complete: (uploadId) => apiClient.post(`${root}/${uploadId}/complete`).then(r => r.data),
+      onProgress,
+    })
   },
   fromColor: (payload) => apiClient.post('/api/photo-routes/v2/routes/from-color', payload).then(r => r.data),
   saveRoute: (route) => apiClient.put(`/api/photo-routes/v2/routes/${route.id}`, {

@@ -21,6 +21,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from core.chunked_upload import ChunkUploadError, ChunkUploadStore
 from core.photo_route_analysis import (BOARD_HEIGHT_MM, BOARD_WIDTH_MM, analyze_board_photo,
                                        assess_capture_quality, board_holes, compute_homography,
                                        fingerprint_payload, map_point, nearest_hole, mobilesam_paths)
@@ -46,6 +47,12 @@ class ColorRefinement(BaseModel):
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+class MediaUploadCreate(Contract):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=100)
+    size_bytes: int = Field(gt=0)
 
 
 class CalibrationUpdate(Contract):
@@ -892,7 +899,28 @@ class PhotoRouteJobManager:
 
 def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobManager) -> APIRouter:
     router = APIRouter(prefix="/api/photo-routes/v2", tags=["photo-route-v2"])
+    route_uploads = ChunkUploadStore(store.assets / ".chunk-uploads")
+    media_types = {
+        "image/jpeg": ("photo", "jpg", 25 * 1024 * 1024),
+        "image/png": ("photo", "png", 25 * 1024 * 1024),
+        "image/webp": ("photo", "webp", 25 * 1024 * 1024),
+        "video/mp4": ("video", "mp4", 500 * 1024 * 1024),
+        "video/quicktime": ("video", "mov", 500 * 1024 * 1024),
+        "video/webm": ("video", "webm", 500 * 1024 * 1024),
+    }
     def owner(request: Request) -> str: return request.state.pilot_user.username
+
+    def validate_media(route_id: str, username: str, content_type: str):
+        route = store.get_route(route_id, username)
+        content_type = content_type.lower()
+        if content_type not in media_types:
+            raise HTTPException(422, "仅支持 JPG、PNG、WebP 照片和 MP4、MOV、WebM 视频")
+        kind, suffix, size_limit = media_types[content_type]
+        kind_limit = 8 if kind == "photo" else 2
+        if sum(item["kind"] == kind for item in route["media"]) >= kind_limit:
+            label = "照片" if kind == "photo" else "视频"
+            raise HTTPException(422, f"同一条线路最多保存 {kind_limit} 个{label}")
+        return content_type, kind, suffix, size_limit
 
     @router.post("/boards/upload")
     async def upload_board(request: Request, photo: UploadFile = File(...), board_name: str = Form(default="")):
@@ -962,23 +990,7 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
 
     @router.post("/routes/{route_id}/media")
     async def upload_route_media(route_id: str, request: Request, media: UploadFile = File(...)):
-        route = store.get_route(route_id, owner(request))
-        content_type = (media.content_type or "").lower()
-        allowed = {
-            "image/jpeg": ("photo", "jpg", 25 * 1024 * 1024),
-            "image/png": ("photo", "png", 25 * 1024 * 1024),
-            "image/webp": ("photo", "webp", 25 * 1024 * 1024),
-            "video/mp4": ("video", "mp4", 500 * 1024 * 1024),
-            "video/quicktime": ("video", "mov", 500 * 1024 * 1024),
-            "video/webm": ("video", "webm", 500 * 1024 * 1024),
-        }
-        if content_type not in allowed:
-            raise HTTPException(422, "仅支持 JPG、PNG、WebP 照片和 MP4、MOV、WebM 视频")
-        kind, suffix, size_limit = allowed[content_type]
-        kind_limit = 8 if kind == "photo" else 2
-        if sum(item["kind"] == kind for item in route["media"]) >= kind_limit:
-            label = "照片" if kind == "photo" else "视频"
-            raise HTTPException(422, f"同一条线路最多保存 {kind_limit} 个{label}")
+        content_type, kind, suffix, size_limit = validate_media(route_id, owner(request), media.content_type or "")
         temp = store.assets / f".route-media-{uuid.uuid4().hex}.tmp"
         digest, size = hashlib.sha256(), 0
         try:
@@ -1004,6 +1016,60 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
                                          mime_type=content_type, size_bytes=size)
         finally:
             temp.unlink(missing_ok=True)
+
+    @router.post("/routes/{route_id}/media/uploads")
+    def create_route_media_upload(route_id: str, payload: MediaUploadCreate, request: Request):
+        username = owner(request)
+        content_type, kind, suffix, size_limit = validate_media(route_id, username, payload.content_type)
+        try:
+            return route_uploads.create(username, total_size=payload.size_bytes, max_size=size_limit, metadata={
+                "route_id": route_id, "filename": payload.filename, "content_type": content_type,
+                "kind": kind, "suffix": suffix,
+            })
+        except ChunkUploadError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.put("/routes/{route_id}/media/uploads/{upload_id}")
+    async def append_route_media_upload(route_id: str, upload_id: str, request: Request):
+        try:
+            offset = int(request.headers.get("x-upload-offset", "-1"))
+        except ValueError as exc:
+            raise HTTPException(422, "上传位置无效") from exc
+        data = await request.body()
+        try:
+            result = route_uploads.append(upload_id, owner(request), offset=offset, data=data)
+        except ChunkUploadError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return result
+
+    @router.post("/routes/{route_id}/media/uploads/{upload_id}/complete")
+    def complete_route_media_upload(route_id: str, upload_id: str, request: Request):
+        username = owner(request)
+        try:
+            meta, part = route_uploads.finish(upload_id, username)
+            details = meta["metadata"]
+            if details.get("route_id") != route_id:
+                raise ChunkUploadError("上传会话与线路不匹配")
+            content_type, kind, suffix, _limit = validate_media(route_id, username, details["content_type"])
+            digest = hashlib.sha256()
+            with part.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    digest.update(chunk)
+            filename = f"{digest.hexdigest()}.{suffix}"
+            final = store.assets / filename
+            with store._lock:
+                if final.exists():
+                    part.unlink(missing_ok=True)
+                else:
+                    os.replace(part, final)
+            asset = {"filename": filename, "sha256": digest.hexdigest(), "size_bytes": meta["total_size"]}
+            return store.add_route_media(route_id, username, kind=kind, asset=asset,
+                                         original_name=details["filename"], mime_type=content_type,
+                                         size_bytes=meta["total_size"])
+        except ChunkUploadError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        finally:
+            route_uploads.discard(upload_id)
 
     @router.put("/routes/{route_id}")
     def update_route(route_id: str, payload: RouteUpdate, request: Request): return store.update_route(route_id, owner(request), payload)

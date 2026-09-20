@@ -88,6 +88,26 @@ class ClimbReplayApiTests(unittest.TestCase):
         self.assertEqual(self.client.get(
             f"/api/climb-replay/jobs/{job['id']}", headers={"x-user": "other"}).status_code, 404)
 
+    def test_proxy_safe_chunk_upload_creates_job(self):
+        content = self.video.read_bytes()
+        started = self.client.post('/api/climb-replay/uploads', json={
+            'filename':'attempt.mp4', 'content_type':'video/mp4', 'size_bytes':len(content),
+            'route_id':'route-1', 'route_color':'',
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']; split = max(1, len(content) // 2)
+        first = self.client.put(f'/api/climb-replay/uploads/{upload_id}', content=content[:split],
+                                headers={'x-upload-offset':'0'})
+        self.assertEqual(first.status_code, 200, first.text)
+        second = self.client.put(f'/api/climb-replay/uploads/{upload_id}', content=content[split:],
+                                 headers={'x-upload-offset':str(split)})
+        self.assertTrue(second.json()['complete'])
+        completed = self.client.post(f'/api/climb-replay/uploads/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 202, completed.text)
+        job = self.wait(completed.json()['id'])
+        self.assertEqual(job['status'], 'succeeded')
+        self.assertEqual(job['route_color'], '绿色')
+
     def test_rejects_non_mp4_and_overlong_video(self):
         response = self.client.post(
             "/api/climb-replay/jobs",

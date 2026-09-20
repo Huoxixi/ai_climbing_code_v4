@@ -212,6 +212,27 @@ class PhotoRouteV2Tests(unittest.TestCase):
         self.assertEqual(self.client.get(asset_url).status_code, 200)
         self.assertEqual(self.client.get(asset_url, headers={'x-test-owner':'another-owner'}).status_code, 404)
 
+    def test_route_media_supports_proxy_safe_chunk_uploads(self):
+        created = self.create_board(); board = self.seed_analysis(created['board']['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色', name='分片视频'))
+        content = b'chunk-one-' + b'chunk-two'
+        root = f"/api/photo-routes/v2/routes/{route['id']}/media/uploads"
+        started = self.client.post(root, json={
+            'filename':'attempt.mp4', 'content_type':'video/mp4', 'size_bytes':len(content),
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']
+        first = self.client.put(f'{root}/{upload_id}', content=content[:10], headers={'x-upload-offset':'0'})
+        self.assertEqual(first.json()['offset'], 10)
+        second = self.client.put(f'{root}/{upload_id}', content=content[10:], headers={'x-upload-offset':'10'})
+        self.assertTrue(second.json()['complete'])
+        completed = self.client.post(f'{root}/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 200, completed.text)
+        self.assertEqual(completed.json()['size_bytes'], len(content))
+        asset_url = f"/api/photo-routes/v2/assets/{completed.json()['asset']['filename']}"
+        self.assertEqual(self.client.get(asset_url).content, content)
+
     def test_cancel_retry_and_restart_recovery(self):
         created = self.create_board(); job = created['job']
         cancelled = self.client.post(f"/api/photo-routes/v2/jobs/{job['id']}/cancel")

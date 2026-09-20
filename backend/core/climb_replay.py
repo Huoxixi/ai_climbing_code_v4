@@ -30,6 +30,9 @@ from typing import Any, Callable, Protocol
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
+
+from core.chunked_upload import ChunkUploadError, ChunkUploadStore
 
 
 def utcnow() -> str:
@@ -51,6 +54,15 @@ class VideoLimits:
     max_width: int = 1920
     max_height: int = 1080
     max_frames: int = 2700
+
+
+class ReplayUploadCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=100)
+    size_bytes: int = Field(gt=0)
+    route_id: str = Field(default="", max_length=64)
+    route_color: str = Field(default="", max_length=40)
 
 
 @dataclass(frozen=True)
@@ -608,6 +620,7 @@ def create_climb_replay_router(
 ) -> APIRouter:
     limits = limits or VideoLimits()
     router = APIRouter(prefix="/api/climb-replay", tags=["climb-replay"])
+    replay_uploads = ChunkUploadStore(store.root / ".chunk-uploads")
 
     def owner(request: Request) -> str:
         user = getattr(request.state, "pilot_user", None)
@@ -615,14 +628,7 @@ def create_climb_replay_router(
             raise HTTPException(401, "请先登录")
         return user.username
 
-    @router.post("/jobs", status_code=202)
-    async def create_job(
-        request: Request,
-        video: UploadFile = File(...),
-        route_id: str = Form(default=""),
-        route_color: str = Form(default=""),
-    ):
-        username = owner(request)
+    def resolve_route(username: str, route_id: str, route_color: str) -> tuple[str, str]:
         route_id = route_id.strip()
         if route_id:
             if route_lookup is None:
@@ -632,6 +638,17 @@ def create_climb_replay_router(
         route_color = route_color.strip()
         if not route_color or len(route_color) > 40:
             raise HTTPException(422, "请选择需要分析的线路颜色")
+        return route_id, route_color
+
+    @router.post("/jobs", status_code=202)
+    async def create_job(
+        request: Request,
+        video: UploadFile = File(...),
+        route_id: str = Form(default=""),
+        route_color: str = Form(default=""),
+    ):
+        username = owner(request)
+        route_id, route_color = resolve_route(username, route_id, route_color)
         if (video.content_type or "").lower() != "video/mp4":
             raise HTTPException(422, "技术验证阶段仅支持 MP4 视频")
 
@@ -659,6 +676,52 @@ def create_climb_replay_router(
             return job
         finally:
             upload.unlink(missing_ok=True)
+
+    @router.post("/uploads")
+    def create_upload(payload: ReplayUploadCreate, request: Request):
+        username = owner(request)
+        route_id, route_color = resolve_route(username, payload.route_id, payload.route_color)
+        if payload.content_type.lower() != "video/mp4":
+            raise HTTPException(422, "技术验证阶段仅支持 MP4 视频")
+        try:
+            return replay_uploads.create(username, total_size=payload.size_bytes, max_size=limits.max_bytes, metadata={
+                "filename": payload.filename, "content_type": "video/mp4",
+                "route_id": route_id, "route_color": route_color,
+            })
+        except ChunkUploadError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.put("/uploads/{upload_id}")
+    async def append_upload(upload_id: str, request: Request):
+        try:
+            offset = int(request.headers.get("x-upload-offset", "-1"))
+        except ValueError as exc:
+            raise HTTPException(422, "上传位置无效") from exc
+        try:
+            return replay_uploads.append(upload_id, owner(request), offset=offset, data=await request.body())
+        except ChunkUploadError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @router.post("/uploads/{upload_id}/complete", status_code=202)
+    def complete_upload(upload_id: str, request: Request):
+        username = owner(request)
+        try:
+            meta, part = replay_uploads.finish(upload_id, username)
+            details = meta["metadata"]
+            route_id, route_color = resolve_route(username, details.get("route_id", ""), details.get("route_color", ""))
+            try:
+                info = probe_video(part)
+                validate_video(info, limits)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            job = store.create(owner=username, route_id=route_id or None, route_color=route_color,
+                               source=part, original_name=details["filename"], info=info)
+            manager.enqueue(job["id"])
+            return job
+        except ChunkUploadError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        finally:
+            replay_uploads.discard(upload_id)
 
     @router.get("/jobs")
     def list_jobs(request: Request):
