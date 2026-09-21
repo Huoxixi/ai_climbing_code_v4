@@ -62,6 +62,11 @@ REPLAY_RETENTION_KEEP = "keep_private_original"
 ReplayRetentionMode = Literal["delete_after_processing", "keep_private_original"]
 REPLAY_OVERLAY_FILENAME = "overlay.webm"
 REPLAY_OVERLAY_MEDIA_KIND = "overlay_video"
+REPLAY_VIDEO_MIME_TYPES = frozenset({
+    "video/mp4", "video/quicktime", "video/x-m4v", "video/webm",
+    "video/3gpp", "video/3gpp2", "video/x-matroska",
+})
+REPLAY_VIDEO_SUFFIXES = frozenset({".mp4", ".m4v", ".mov", ".webm", ".3gp", ".3g2", ".mkv"})
 
 
 class ReplayConfigurationError(RuntimeError):
@@ -113,7 +118,7 @@ def probe_video(path: Path) -> VideoInfo:
     """Read enough metadata to reject unsafe or unsupported uploads."""
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
-        raise ValueError("无法读取视频，请上传标准 MP4 文件")
+        raise ValueError("无法读取这个视频，请尝试从手机相册重新导出后上传")
     try:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -131,6 +136,80 @@ def probe_video(path: Path) -> VideoInfo:
         duration_seconds=frame_count / fps,
         size_bytes=path.stat().st_size,
     )
+
+
+def validate_video_upload_type(filename: str, content_type: str) -> bool:
+    """Accept common mobile containers without trusting MIME metadata alone."""
+    suffix = Path(filename or "").suffix.lower()
+    mime = (content_type or "").split(";", 1)[0].strip().lower()
+    if mime not in REPLAY_VIDEO_MIME_TYPES and suffix not in REPLAY_VIDEO_SUFFIXES:
+        raise ValueError("支持 MP4、MOV、M4V、WebM、3GP 和 MKV 视频")
+    return suffix == ".mp4" and mime in {"", "application/octet-stream", "video/mp4"}
+
+
+def convert_video_to_mp4(source: Path, target: Path) -> None:
+    """Decode a supported container and write the silent analysis copy as MP4."""
+    capture = cv2.VideoCapture(str(source))
+    if not capture.isOpened():
+        raise ValueError("无法读取这个视频，请尝试从手机相册重新导出后上传")
+    writer = None
+    try:
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
+        ok, first_frame = capture.read()
+        if not ok or first_frame is None or not math.isfinite(fps) or fps <= 0:
+            raise ValueError("视频缺少有效画面或帧率信息")
+        height, width = first_frame.shape[:2]
+        for codec in ("mp4v", "avc1", "H264"):
+            candidate = cv2.VideoWriter(
+                str(target), cv2.VideoWriter_fourcc(*codec), fps, (width, height),
+            )
+            if candidate.isOpened():
+                writer = candidate
+                break
+            candidate.release()
+        if writer is None:
+            raise ValueError("服务器暂时无法转换视频，请将视频导出为 H.264 编码的 MP4 后重试")
+        writer.write(first_frame)
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if frame.shape[1] != width or frame.shape[0] != height:
+                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+            writer.write(frame)
+    except cv2.error as exc:
+        raise ValueError("服务器无法转换这个视频，请将视频导出为 H.264 编码的 MP4 后重试") from exc
+    finally:
+        capture.release()
+        if writer is not None:
+            writer.release()
+    if not target.is_file() or target.stat().st_size <= 0:
+        target.unlink(missing_ok=True)
+        raise ValueError("视频转换失败，请将视频导出为 H.264 编码的 MP4 后重试")
+
+
+def prepare_video_upload(
+    source: Path,
+    *,
+    filename: str,
+    content_type: str,
+    limits: VideoLimits,
+    output: Path,
+) -> tuple[Path, VideoInfo]:
+    """Validate uploaded bytes and normalize non-MP4 containers for analysis."""
+    is_mp4 = validate_video_upload_type(filename, content_type)
+    original_info = probe_video(source)
+    validate_video(original_info, limits)
+    if is_mp4:
+        return source, original_info
+    try:
+        convert_video_to_mp4(source, output)
+        converted_info = probe_video(output)
+        validate_video(converted_info, limits)
+        return output, converted_info
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
 
 
 def validate_video(info: VideoInfo, limits: VideoLimits) -> None:
@@ -1152,7 +1231,8 @@ class ClimbReplayStore:
                     "retention_mode": retention_mode, "delete_at": None,
                     "deleted_at": None, "size_bytes": info.size_bytes,
                     "checksum_sha256": checksum,
-                    "content_type": "video/mp4", "filename": original_name,
+                    "content_type": "video/mp4",
+                    "filename": f"{Path(original_name).stem or 'climb-replay'}.mp4",
                 },
             },
             "deletion": None,
@@ -2593,10 +2673,13 @@ def create_climb_replay_router(
         route_id, route_color = resolve_route(username, route_id, route_color)
         consent = consent_grant(consent_version, consent_granted, attempt=1)
         retention = retention_choice(retention_mode)
-        if (video.content_type or "").lower() != "video/mp4":
-            raise HTTPException(422, "技术验证阶段仅支持 MP4 视频")
+        try:
+            validate_video_upload_type(video.filename or "", video.content_type or "")
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
         upload = store.root / f".upload-{uuid.uuid4().hex}.tmp"
+        normalized = store.root / f".normalized-{uuid.uuid4().hex}.mp4"
         size, digest = 0, hashlib.sha256()
         try:
             with upload.open("wb") as target:
@@ -2609,28 +2692,33 @@ def create_climb_replay_router(
             if not size:
                 raise HTTPException(422, "视频内容为空")
             try:
-                info = probe_video(upload)
-                validate_video(info, limits)
+                prepared, info = prepare_video_upload(
+                    upload, filename=video.filename or "", content_type=video.content_type or "",
+                    limits=limits, output=normalized,
+                )
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
             job = store.create(owner=username, route_id=route_id or None, route_color=route_color,
-                               source=upload, original_name=video.filename or f"{digest.hexdigest()}.mp4",
+                               source=prepared, original_name=video.filename or f"{digest.hexdigest()}.mp4",
                                info=info, consent=consent, retention_mode=retention)
             manager.enqueue(job["id"])
             return job
         finally:
             upload.unlink(missing_ok=True)
+            normalized.unlink(missing_ok=True)
 
     @router.post("/uploads")
     def create_upload(payload: ReplayUploadCreate, request: Request):
         username = owner(request)
         route_id, route_color = resolve_route(username, payload.route_id, payload.route_color)
         consent = consent_grant(payload.consent_version, payload.consent_granted, attempt=1)
-        if payload.content_type.lower() != "video/mp4":
-            raise HTTPException(422, "技术验证阶段仅支持 MP4 视频")
+        try:
+            validate_video_upload_type(payload.filename, payload.content_type)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
         try:
             return replay_uploads.create(username, total_size=payload.size_bytes, max_size=limits.max_bytes, metadata={
-                "filename": payload.filename, "content_type": "video/mp4",
+                "filename": payload.filename, "content_type": payload.content_type,
                 "route_id": route_id, "route_color": route_color,
                 "consent": consent, "retention_mode": payload.retention_mode,
             })
@@ -2651,17 +2739,20 @@ def create_climb_replay_router(
     @router.post("/uploads/{upload_id}/complete", status_code=202)
     def complete_upload(upload_id: str, request: Request):
         username = owner(request)
+        normalized = store.root / f".normalized-{uuid.uuid4().hex}.mp4"
         try:
             meta, part = replay_uploads.finish(upload_id, username)
             details = meta["metadata"]
             route_id, route_color = resolve_route(username, details.get("route_id", ""), details.get("route_color", ""))
             try:
-                info = probe_video(part)
-                validate_video(info, limits)
+                prepared, info = prepare_video_upload(
+                    part, filename=details["filename"], content_type=details.get("content_type", ""),
+                    limits=limits, output=normalized,
+                )
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
             job = store.create(owner=username, route_id=route_id or None, route_color=route_color,
-                               source=part, original_name=details["filename"], info=info,
+                               source=prepared, original_name=details["filename"], info=info,
                                consent=details["consent"],
                                retention_mode=retention_choice(
                                    details.get("retention_mode", REPLAY_RETENTION_DELETE),
@@ -2672,6 +2763,7 @@ def create_climb_replay_router(
             raise HTTPException(422, str(exc)) from exc
         finally:
             replay_uploads.discard(upload_id)
+            normalized.unlink(missing_ok=True)
 
     @router.get("/jobs")
     def list_jobs(request: Request):

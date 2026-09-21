@@ -26,7 +26,7 @@
         >
           <VideoCamera class="drop-icon" />
           <strong>选择攀爬视频</strong>
-          <span>MP4 · 最长 1 分 30 秒 · 不超过 200 MB</span>
+          <span>MP4、MOV 等常见视频 · 最长 1 分 30 秒 · 不超过 200 MB</span>
           <button type="button" class="secondary-button">浏览文件</button>
         </div>
 
@@ -167,7 +167,7 @@
             </li>
           </ol>
         </nav>
-        <input ref="fileInput" class="visually-hidden" type="file" accept="video/mp4,.mp4" @change="onFileChange" />
+        <input ref="fileInput" class="visually-hidden" type="file" accept="video/mp4,video/quicktime,video/x-m4v,video/webm,video/3gpp,video/3gpp2,video/x-matroska,.mp4,.mov,.m4v,.webm,.3gp,.3g2,.mkv" @change="onFileChange" />
 
         <div v-if="activeJob" class="analysis-state" :class="activeJob.status" aria-live="polite">
           <div class="state-copy">
@@ -292,8 +292,8 @@
         <button v-if="activeConsentGranted" type="button" class="consent-action" @click="withdrawConsent">撤回本次授权</button>
 
         <button type="button" class="primary-action" :disabled="!canSubmit" @click="submit">
-          <Loading v-if="isBusy" />
-          <span>{{ isBusy ? '正在分析' : '开始 AI 复盘' }}</span>
+          <Loading v-if="isBusy || isSubmitting" />
+          <span>{{ isSubmitting ? (uploadProgress < 100 ? `正在上传 ${uploadProgress}%` : '正在转换视频') : (isBusy ? '正在分析' : '开始 AI 复盘') }}</span>
         </button>
         <button v-if="isBusy" type="button" class="cancel-action" @click="cancelJob">取消任务</button>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
@@ -344,6 +344,7 @@ const consentPolicy = ref(null)
 const testVideoCases = ref([])
 const loadingTestCaseId = ref('')
 const uploadProgress = ref(0)
+const isSubmitting = ref(false)
 const activeJob = ref(null)
 const recentJobs = ref([])
 const formError = ref('')
@@ -541,7 +542,7 @@ const currentConsentEvent = computed(() => {
   return [...(activeJob.value?.consent_history || [])].reverse().find((event) => event.attempt === attempt)
 })
 const activeConsentGranted = computed(() => currentConsentEvent.value?.event === 'granted')
-const canSubmit = computed(() => selectedFile.value && routeColor.value && sampleConsent.value && consentPolicy.value && !isBusy.value && !isDeleting.value)
+const canSubmit = computed(() => selectedFile.value && routeColor.value && sampleConsent.value && consentPolicy.value && !isBusy.value && !isSubmitting.value && !isDeleting.value)
 const statusTitle = computed(() => isJobDeleting.value ? '正在删除整次记录' : ({
   queued: '任务正在排队', running: activeJob.value?.stage || '正在分析视频',
   succeeded: '分析完成', failed: '分析未完成', cancelled: '任务已取消',
@@ -585,8 +586,10 @@ function useFile(file) {
   formError.value = ''
   formNotice.value = ''
   if (!file) return
-  if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
-    formError.value = '当前仅支持 MP4 视频。'
+  const supportedTypes = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/3gpp', 'video/3gpp2', 'video/x-matroska'])
+  const supportedExtensions = ['.mp4', '.mov', '.m4v', '.webm', '.3gp', '.3g2', '.mkv']
+  if (!supportedTypes.has(file.type.toLowerCase()) && !supportedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension))) {
+    formError.value = '请选择 MP4、MOV、M4V、WebM、3GP 或 MKV 视频。'
     return
   }
   if (file.size > 200 * 1024 * 1024) {
@@ -637,6 +640,7 @@ async function submit() {
   if (!canSubmit.value) return
   formError.value = ''
   uploadProgress.value = 0
+  isSubmitting.value = true
   try {
     activeJob.value = await climbReplayService.create({
       video: selectedFile.value,
@@ -649,6 +653,7 @@ async function submit() {
     await loadJobs()
     schedulePoll()
   } catch (error) { formError.value = errorText(error) }
+  finally { isSubmitting.value = false }
 }
 function schedulePoll() {
   window.clearTimeout(pollTimer)

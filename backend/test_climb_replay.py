@@ -19,7 +19,7 @@ from core.climb_replay import (AliyunReplayAnalyzer, ClimbReplayManager,
                                build_action_steps, build_pose_render_timeline,
                                build_visible_action_markers,
                                create_climb_replay_router, fit_aspect_rect,
-                               fit_hold_map_rect, probe_video,
+                               fit_hold_map_rect, prepare_video_upload, probe_video,
                                native_mask_polygon,
                                render_replay_overlay_video)
 
@@ -388,14 +388,44 @@ class ClimbReplayApiTests(unittest.TestCase):
         self.assertEqual(retried.json()['attempt'], 2)
         self.assertEqual(retried.json()['consent_history'][-1]['attempt'], 2)
 
-    def test_rejects_non_mp4_and_overlong_video(self):
+    def test_accepts_common_mobile_video_and_rejects_unknown_container(self):
+        converted = Path(self.temp.name) / "converted.mp4"
+        prepared, info = prepare_video_upload(
+            self.video,
+            filename="手机拍摄.MOV",
+            content_type="video/quicktime",
+            limits=VideoLimits(max_duration_seconds=5),
+            output=converted,
+        )
+        self.assertEqual(prepared, converted)
+        self.assertTrue(converted.is_file())
+        self.assertGreater(info.frame_count, 0)
+
+        content = self.video.read_bytes()
+        started = self.client.post('/api/climb-replay/uploads', json={
+            'filename':'手机拍摄.mov', 'content_type':'video/quicktime', 'size_bytes':len(content),
+            'route_color':'绿色', 'consent_version':REPLAY_CONSENT_VERSION,
+            'consent_granted':True,
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']
+        self.client.put(f'/api/climb-replay/uploads/{upload_id}', content=content,
+                        headers={'x-upload-offset':'0'})
+        completed = self.client.post(f'/api/climb-replay/uploads/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 202, completed.text)
+        source = completed.json()['media']['source_video']
+        self.assertEqual(source['content_type'], 'video/mp4')
+        self.assertEqual(source['filename'], '手机拍摄.mp4')
+
         response = self.client.post(
             "/api/climb-replay/jobs",
             data={"route_color": "green", "consent_version": REPLAY_CONSENT_VERSION,
                   "consent_granted": "true"},
-            files={"video": ("attempt.mov", b"not-video", "video/quicktime")},
+            files={"video": ("attempt.avi", b"not-video", "video/x-msvideo")},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_rejects_overlong_video(self):
         long_video = Path(self.temp.name) / "long.mp4"
         make_video(long_video, frames=24, fps=4.0)
         with long_video.open("rb") as source:
