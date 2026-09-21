@@ -14,6 +14,15 @@ foreach ($portNumber in @(4176,8004)) {
 if (-not (Test-Path -LiteralPath $pythonRuntime)) { throw 'Bundled Python runtime is unavailable.' }
 $climbingModelRoot = Join-Path $workspaceDirectory 'photo-route-experiments/indoor-climbing-20260906'
 $pythonPaths = @('boulder-python','boulder-model-python','boulder-app-python') | ForEach-Object { Join-Path $workspaceDirectory ".tools/$_" }
+$climbReplayCaseSpecs = @(
+    @{ id='case-1'; label='本地案例 1'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/a5dd8a80ca37708687f488b49bb82d84.mp4') },
+    @{ id='case-2'; label='本地案例 2'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/32fd4ed4a82458794181be60eb5b3792.mp4'); comparison_path=(Join-Path $projectDirectory '.local/diagnostics/distilled-chinese-timeline-case2-20260921-01.webm'); comparison_route_color='蓝色'; comparison_action_count=17 },
+    @{ id='case-3'; label='本地案例 3'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/ebe6e698a861512b2587f661edd1b7a1.mp4') }
+)
+$climbReplayTestVideos = @($climbReplayCaseSpecs | Where-Object { Test-Path -LiteralPath $_.path })
+$env:CLIMB_REPLAY_TEST_VIDEOS = ConvertTo-Json -InputObject $climbReplayTestVideos -Compress
+Remove-Item Env:CLIMB_REPLAY_TEST_VIDEO_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:CLIMB_REPLAY_TEST_VIDEO_SOURCE_URL -ErrorAction SilentlyContinue
 $env:PYTHONPATH = ($pythonPaths + @((Join-Path $climbingModelRoot 'detectron-deps'),(Join-Path $climbingModelRoot 'detectron2-source'))) -join ';'
 $env:PHOTO_ROUTE_CLIMBING_MODEL_CONFIG = Join-Path $projectDirectory '.local/quality-selection-20260907/config-1200.yml'
 $env:PHOTO_ROUTE_CLIMBING_MODEL_CHECKPOINT = Join-Path $climbingModelRoot 'model/verified-model_final.pth'

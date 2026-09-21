@@ -2,6 +2,9 @@
 aiohappyeyeballs
 aiohttp
 aiosignal
+alibabacloud-facebody20191230
+alibabacloud-tea-openapi
+alibabacloud-tea-util
 altair
 annotated-doc
 annotated-types
