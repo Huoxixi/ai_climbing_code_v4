@@ -71,9 +71,9 @@ test('复盘记录默认优先播放复盘视频并保留原视频切换', () =>
 
 test('只有一种视频时按可用版本播放', () => {
   assert.match(page, /if \(replayVideoAvailable\.value\) return 'overlay'/)
-  assert.match(page, /if \(sourceAvailable\.value\) return 'source'/)
+  assert.match(page, /if \(sourcePlayable\.value\) return 'source'/)
   assert.match(page, /:disabled="!replayVideoAvailable"/)
-  assert.match(page, /:disabled="!sourceAvailable"/)
+  assert.match(page, /:disabled="!sourcePlayable"/)
 })
 
 test('本地案例记录优先使用已生成的最新对照版成片', () => {

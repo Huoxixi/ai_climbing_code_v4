@@ -13,6 +13,7 @@ from typing import Literal
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from core.media_normalization import normalize_photo_bytes
 from pydantic import BaseModel, Field
 
 from core.photo_route_analysis import analyze_board_photo, assess_capture_quality, _colour_name
@@ -108,8 +109,10 @@ class PhotoWorkflow:
           (bid,owner,source['board_key'] if source else uuid.uuid4().hex,number,1,'processing',self.store._json(asset),asset['width'],asset['height'],self.store._json(quality),None,None,asset['sha256'],timestamp,timestamp))
         return bid
 
-    def upload(self, owner, sid, filename, data):
+    def upload(self, owner, sid, filename, data, content_type=''):
         if not sid or len(sid)>80: raise HTTPException(422,'无效的上传请求')
+        try: data,filename,_=normalize_photo_bytes(data,filename,content_type)
+        except (ValueError,RuntimeError) as exc: raise HTTPException(422,str(exc)) from exc
         with self.store.connect() as db:
             existing=db.execute('SELECT owner,board_id FROM photo_work_sessions WHERE id=?',(sid,)).fetchone()
         if existing:
@@ -119,7 +122,7 @@ class PhotoWorkflow:
             return previous
         image=decode_photo(data); quality=assess_capture_quality(image)
         if not quality.accepted: raise HTTPException(422,'；'.join(quality.issues))
-        # Store original bytes; decoding does not change the user's original.
+        # Store server-ready bytes; the copy on the user's device is never modified.
         suffix=filename.rsplit('.',1)[-1].lower()
         if suffix not in {'jpg','jpeg','png','webp'}: suffix='jpg'
         asset=self.store.save_asset(data,suffix,image.shape[1],image.shape[0])
@@ -401,8 +404,8 @@ def workflow_router(workflow):
     @router.post('/upload')
     async def upload(request:Request,photo:UploadFile=File(...),request_id:str=Form(...)):
         from core.photo_route_processing import MAX_UPLOAD_BYTES
-        data=await photo.read(MAX_UPLOAD_BYTES+1)
-        try: return workflow.upload(owner(request),request_id,photo.filename or 'photo.jpg',data)
+        data=await photo.read(max(MAX_UPLOAD_BYTES,25*1024*1024)+1)
+        try: return workflow.upload(owner(request),request_id,photo.filename or 'photo.jpg',data,photo.content_type or '')
         except ValueError as exc: raise HTTPException(422,str(exc)) from exc
     @router.post('/{sid}/color')
     def color(sid:str,change:Change,request:Request): return workflow.select(sid,owner(request),change)

@@ -171,6 +171,7 @@ LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
   test_photo_route_instance_masks \
   test_hole_grid_topology \
   test_climb_replay \
+  test_media_normalization \
   test_photo_wall_processing \
   test_pilot_access \
   test_member_accounts \

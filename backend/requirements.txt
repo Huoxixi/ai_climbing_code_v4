@@ -31,6 +31,7 @@ distro
 docstring-parser
 executing
 fastapi==0.120.0
+imageio-ffmpeg==0.6.0
 frozenlist
 fsspec
 gitdb
@@ -69,6 +70,7 @@ packaging
 pandas
 parso
 pillow
+pillow-heif==1.7.0
 platformdirs
 prompt-toolkit
 protobuf

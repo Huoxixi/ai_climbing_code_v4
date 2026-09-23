@@ -43,6 +43,7 @@ jobs:
             test_photo_route_instance_masks \
             test_hole_grid_topology \
             test_climb_replay \
+            test_media_normalization \
             test_photo_route_refinement \
             test_photo_workflow \
             test_photo_settings \

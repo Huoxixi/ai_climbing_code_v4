@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.chunked_upload import ChunkUploadError, ChunkUploadStore
+from core.media_normalization import is_heif_photo, normalize_photo_bytes
 from core.photo_route_analysis import (BOARD_HEIGHT_MM, BOARD_WIDTH_MM, analyze_board_photo,
                                        assess_capture_quality, board_holes, compute_homography,
                                        fingerprint_payload, map_point, nearest_hole, mobilesam_paths)
@@ -296,10 +297,12 @@ class PhotoRouteV2Store:
             raise HTTPException(422, "素材指纹校验失败")
         return path
 
-    def create_upload(self, owner: str, filename: str, data: bytes) -> tuple[dict, dict]:
+    def create_upload(self, owner: str, filename: str, data: bytes,
+                      content_type: str = "") -> tuple[dict, dict]:
         try:
+            data, filename, _ = normalize_photo_bytes(data, filename, content_type)
             image = decode_photo(data)
-        except PhotoProcessingError as exc:
+        except (PhotoProcessingError, ValueError, RuntimeError) as exc:
             raise HTTPException(422, str(exc)) from exc
         quality = assess_capture_quality(image)
         if not quality.accepted:
@@ -904,17 +907,21 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
         "image/jpeg": ("photo", "jpg", 25 * 1024 * 1024),
         "image/png": ("photo", "png", 25 * 1024 * 1024),
         "image/webp": ("photo", "webp", 25 * 1024 * 1024),
+        "image/heic": ("photo", "heic", 25 * 1024 * 1024),
+        "image/heif": ("photo", "heif", 25 * 1024 * 1024),
         "video/mp4": ("video", "mp4", 500 * 1024 * 1024),
         "video/quicktime": ("video", "mov", 500 * 1024 * 1024),
         "video/webm": ("video", "webm", 500 * 1024 * 1024),
     }
     def owner(request: Request) -> str: return request.state.pilot_user.username
 
-    def validate_media(route_id: str, username: str, content_type: str):
+    def validate_media(route_id: str, username: str, content_type: str, filename: str = ""):
         route = store.get_route(route_id, username)
         content_type = content_type.lower()
+        if is_heif_photo(filename, content_type):
+            content_type = "image/heif" if filename.lower().endswith(".heif") else "image/heic"
         if content_type not in media_types:
-            raise HTTPException(422, "仅支持 JPG、PNG、WebP 照片和 MP4、MOV、WebM 视频")
+            raise HTTPException(422, "仅支持 JPG、PNG、WebP、HEIC/HEIF 照片和 MP4、MOV、WebM 视频")
         kind, suffix, size_limit = media_types[content_type]
         kind_limit = 8 if kind == "photo" else 2
         if sum(item["kind"] == kind for item in route["media"]) >= kind_limit:
@@ -924,8 +931,13 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
 
     @router.post("/boards/upload")
     async def upload_board(request: Request, photo: UploadFile = File(...), board_name: str = Form(default="")):
-        data = await photo.read()
-        board, job = store.create_upload(owner(request), photo.filename or board_name or "board.jpg", data)
+        data = await photo.read(25 * 1024 * 1024 + 1)
+        if len(data) > 25 * 1024 * 1024:
+            raise HTTPException(413, "照片不能超过 25 MB")
+        board, job = store.create_upload(
+            owner(request), photo.filename or board_name or "board.jpg", data,
+            photo.content_type or "",
+        )
         jobs.enqueue(job["id"])
         return {"board": board, "job": job}
 
@@ -990,7 +1002,7 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
 
     @router.post("/routes/{route_id}/media")
     async def upload_route_media(route_id: str, request: Request, media: UploadFile = File(...)):
-        content_type, kind, suffix, size_limit = validate_media(route_id, owner(request), media.content_type or "")
+        content_type, kind, suffix, size_limit = validate_media(route_id, owner(request), media.content_type or "", media.filename or "")
         temp = store.assets / f".route-media-{uuid.uuid4().hex}.tmp"
         digest, size = hashlib.sha256(), 0
         try:
@@ -1003,6 +1015,14 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
                     target.write(chunk)
             if not size:
                 raise HTTPException(422, "文件内容为空")
+            if kind == "photo" and is_heif_photo(media.filename or "", content_type):
+                try:
+                    converted, _, content_type = normalize_photo_bytes(temp.read_bytes(), media.filename or "photo.heic", content_type)
+                except (ValueError, RuntimeError) as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                temp.write_bytes(converted)
+                suffix, size = "jpg", len(converted)
+                digest = hashlib.sha256(converted)
             filename = f"{digest.hexdigest()}.{suffix}"
             final = store.assets / filename
             with store._lock:
@@ -1020,7 +1040,7 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
     @router.post("/routes/{route_id}/media/uploads")
     def create_route_media_upload(route_id: str, payload: MediaUploadCreate, request: Request):
         username = owner(request)
-        content_type, kind, suffix, size_limit = validate_media(route_id, username, payload.content_type)
+        content_type, kind, suffix, size_limit = validate_media(route_id, username, payload.content_type, payload.filename)
         try:
             return route_uploads.create(username, total_size=payload.size_bytes, max_size=size_limit, metadata={
                 "route_id": route_id, "filename": payload.filename, "content_type": content_type,
@@ -1050,7 +1070,14 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
             details = meta["metadata"]
             if details.get("route_id") != route_id:
                 raise ChunkUploadError("上传会话与线路不匹配")
-            content_type, kind, suffix, _limit = validate_media(route_id, username, details["content_type"])
+            content_type, kind, suffix, _limit = validate_media(route_id, username, details["content_type"], details["filename"])
+            if kind == "photo" and is_heif_photo(details["filename"], content_type):
+                try:
+                    converted, _, content_type = normalize_photo_bytes(part.read_bytes(), details["filename"], content_type)
+                except (ValueError, RuntimeError) as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                part.write_bytes(converted)
+                suffix = "jpg"
             digest = hashlib.sha256()
             with part.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
@@ -1062,10 +1089,11 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
                     part.unlink(missing_ok=True)
                 else:
                     os.replace(part, final)
-            asset = {"filename": filename, "sha256": digest.hexdigest(), "size_bytes": meta["total_size"]}
+            size_bytes = part.stat().st_size if part.exists() else final.stat().st_size
+            asset = {"filename": filename, "sha256": digest.hexdigest(), "size_bytes": size_bytes}
             return store.add_route_media(route_id, username, kind=kind, asset=asset,
                                          original_name=details["filename"], mime_type=content_type,
-                                         size_bytes=meta["total_size"])
+                                         size_bytes=size_bytes)
         except ChunkUploadError as exc:
             raise HTTPException(422, str(exc)) from exc
         finally:

@@ -35,14 +35,15 @@
       </div>
       <section class="record-media" aria-labelledby="record-media-title">
         <div class="record-media__heading"><div><h2 id="record-media-title">照片与视频</h2><p>{{ mediaSummary(detail) }}</p></div><button class="photo-work__primary record-media__add" type="button" :disabled="mediaUploading" @click="mediaPickerOpen=true">＋ 添加媒体</button></div>
-        <input ref="mediaPhotoInput" class="photo-work__file" type="file" multiple accept="image/jpeg,image/png,image/webp" @change="uploadSelectedMedia" />
+        <input ref="mediaPhotoInput" class="photo-work__file" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" @change="uploadSelectedMedia" />
         <input ref="mediaVideoInput" class="photo-work__file" type="file" multiple accept="video/mp4,video/quicktime,video/webm" @change="uploadSelectedMedia" />
         <div v-if="mediaUploading" class="record-media__progress" role="status"><div><strong>正在上传 {{ mediaUploadName }}</strong><span>{{ mediaUploadProgress }}%</span></div><progress :value="mediaUploadProgress" max="100" /></div>
         <p v-if="mediaError" class="photo-work__error" role="alert">{{ mediaError }}</p>
         <div v-if="detail.media?.length" class="record-media__grid">
           <article v-for="item in detail.media" :key="item.id" class="record-media__item">
             <img v-if="item.kind==='photo'" :src="photoV2AssetUrl(item.asset)" :alt="`${detail.name}的攀岩照片`" loading="lazy" />
-            <video v-else :src="photoV2AssetUrl(item.asset)" controls preload="metadata">你的浏览器暂不支持播放这个视频。</video>
+            <video v-else :src="photoV2AssetUrl(item.asset)" controls preload="metadata" @error="mediaPlaybackErrors[item.id] = true">你的浏览器暂不支持播放这个视频。</video>
+            <p v-if="item.kind==='video' && mediaPlaybackErrors[item.id]" class="record-media__playback-error" role="status">视频已保存，但当前浏览器无法播放该编码。此资料入口暂不自动转码；AI 复盘入口可自动处理。</p>
             <div><span>{{ item.kind==='photo' ? '照片' : '视频' }}</span><time :datetime="item.created_at">{{ formatMediaDate(item) }}</time></div>
           </article>
         </div>
@@ -50,7 +51,8 @@
       </section>
       <div v-if="mediaPickerOpen" class="media-picker" role="presentation" @click.self="mediaPickerOpen=false">
         <section role="dialog" aria-modal="true" aria-labelledby="media-picker-title"><div class="media-picker__top"><div><h2 id="media-picker-title">添加到这条线路</h2><p>照片最多 8 张，视频最多 2 个。</p></div><button type="button" aria-label="关闭" @click="mediaPickerOpen=false">×</button></div>
-          <div class="media-picker__choices"><button type="button" @click="chooseMedia('photo')"><span class="media-picker__icon" aria-hidden="true">▧</span><strong>添加照片</strong><small>JPG、PNG 或 WebP</small></button><button type="button" @click="chooseMedia('video')"><span class="media-picker__icon media-picker__icon--play" aria-hidden="true">▶</span><strong>添加视频</strong><small>MP4、MOV 或 WebM</small></button></div>
+          <div class="media-picker__choices"><button type="button" @click="chooseMedia('photo')"><span class="media-picker__icon" aria-hidden="true">▧</span><strong>添加照片</strong><small>JPG、PNG、WebP 或 HEIC</small></button><button type="button" @click="chooseMedia('video')"><span class="media-picker__icon media-picker__icon--play" aria-hidden="true">▶</span><strong>添加视频</strong><small>MP4、MOV 或 WebM</small></button></div>
+          <p class="media-picker__notice">此处视频仅保存为线路资料，暂不自动转码；MOV、WebM 在部分设备可能无法播放。AI 复盘入口会自动整理视频。</p>
         </section>
       </div>
     </template>
@@ -76,17 +78,17 @@
       <p v-if="libraryError && library.length" class="photo-work__library-warning" role="status">{{libraryError}}</p>
     </template>
     <template v-else-if="!session || ['saved','abandoned'].includes(session.status)">
-      <input ref="cameraInput" class="photo-work__file" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" @change="choose" />
-      <input ref="albumInput" class="photo-work__file" type="file" accept="image/jpeg,image/png,image/webp" @change="choose" />
-      <div v-if="state.pending" class="photo-work__pending"><img :src="state.preview" alt="待上传照片预览" /><div class="photo-work__pending-sheet">
+      <input ref="cameraInput" class="photo-work__file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" capture="environment" @change="choose" />
+      <input ref="albumInput" class="photo-work__file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" @change="choose" />
+      <div v-if="state.pending" class="photo-work__pending"><img v-if="state.preview" :src="state.preview" alt="待上传照片预览" /><p v-else role="status">已选择 {{ state.pending.file.name }}。确认上传后，系统会转换 HEIC/HEIF 并显示照片。</p><div class="photo-work__pending-sheet">
         <button class="photo-work__back" type="button" :disabled="state.uploading" @click="leaveConfirmation">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg><span>返回</span>
         </button>
-        <h2>确认这张照片</h2><p>原图会完整保留。确认后识别照片中的岩点边缘，再由你逐个检查。</p>
+        <h2>确认这张照片</h2><p>手机里的原图不会修改。HEIC/HEIF 上传到本系统后转换为 JPEG，再识别岩点边缘供你检查。</p>
         <p v-if="state.error" class="photo-work__inline-error" role="alert"><strong>照片仍保留在本机。</strong><span>{{ state.error }}</span></p>
         <div class="photo-work__actions"><button :disabled="state.uploading || !editable" @click="albumInput.click()">更换照片</button><button class="photo-work__primary" :disabled="state.uploading || !editable" @click="workflow.upload"><span v-if="state.uploading" class="photo-work__button-spinner" aria-hidden="true"></span>{{state.uploading?'正在上传…':state.error?'重新上传':'确认上传'}}</button></div>
       </div></div>
-      <div v-else class="photo-work__upload"><div class="photo-work__upload-copy"><h2>记录一条刚刚爬过的线路</h2><p>拍下整面墙，系统识别岩点轮廓后由你确认。原始照片始终保留。</p></div><div class="photo-work__capture-actions"><button class="photo-work__primary" :disabled="!editable" @click="cameraInput.click()">拍摄墙面</button><button :disabled="!editable" @click="albumInput.click()">从相册选择</button></div></div>
+      <div v-else class="photo-work__upload"><div class="photo-work__upload-copy"><h2>记录一条刚刚爬过的线路</h2><p>拍下整面墙，系统识别岩点轮廓后由你确认。HEIC/HEIF 会在服务器转换为 JPEG，手机里的原照片不会修改。</p></div><div class="photo-work__capture-actions"><button class="photo-work__primary" :disabled="!editable" @click="cameraInput.click()">拍摄墙面</button><button :disabled="!editable" @click="albumInput.click()">从相册选择</button></div></div>
       <p v-if="state.uploading" role="status">已上传 {{state.uploadProgress}}%<progress :value="state.uploadProgress" max="100" aria-label="照片上传进度" /></p>
       <div v-if="!state.pending" class="photo-work__samples"><button v-for="sample in samples" :key="sample.name" :disabled="!editable || state.uploading || samplePreparing" @click="chooseSample(sample)"><img :src="sample.url" :alt="sample.name" /><span>{{samplePreparing===sample.name?'正在准备…':sample.name}}</span></button></div>
     </template>
@@ -204,7 +206,7 @@ const visibleObjects=computed(()=>board.value?.objects.filter(obj=>showOther.val
 const contourInput=ref(''), localError=ref('')
 const view=ref('current'), library=ref([]), libraryBoards=ref({}), libraryLoading=ref(false), libraryError=ref(''), detail=ref(null), detailBoard=ref(null), noteObject=ref(''), noteState=ref('备注已保存')
 const recordSearch=ref(''), recordFilter=ref('all')
-const mediaPickerOpen=ref(false), mediaPhotoInput=ref(null), mediaVideoInput=ref(null), mediaUploading=ref(false), mediaUploadProgress=ref(0), mediaUploadName=ref(''), mediaError=ref('')
+const mediaPickerOpen=ref(false), mediaPhotoInput=ref(null), mediaVideoInput=ref(null), mediaUploading=ref(false), mediaUploadProgress=ref(0), mediaUploadName=ref(''), mediaError=ref(''), mediaPlaybackErrors=ref({})
 const noteSaveLabel=computed(()=>({
   '备注已保存':'已保存',
   '等待保存备注':'保存修改',
@@ -282,7 +284,7 @@ function navigateBack(fallback='home'){
   if(history.state?.photoParent)history.back()
   else{writePhotoLocation(fallback,'','replace');applyPhotoLocation()}
 }
-async function choose(event){const file=event.target.files?.[0];event.target.value='';if(file){await workflow.choose(file);if(state.pending)writePhotoLocation('confirm')}}
+async function choose(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{await workflow.choose(file);if(state.pending)writePhotoLocation('confirm')}catch(error){localError.value=error?.message || '照片暂存失败，请保持页面打开后重试。'}}
 async function chooseSample(sample){
   if(samplePreparing.value)return
   localError.value='';samplePreparing.value=sample.name
@@ -460,6 +462,7 @@ defineExpose({beforeLeave,openCurrent,returnCurrent,openLibrary})
 .photo-work__library-grid{display:grid;grid-template-columns:1fr;gap:12px}.photo-work .photo-work__library-card{position:relative;display:grid;grid-template-columns:190px minmax(0,1fr) 28px;align-items:center;gap:18px;width:100%;padding:12px;border:1px solid var(--ui-line);border-radius:16px;background:var(--ui-surface);text-align:left;box-shadow:0 1px 0 rgba(28,30,33,.03)}.photo-work .photo-work__library-card:hover{border-color:#d5b532;background:#fffdf4;box-shadow:0 10px 24px rgba(28,30,33,.08);transform:translateY(-1px)}.photo-work__library-photo{width:190px;aspect-ratio:16/10;border:0;border-radius:11px;background:#242522}.photo-work__library-card:hover .photo-work__library-photo{transform:none;box-shadow:none}.photo-work__library-meta{display:grid;gap:5px;padding:0}.photo-work__library-meta>span:not(.photo-work__library-title),.photo-work__library-meta time{color:var(--ui-ink-muted);font-size:13px}.photo-work__library-title{display:flex;align-items:center;gap:10px}.photo-work__library-title strong{font-size:17px}.record-list__arrow{color:var(--ui-ink-muted);font-size:30px;font-weight:300;text-align:center}
 .record-media{margin-top:32px;padding-top:24px;border-top:1px solid var(--ui-line)}.record-media__heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.record-media__heading>div{display:grid;gap:4px}.record-media__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.record-media__item{min-width:0;overflow:hidden;border:1px solid var(--ui-line);border-radius:14px;background:var(--ui-surface)}.record-media__item img,.record-media__item video{display:block;width:100%;aspect-ratio:4/3;background:#222;object-fit:cover}.record-media__item>div{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;color:var(--ui-ink-muted);font-size:12px}.record-media__item>div span{color:var(--ui-ink);font-weight:700}.record-media__empty{display:grid;place-items:center;gap:7px;min-height:190px;padding:24px;border:1px dashed var(--ui-line-strong);border-radius:16px;background:rgba(255,255,255,.45);text-align:center}.record-media__empty p{color:var(--ui-ink-muted);font-size:13px}.record-media__progress{display:grid;gap:8px;margin:0 0 14px;padding:12px 14px;border:1px solid #ecd66f;border-radius:12px;background:#fff9d8}.record-media__progress>div{display:flex;justify-content:space-between;gap:12px;font-size:13px}.record-media__progress progress{width:100%}
 .media-picker{position:fixed;z-index:220;inset:0;display:grid;place-items:center;padding:20px;background:rgba(25,26,24,.42);backdrop-filter:blur(2px)}.media-picker>section{width:min(520px,100%);padding:22px;border:1px solid var(--ui-line);border-radius:20px;background:var(--ui-surface);box-shadow:0 24px 70px rgba(20,21,19,.24)}.media-picker__top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.media-picker__top p{color:var(--ui-ink-muted);font-size:13px}.media-picker__top>button{min-width:44px;padding:6px;border-color:transparent;border-radius:50%;font-size:24px}.media-picker__choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}.media-picker__choices button{display:grid;justify-items:start;gap:5px;min-height:150px;padding:18px;border-radius:16px;text-align:left}.media-picker__choices strong{font-size:17px}.media-picker__choices small{color:var(--ui-ink-muted)}.media-picker__icon{display:grid;place-items:center;width:42px;height:42px;margin-bottom:6px;border-radius:13px;background:#fff4a8;color:#584400;font-size:22px}.media-picker__icon--play{padding-left:2px}
+.media-picker__notice,.record-media__playback-error{padding:10px 12px;color:var(--ui-ink-muted);font-size:12px;line-height:1.5}.media-picker__notice{margin-top:14px}.record-media__playback-error{margin:0;background:#fff8d9}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:860px){
   .record-detail__top{gap:8px;margin-bottom:12px}.record-detail__top>.photo-work__back{min-width:44px;padding-inline:8px}.record-detail__top>.photo-work__back span:last-child{display:none}.record-detail__top h2{font-size:22px}

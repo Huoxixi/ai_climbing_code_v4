@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 import cv2
 import numpy as np
+from PIL import Image
+from pillow_heif import register_heif_opener
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -211,6 +213,40 @@ class PhotoRouteV2Tests(unittest.TestCase):
         asset_url = f"/api/photo-routes/v2/assets/{videos[0]['asset']['filename']}"
         self.assertEqual(self.client.get(asset_url).status_code, 200)
         self.assertEqual(self.client.get(asset_url, headers={'x-test-owner':'another-owner'}).status_code, 404)
+
+    def test_heic_board_and_route_photo_are_converted_by_server(self):
+        register_heif_opener()
+        source = cv2.imdecode(np.frombuffer(photo_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        encoded = io.BytesIO()
+        Image.fromarray(cv2.cvtColor(source, cv2.COLOR_BGR2RGB)).save(encoded, format='HEIF')
+        heic = encoded.getvalue()
+        upload = self.client.post('/api/photo-routes/v2/boards/upload',
+                                  files={'photo': ('wall.heic', heic, 'image/heic')})
+        self.assertEqual(upload.status_code, 200, upload.text)
+        board = upload.json()['board']
+        self.assertTrue(board['original_asset']['filename'].endswith('.jpg'))
+        board = self.seed_analysis(board['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色'))
+        root = f"/api/photo-routes/v2/routes/{route['id']}/media/uploads"
+        started = self.client.post(root, json={
+            'filename': 'attempt.heic', 'content_type': 'image/heic', 'size_bytes': len(heic),
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']
+        self.client.put(f'{root}/{upload_id}', content=heic, headers={'x-upload-offset': '0'})
+        completed = self.client.post(f'{root}/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 200, completed.text)
+        photo = completed.json()
+        self.assertEqual(photo['mime_type'], 'image/jpeg')
+        self.assertTrue(photo['asset']['filename'].endswith('.jpg'))
+        self.assertEqual(Image.open(io.BytesIO(self.client.get(
+            f"/api/photo-routes/v2/assets/{photo['asset']['filename']}").content)).format, 'JPEG')
+        direct = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                  files={'media': ('second.heif', heic, 'application/octet-stream')})
+        self.assertEqual(direct.status_code, 200, direct.text)
+        self.assertEqual(direct.json()['mime_type'], 'image/jpeg')
+        self.assertTrue(direct.json()['asset']['filename'].endswith('.jpg'))
 
     def test_route_media_supports_proxy_safe_chunk_uploads(self):
         created = self.create_board(); board = self.seed_analysis(created['board']['id'])

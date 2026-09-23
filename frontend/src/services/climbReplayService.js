@@ -22,20 +22,20 @@ const climbReplayService = {
   comparisonVideoUrl,
   list: () => apiClient.get('/api/climb-replay/jobs').then((response) => response.data),
   get: (id) => apiClient.get(`/api/climb-replay/jobs/${id}`).then((response) => response.data),
-  create: ({ video, routeColor, routeId = '', consentVersion, consentGranted, retentionMode }, onProgress) => uploadInChunks({
+  create: ({ video, routeColor, routeId = '', consentVersion, consentGranted, retentionMode, trimStartSeconds = 0, trimEndSeconds = null }, onProgress) => uploadInChunks({
     file: video,
     create: () => apiClient.post('/api/climb-replay/uploads', {
       filename:video.name, content_type:video.type || 'application/octet-stream', size_bytes:video.size,
       route_id:routeId, route_color:routeColor,
       consent_version:consentVersion, consent_granted:consentGranted,
       retention_mode:retentionMode,
+      trim_start_seconds:trimStartSeconds,
+      trim_end_seconds:trimEndSeconds,
     }).then(response => response.data),
     append: (uploadId, offset, chunk) => apiClient.put(`/api/climb-replay/uploads/${uploadId}`, chunk, {
       timeout:120000, headers:{ 'Content-Type':'application/octet-stream', 'X-Upload-Offset':String(offset) },
     }).then(response => response.data),
-    complete: (uploadId) => apiClient.post(`/api/climb-replay/uploads/${uploadId}/complete`, null, {
-      timeout:180000,
-    }).then(response => response.data),
+    complete: (uploadId) => apiClient.post(`/api/climb-replay/uploads/${uploadId}/complete`).then(response => response.data),
     onProgress,
   }),
   cancel: (id) => apiClient.post(`/api/climb-replay/jobs/${id}/cancel`).then((response) => response.data),

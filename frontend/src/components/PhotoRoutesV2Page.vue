@@ -42,10 +42,10 @@
     </main>
     <main v-else-if="stage === 'upload'" class="route-v2__upload">
       <section class="route-v2__drop" :class="{ 'is-busy': uploading }">
-        <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" :disabled="uploading || jobBusy || !editable" @change="upload" />
+        <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" :disabled="uploading || jobBusy || !editable" @change="upload" />
         <div class="route-v2__drop-copy">
           <h2>{{ uploading ? '正在检查并创建本地任务…' : '上传完整正面岩壁照片' }}</h2>
-          <p>需要看清岩壁四周边界、全部岩点和孔阵列。画面模糊、过曝或大面积遮挡会要求重拍。</p>
+          <p>需要看清岩壁四周边界、全部岩点和孔位。HEIC/HEIF 会在服务器转换为 JPEG，手机里的原照片不会修改。</p>
           <button class="route-v2__primary" type="button" :disabled="uploading || jobBusy || !editable" @click="fileInput?.click()">选择照片</button>
         </div>
       </section>

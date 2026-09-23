@@ -2,6 +2,7 @@ import tempfile
 import threading
 import time
 import unittest
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -214,6 +215,51 @@ class ClimbReplayApiTests(unittest.TestCase):
         self.assertEqual(job['status'], 'succeeded')
         self.assertEqual(job['route_color'], '绿色')
 
+    def test_completion_returns_before_video_conversion_finishes(self):
+        original = __import__('core.climb_replay', fromlist=['convert_video_to_mp4']).convert_video_to_mp4
+        started, release = threading.Event(), threading.Event()
+
+        def slow_convert(*args, **kwargs):
+            started.set()
+            if not release.wait(3):
+                raise RuntimeError('test conversion was not released')
+            return original(*args, **kwargs)
+
+        content = self.video.read_bytes()
+        upload = self.client.post('/api/climb-replay/uploads', json={
+            'filename': 'phone.mov', 'content_type': 'video/quicktime',
+            'size_bytes': len(content), 'route_color': '绿色',
+            'consent_version': REPLAY_CONSENT_VERSION, 'consent_granted': True,
+        }).json()
+        self.client.put(f"/api/climb-replay/uploads/{upload['id']}", content=content,
+                        headers={'x-upload-offset': '0'})
+        with patch('core.climb_replay.convert_video_to_mp4', side_effect=slow_convert):
+            response = self.client.post(f"/api/climb-replay/uploads/{upload['id']}/complete")
+            try:
+                self.assertEqual(response.status_code, 202)
+                self.assertTrue(started.wait(2))
+                self.assertIn(response.json()['status'], {'queued', 'running'})
+            finally:
+                release.set()
+            self.assertEqual(self.wait(response.json()['id'])['status'], 'succeeded')
+
+    def test_unreadable_mobile_video_reports_processing_failure_in_job(self):
+        content = b'not a video'
+        upload = self.client.post('/api/climb-replay/uploads', json={
+            'filename': 'broken.mov', 'content_type': 'video/quicktime',
+            'size_bytes': len(content), 'route_color': '绿色',
+            'consent_version': REPLAY_CONSENT_VERSION, 'consent_granted': True,
+        }).json()
+        self.client.put(f"/api/climb-replay/uploads/{upload['id']}", content=content,
+                        headers={'x-upload-offset': '0'})
+        response = self.client.post(f"/api/climb-replay/uploads/{upload['id']}/complete")
+        self.assertEqual(response.status_code, 202)
+        job = self.wait(response.json()['id'])
+        self.assertEqual(job['status'], 'failed')
+        self.assertEqual(job['error_code'], 'media_processing_failed')
+        self.assertIn('无法读取', job['error'])
+        self.assertEqual(job['analysis_runs'], [])
+
     def test_keep_private_original_has_no_automatic_delete_time(self):
         content = self.video.read_bytes()
         started = self.client.post('/api/climb-replay/uploads', json={
@@ -413,7 +459,8 @@ class ClimbReplayApiTests(unittest.TestCase):
                         headers={'x-upload-offset':'0'})
         completed = self.client.post(f'/api/climb-replay/uploads/{upload_id}/complete')
         self.assertEqual(completed.status_code, 202, completed.text)
-        source = completed.json()['media']['source_video']
+        self.assertEqual(completed.json()['preparation']['status'], 'queued')
+        source = self.wait(completed.json()['id'])['media']['source_video']
         self.assertEqual(source['content_type'], 'video/mp4')
         self.assertEqual(source['filename'], '手机拍摄.mp4')
 
@@ -425,7 +472,7 @@ class ClimbReplayApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
-    def test_rejects_overlong_video(self):
+    def test_overlong_video_uses_first_allowed_segment(self):
         long_video = Path(self.temp.name) / "long.mp4"
         make_video(long_video, frames=24, fps=4.0)
         with long_video.open("rb") as source:
@@ -435,8 +482,10 @@ class ClimbReplayApiTests(unittest.TestCase):
                       "consent_granted": "true"},
                 files={"video": ("long.mp4", source, "video/mp4")},
             )
-        self.assertEqual(response.status_code, 422)
-        self.assertIn("5 秒", response.json()["detail"])
+        self.assertEqual(response.status_code, 202)
+        job = self.wait(response.json()["id"])
+        self.assertEqual(job["status"], "succeeded")
+        self.assertLessEqual(job["video"]["duration_seconds"], 5.05)
 
 
 class ClimbReplayAnalysisTests(unittest.TestCase):
@@ -445,6 +494,63 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
         self.assertEqual(limits.max_bytes, 200 * 1024 * 1024)
         self.assertEqual(limits.max_duration_seconds, 90.0)
         self.assertEqual(limits.max_frames, 2700)
+
+    def test_sixty_fps_phone_video_becomes_browser_playable_thirty_fps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / 'phone.mov', root / 'analysis.mp4'
+            writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*'mp4v'), 60, (64, 64))
+            if not writer.isOpened():
+                self.skipTest('当前 OpenCV 环境不能编码 MOV')
+            try:
+                for index in range(3000):
+                    writer.write(np.full((64, 64, 3), index % 255, dtype=np.uint8))
+            finally:
+                writer.release()
+            prepared, info = prepare_video_upload(
+                source, filename='phone.mov', content_type='video/quicktime',
+                limits=VideoLimits(), output=output, trim_end_seconds=50,
+            )
+            self.assertEqual(prepared, output)
+            self.assertEqual(info.fps, 30)
+            self.assertEqual(info.frame_count, 1500)
+            self.assertLessEqual(info.size_bytes, 200 * 1024 * 1024)
+            capture = cv2.VideoCapture(str(output))
+            try:
+                fourcc = int(capture.get(cv2.CAP_PROP_FOURCC))
+                codec = ''.join(chr((fourcc >> (8 * i)) & 255) for i in range(4))
+                self.assertIn(codec.lower(), {'h264', 'avc1'})
+            finally:
+                capture.release()
+
+    def test_large_portrait_video_is_scaled_without_changing_orientation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / 'portrait.mp4', root / 'analysis.mp4'
+            make_video(source, frames=4, fps=4, width=1024, height=2048)
+            _, info = prepare_video_upload(
+                source, filename='portrait.mp4', content_type='video/mp4',
+                limits=VideoLimits(), output=output,
+            )
+            self.assertEqual((info.width, info.height), (960, 1920))
+            self.assertEqual(info.frame_count, 4)
+
+    def test_phone_rotation_metadata_is_applied_before_resizing(self):
+        from imageio_ffmpeg import get_ffmpeg_exe
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, rotated, output = root / 'original.mp4', root / 'rotated.mov', root / 'analysis.mp4'
+            make_video(source, frames=8, fps=4, width=96, height=64)
+            subprocess.run([
+                get_ffmpeg_exe(), '-hide_banner', '-loglevel', 'error', '-y',
+                '-display_rotation:v:0', '90', '-i', str(source), '-c', 'copy', str(rotated),
+            ], check=True)
+            self.assertEqual((probe_video(rotated).width, probe_video(rotated).height), (64, 96))
+            _, info = prepare_video_upload(
+                rotated, filename='rotated.mov', content_type='video/quicktime',
+                limits=VideoLimits(), output=output,
+            )
+            self.assertEqual((info.width, info.height), (64, 96))
 
     def test_missing_domestic_pose_keys_fails_before_any_upload(self):
         with patch.dict("os.environ", {

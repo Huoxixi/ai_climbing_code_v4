@@ -19,7 +19,9 @@ import json
 import math
 import os
 import queue
+import re
 import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -80,6 +82,7 @@ class ReplayCancelled(RuntimeError):
 @dataclass(frozen=True)
 class VideoLimits:
     max_bytes: int = 200 * 1024 * 1024
+    max_input_bytes: int = 500 * 1024 * 1024
     max_duration_seconds: float = 90.0
     max_width: int = 1920
     max_height: int = 1080
@@ -96,6 +99,8 @@ class ReplayUploadCreate(BaseModel):
     consent_version: str = Field(min_length=1, max_length=100)
     consent_granted: bool
     retention_mode: ReplayRetentionMode = REPLAY_RETENTION_DELETE
+    trim_start_seconds: float = Field(default=0, ge=0)
+    trim_end_seconds: float | None = Field(default=None, gt=0)
 
 
 class ReplayRetryCreate(BaseModel):
@@ -117,15 +122,43 @@ class VideoInfo:
 def probe_video(path: Path) -> VideoInfo:
     """Read enough metadata to reject unsafe or unsupported uploads."""
     cap = cv2.VideoCapture(str(path))
-    if not cap.isOpened():
-        raise ValueError("无法读取这个视频，请尝试从手机相册重新导出后上传")
+    orientation_auto = getattr(cv2, "CAP_PROP_ORIENTATION_AUTO", None)
+    if cap.isOpened() and orientation_auto is not None:
+        cap.set(orientation_auto, 1)
     try:
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = float(cap.get(cv2.CAP_PROP_FPS))
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        ok, frame = cap.read() if cap.isOpened() else (False, None)
+        if ok and frame is not None:
+            height, width = frame.shape[:2]
+            fps = float(cap.get(cv2.CAP_PROP_FPS))
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        else:
+            width = height = frame_count = 0
+            fps = 0.0
     finally:
         cap.release()
+    if width <= 0 or height <= 0 or fps <= 0 or frame_count <= 0:
+        from imageio_ffmpeg import get_ffmpeg_exe
+        try:
+            result = subprocess.run(
+                [get_ffmpeg_exe(), "-hide_banner", "-i", str(path), "-t", "0", "-f", "null", "-"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=15,
+            )
+            duration_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
+            video_match = re.search(
+                r"Video:.*?(\d{2,5})x(\d{2,5}).*?(\d+(?:\.\d+)?) fps", result.stderr,
+            )
+            if not duration_match or not video_match:
+                raise ValueError("missing video stream metadata")
+            hours, minutes, seconds = duration_match.groups()
+            duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+            width, height = int(video_match.group(1)), int(video_match.group(2))
+            rotation = re.search(r"rotation of\s+(-?\d+(?:\.\d+)?) degrees", result.stderr)
+            if rotation and abs(float(rotation.group(1))) % 180 > 45:
+                width, height = height, width
+            fps = float(video_match.group(3))
+            frame_count = max(1, int(round(duration * fps)))
+        except (OSError, RuntimeError, ValueError, TypeError, subprocess.TimeoutExpired) as exc:
+            raise ValueError("服务器无法读取这个视频，可能是文件损坏或编码暂不支持；可更换视频重试，仍失败请联系管理员") from exc
     if width <= 0 or height <= 0 or fps <= 0 or frame_count <= 0:
         raise ValueError("视频缺少有效的尺寸、帧率或时长信息")
     return VideoInfo(
@@ -147,45 +180,71 @@ def validate_video_upload_type(filename: str, content_type: str) -> bool:
     return suffix == ".mp4" and mime in {"", "application/octet-stream", "video/mp4"}
 
 
-def convert_video_to_mp4(source: Path, target: Path) -> None:
-    """Decode a supported container and write the silent analysis copy as MP4."""
-    capture = cv2.VideoCapture(str(source))
-    if not capture.isOpened():
-        raise ValueError("无法读取这个视频，请尝试从手机相册重新导出后上传")
-    writer = None
+def convert_video_to_mp4(
+    source: Path,
+    target: Path,
+    *,
+    limits: VideoLimits | None = None,
+    start_seconds: float = 0,
+    end_seconds: float | None = None,
+    cancelled: Callable[[], bool] = lambda: False,
+) -> None:
+    """Produce a silent, upright, browser-readable H.264 analysis copy."""
+    from imageio_ffmpeg import get_ffmpeg_exe
+
+    info = probe_video(source)
+    bounds = limits or VideoLimits()
+    if not math.isfinite(start_seconds) or start_seconds < 0 or start_seconds >= info.duration_seconds:
+        raise ValueError("视频片段起点无效或超出视频时长")
+    finish = min(info.duration_seconds, end_seconds if end_seconds is not None else start_seconds + bounds.max_duration_seconds)
+    if not math.isfinite(finish) or finish <= start_seconds or finish > info.duration_seconds + .05:
+        raise ValueError("视频片段终点无效或超出视频时长")
+    duration = finish - start_seconds
+    output_fps = min(info.fps, 30.0, bounds.max_frames / duration)
+    if output_fps < 1:
+        raise ValueError("当前视频片段过长，无法在试用上限内处理")
+
+    def dimensions(max_long: int, max_short: int) -> tuple[int, int]:
+        scale = min(1.0, max_long / max(info.width, info.height), max_short / min(info.width, info.height))
+        return (max(2, int(info.width * scale) // 2 * 2),
+                max(2, int(info.height * scale) // 2 * 2))
+
     try:
-        fps = float(capture.get(cv2.CAP_PROP_FPS))
-        ok, first_frame = capture.read()
-        if not ok or first_frame is None or not math.isfinite(fps) or fps <= 0:
-            raise ValueError("视频缺少有效画面或帧率信息")
-        height, width = first_frame.shape[:2]
-        for codec in ("mp4v", "avc1", "H264"):
-            candidate = cv2.VideoWriter(
-                str(target), cv2.VideoWriter_fourcc(*codec), fps, (width, height),
-            )
-            if candidate.isOpened():
-                writer = candidate
-                break
-            candidate.release()
-        if writer is None:
-            raise ValueError("服务器暂时无法转换视频，请将视频导出为 H.264 编码的 MP4 后重试")
-        writer.write(first_frame)
-        while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
-            if frame.shape[1] != width or frame.shape[0] != height:
-                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-            writer.write(frame)
-    except cv2.error as exc:
-        raise ValueError("服务器无法转换这个视频，请将视频导出为 H.264 编码的 MP4 后重试") from exc
-    finally:
-        capture.release()
-        if writer is not None:
-            writer.release()
-    if not target.is_file() or target.stat().st_size <= 0:
+        ffmpeg = get_ffmpeg_exe()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("服务器视频转换组件不可用，请联系管理员检查媒体处理组件") from exc
+    for long_edge, short_edge, crf in ((bounds.max_width, bounds.max_height, 26), (1280, 720, 30), (960, 540, 34)):
+        width, height = dimensions(long_edge, short_edge)
         target.unlink(missing_ok=True)
-        raise ValueError("视频转换失败，请将视频导出为 H.264 编码的 MP4 后重试")
+        command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+                   "-i", str(source), "-ss", str(start_seconds), "-t", str(duration),
+                   "-map", "0:v:0", "-an", "-vf", f"fps={output_fps:.5f},scale={width}:{height}",
+                   "-c:v", "libx264", "-preset", "ultrafast", "-crf", str(crf),
+                   "-threads", "2", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(target)]
+        try:
+            process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            raise ValueError("服务器无法启动视频转换组件，请联系管理员检查媒体处理组件") from exc
+        try:
+            while process.poll() is None:
+                if cancelled():
+                    process.terminate()
+                    raise ReplayCancelled()
+                try:
+                    process.wait(timeout=.2)
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        if process.returncode != 0 or not target.is_file() or target.stat().st_size == 0:
+            target.unlink(missing_ok=True)
+            raise ValueError("服务器未能完成视频转换，可能是编码暂不支持、文件损坏或服务器资源不足；可更换视频重试，仍失败请联系管理员")
+        if target.stat().st_size <= bounds.max_bytes:
+            return
+    target.unlink(missing_ok=True)
+    raise ValueError(f"视频压缩后仍超过 {bounds.max_bytes // (1024 * 1024)} MB，当前服务器无法处理")
 
 
 def prepare_video_upload(
@@ -195,15 +254,36 @@ def prepare_video_upload(
     content_type: str,
     limits: VideoLimits,
     output: Path,
+    trim_start_seconds: float = 0,
+    trim_end_seconds: float | None = None,
+    cancelled: Callable[[], bool] = lambda: False,
 ) -> tuple[Path, VideoInfo]:
-    """Validate uploaded bytes and normalize non-MP4 containers for analysis."""
-    is_mp4 = validate_video_upload_type(filename, content_type)
+    """Validate uploaded bytes and normalize mobile media for analysis."""
+    validate_video_upload_type(filename, content_type)
     original_info = probe_video(source)
-    validate_video(original_info, limits)
-    if is_mp4:
-        return source, original_info
+    if original_info.size_bytes > limits.max_input_bytes:
+        raise ValueError(f"视频不能超过 {limits.max_input_bytes // (1024 * 1024)} MB")
+    trim_start_seconds = float(trim_start_seconds)
+    if not math.isfinite(trim_start_seconds) or trim_start_seconds < 0:
+        raise ValueError("视频片段起点无效")
+    if trim_end_seconds is not None:
+        trim_end_seconds = float(trim_end_seconds)
+        if not math.isfinite(trim_end_seconds):
+            raise ValueError("视频片段终点无效")
+        if trim_end_seconds <= trim_start_seconds:
+            raise ValueError("视频片段终点必须晚于起点")
+        if trim_end_seconds - trim_start_seconds > limits.max_duration_seconds + 0.05:
+            raise ValueError(f"视频片段不能超过 {limits.max_duration_seconds:g} 秒")
+    elif original_info.duration_seconds > trim_start_seconds + limits.max_duration_seconds:
+        trim_end_seconds = trim_start_seconds + limits.max_duration_seconds
+    if trim_end_seconds is not None and trim_end_seconds > original_info.duration_seconds + 0.05:
+        raise ValueError("视频片段终点超出视频时长")
     try:
-        convert_video_to_mp4(source, output)
+        convert_video_to_mp4(
+            source, output, limits=limits,
+            start_seconds=trim_start_seconds, end_seconds=trim_end_seconds,
+            cancelled=cancelled,
+        )
         converted_info = probe_video(output)
         validate_video(converted_info, limits)
         return output, converted_info
@@ -212,9 +292,10 @@ def prepare_video_upload(
         raise
 
 
-def validate_video(info: VideoInfo, limits: VideoLimits) -> None:
-    if info.size_bytes > limits.max_bytes:
-        raise ValueError(f"视频不能超过 {limits.max_bytes // (1024 * 1024)} MB")
+def validate_video(info: VideoInfo, limits: VideoLimits, *, max_bytes: int | None = None) -> None:
+    byte_limit = limits.max_bytes if max_bytes is None else max_bytes
+    if info.size_bytes > byte_limit:
+        raise ValueError(f"视频不能超过 {byte_limit // (1024 * 1024)} MB")
     if info.duration_seconds > limits.max_duration_seconds + 0.05:
         raise ValueError(f"试用阶段仅支持 {limits.max_duration_seconds:g} 秒以内的视频")
     allowed_long = max(limits.max_width, limits.max_height)
@@ -1190,7 +1271,7 @@ class ClimbReplayStore:
 
     @staticmethod
     def _public(job: dict) -> dict:
-        return {key: value for key, value in job.items() if key != "input_path"}
+        return {key: value for key, value in job.items() if key not in {"input_path", "source_path"}}
 
     @staticmethod
     def _sha256(path: Path) -> str:
@@ -1255,6 +1336,66 @@ class ClimbReplayStore:
         _atomic_json(self._path(job_id), job)
         return self._public(job)
 
+    def create_pending(
+        self, *, owner: str, route_id: str | None, route_color: str,
+        source: Path, original_name: str, content_type: str, consent: dict,
+        retention_mode: ReplayRetentionMode, trim_start_seconds: float = 0,
+        trim_end_seconds: float | None = None,
+    ) -> dict:
+        """Persist the upload and respond before any expensive video processing."""
+        job_id, now = uuid.uuid4().hex, utcnow()
+        directory = self.jobs / job_id
+        directory.mkdir(parents=True, exist_ok=False)
+        suffix = Path(original_name).suffix.lower()
+        if suffix not in REPLAY_VIDEO_SUFFIXES:
+            suffix = ".video"
+        target = directory / f"source{suffix}"
+        os.replace(source, target)
+        size = target.stat().st_size
+        job = {
+            "id": job_id, "owner": owner, "route_id": route_id,
+            "route_color": route_color, "original_name": original_name,
+            "source_path": str(target), "input_path": None,
+            "preparation": {"status": "queued", "trim_start_seconds": trim_start_seconds,
+                            "trim_end_seconds": trim_end_seconds, "content_type": content_type},
+            "media": {"source_video": {
+                "kind": "source_video", "status": "available", "retention_mode": retention_mode,
+                "delete_at": None, "deleted_at": None, "size_bytes": size,
+                "checksum_sha256": self._sha256(target),
+                "content_type": content_type or "application/octet-stream", "filename": original_name,
+            }},
+            "deletion": None, "video": None, "status": "queued", "stage": "等待整理视频",
+            "progress": 0, "error": None, "error_code": None, "cancel_requested": False,
+            "attempt": 1, "consent_history": [consent], "analysis_runs": [], "result": None,
+            "created_at": now, "updated_at": now, "started_at": None, "finished_at": None,
+        }
+        _atomic_json(self._path(job_id), job)
+        return self._public(job)
+
+    def finish_preparation(self, job_id: str, path: Path, info: VideoInfo) -> dict:
+        job = self.get(job_id, private=True)
+        directory = self._path(job_id).parent
+        target = directory / "input.mp4"
+        os.replace(path, target)
+        media = dict(job["media"])
+        source = dict(media["source_video"])
+        source.update(size_bytes=info.size_bytes, checksum_sha256=self._sha256(target),
+                      content_type="video/mp4",
+                      filename=f"{Path(job['original_name']).stem or 'climb-replay'}.mp4")
+        media["source_video"] = source
+        preparation = dict(job["preparation"])
+        preparation["status"] = "completed"
+        raw = Path(job["source_path"])
+        updated = self.update(job_id, input_path=str(target), source_path=None,
+                              video=asdict(info), media=media, preparation=preparation,
+                              stage="视频已整理，准备分析", progress=12)
+        try:
+            raw.unlink(missing_ok=True)
+        except OSError:
+            # A later cleanup pass removes the redundant upload after a sharing lock clears.
+            pass
+        return updated
+
     def get(self, job_id: str, owner: str | None = None, *, private=False) -> dict:
         with self._lock:
             job = self._read(job_id)
@@ -1284,11 +1425,14 @@ class ClimbReplayStore:
     def _media_path(self, job_id: str, job: dict, media_kind: str) -> Path:
         directory = self._path(job_id).parent.resolve()
         if media_kind == "source_video":
-            raw_path = job.get("input_path")
+            raw_path = job.get("source_path") or job.get("input_path")
             if not raw_path:
                 raise HTTPException(404, "原视频已删除")
             path = Path(raw_path).resolve()
-            expected_name = "input.mp4"
+            expected_name = path.name
+            if expected_name != "input.mp4" and expected_name not in {
+                    f"source{suffix}" for suffix in (*REPLAY_VIDEO_SUFFIXES, ".video")}:
+                raise RuntimeError("媒体文件名未通过安全校验")
         elif media_kind == REPLAY_OVERLAY_MEDIA_KIND:
             path = (directory / REPLAY_OVERLAY_FILENAME).resolve()
             expected_name = REPLAY_OVERLAY_FILENAME
@@ -1379,11 +1523,16 @@ class ClimbReplayStore:
             raise HTTPException(404, "媒体已删除或不存在")
         path = self._media_path(job_id, job, media_kind)
         path.unlink(missing_ok=True)
+        if media_kind == "source_video":
+            directory = self._path(job_id).parent
+            for suffix in (*REPLAY_VIDEO_SUFFIXES, ".video"):
+                (directory / f"source{suffix}").unlink(missing_ok=True)
         item.update(status="deleted", deleted_at=utcnow(), delete_at=None)
         media[media_kind] = item
         changes = {"media": media}
         if media_kind == "source_video":
             changes["input_path"] = None
+            changes["source_path"] = None
         return self._public(self.update(job_id, **changes))
 
     def cleanup_due_media(self) -> list[str]:
@@ -1404,6 +1553,11 @@ class ClimbReplayStore:
                 overlay = (job.get("media") or {}).get(REPLAY_OVERLAY_MEDIA_KIND) or {}
                 if overlay.get("status") == "cleanup_pending":
                     self.discard_overlay(job["id"])
+                if (job.get("preparation") or {}).get("status") == "completed":
+                    for suffix in (*REPLAY_VIDEO_SUFFIXES, ".video"):
+                        (path.parent / f"source{suffix}").unlink(missing_ok=True)
+                if job.get("status") in {"failed", "cancelled", "succeeded"}:
+                    (path.parent / ".preparing.mp4").unlink(missing_ok=True)
             except (OSError, TypeError, ValueError, json.JSONDecodeError, HTTPException):
                 continue
         return deleted
@@ -1550,6 +1704,7 @@ class ClimbReplayStore:
                     updated_at=utcnow(),
                 )
                 _atomic_json(path, item)
+                (path.parent / ".preparing.mp4").unlink(missing_ok=True)
 
     def cancel(self, job_id: str, owner: str) -> dict:
         job = self.get(job_id, owner, private=True)
@@ -1691,6 +1846,7 @@ class ClimbReplayManager:
     def __init__(self, store: ClimbReplayStore, analyzer: ReplayAnalyzer,
                  *, cleanup_interval_seconds: float = 300):
         self.store, self.analyzer = store, analyzer
+        self.video_limits = VideoLimits()
         self._queue: queue.Queue[tuple[str, str] | None] = queue.Queue()
         self._queued: set[tuple[str, str]] = set()
         self._stop = threading.Event()
@@ -1771,10 +1927,8 @@ class ClimbReplayManager:
             return
         self.store.update(job_id, status="running", stage="检查视频", progress=5,
                           started_at=utcnow(), error=None, error_code=None)
-        info = VideoInfo(**job["video"])
         attempt = int(job.get("attempt") or 1)
-        initial_analysis = self.analyzer.analysis_contract(info)
-        self.store.start_analysis_run(job_id, attempt, initial_analysis)
+        run_started = False
 
         def is_cancelled() -> bool:
             return bool(self.store.get(job_id, private=True).get("cancel_requested"))
@@ -1789,6 +1943,28 @@ class ClimbReplayManager:
             self.store.update_analysis_run(job_id, attempt, analysis)
 
         try:
+            if (job.get("preparation") or {}).get("status") != "completed" and job.get("preparation"):
+                raw = Path(job["source_path"])
+                prepared = raw.with_name(".preparing.mp4")
+                progress("正在整理视频格式、方向和片段", 8)
+                try:
+                    _, info = prepare_video_upload(
+                        raw, filename=job["original_name"],
+                        content_type=job["preparation"].get("content_type", ""),
+                        limits=self.video_limits, output=prepared,
+                        trim_start_seconds=job["preparation"].get("trim_start_seconds", 0),
+                        trim_end_seconds=job["preparation"].get("trim_end_seconds"),
+                        cancelled=is_cancelled,
+                    )
+                    if is_cancelled():
+                        raise ReplayCancelled()
+                    job = self.store.finish_preparation(job_id, prepared, info)
+                finally:
+                    prepared.unlink(missing_ok=True)
+            info = VideoInfo(**job["video"])
+            initial_analysis = self.analyzer.analysis_contract(info)
+            self.store.start_analysis_run(job_id, attempt, initial_analysis)
+            run_started = True
             result = self.analyzer.analyze(
                 Path(job["input_path"]), route_color=job["route_color"], video_info=info,
                 progress=progress, cancelled=is_cancelled, telemetry=telemetry,
@@ -1804,17 +1980,19 @@ class ClimbReplayManager:
                               result=result, error_code=None, finished_at=utcnow())
         except ReplayCancelled:
             self.store.discard_overlay(job_id)
-            self.store.finish_analysis_run(
-                job_id, attempt, state="cancelled", error_code="cancelled_by_user",
-            )
+            if run_started:
+                self.store.finish_analysis_run(
+                    job_id, attempt, state="cancelled", error_code="cancelled_by_user",
+                )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
             self.store.update(job_id, status="cancelled", stage="已取消",
                               error=None, error_code="cancelled_by_user", finished_at=utcnow())
         except ReplayConfigurationError as exc:
             self.store.discard_overlay(job_id)
-            self.store.finish_analysis_run(
-                job_id, attempt, state="failed", error_code="pose_provider_unconfigured",
-            )
+            if run_started:
+                self.store.finish_analysis_run(
+                    job_id, attempt, state="failed", error_code="pose_provider_unconfigured",
+                )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
             self.store.update(
                 job_id, status="failed", stage="姿态服务未配置", progress=0,
@@ -1823,12 +2001,14 @@ class ClimbReplayManager:
             )
         except Exception as exc:  # the public job exposes a concise actionable error
             self.store.discard_overlay(job_id)
-            self.store.finish_analysis_run(
-                job_id, attempt, state="failed", error_code="analysis_failed",
-            )
+            code = "analysis_failed" if run_started else "media_processing_failed"
+            if run_started:
+                self.store.finish_analysis_run(
+                    job_id, attempt, state="failed", error_code=code,
+                )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
-            self.store.update(job_id, status="failed", stage="分析失败", progress=0,
-                              error=str(exc)[:1000], error_code="analysis_failed",
+            self.store.update(job_id, status="failed", stage="分析失败" if run_started else "视频无法处理", progress=0,
+                              error=str(exc)[:1000], error_code=code,
                               finished_at=utcnow())
 
     def close(self) -> None:
@@ -2479,6 +2659,7 @@ def create_climb_replay_router(
     test_video_cases: list[dict[str, Any]] | None = None,
 ) -> APIRouter:
     limits = limits or VideoLimits()
+    manager.video_limits = limits
     router = APIRouter(prefix="/api/climb-replay", tags=["climb-replay"])
     replay_uploads = ChunkUploadStore(store.root / ".chunk-uploads")
     configured_test_videos: list[dict[str, Any]] = []
@@ -2668,6 +2849,8 @@ def create_climb_replay_router(
         consent_version: str = Form(default=""),
         consent_granted: bool = Form(default=False),
         retention_mode: str = Form(default=REPLAY_RETENTION_DELETE),
+        trim_start_seconds: float = Form(default=0),
+        trim_end_seconds: float | None = Form(default=None),
     ):
         username = owner(request)
         route_id, route_color = resolve_route(username, route_id, route_color)
@@ -2679,33 +2862,28 @@ def create_climb_replay_router(
             raise HTTPException(422, str(exc)) from exc
 
         upload = store.root / f".upload-{uuid.uuid4().hex}.tmp"
-        normalized = store.root / f".normalized-{uuid.uuid4().hex}.mp4"
         size, digest = 0, hashlib.sha256()
         try:
             with upload.open("wb") as target:
                 while chunk := await video.read(1024 * 1024):
                     size += len(chunk)
-                    if size > limits.max_bytes:
-                        raise HTTPException(413, f"视频不能超过 {limits.max_bytes // (1024 * 1024)} MB")
+                    if size > limits.max_input_bytes:
+                        raise HTTPException(413, f"视频不能超过 {limits.max_input_bytes // (1024 * 1024)} MB")
                     digest.update(chunk)
                     target.write(chunk)
             if not size:
                 raise HTTPException(422, "视频内容为空")
-            try:
-                prepared, info = prepare_video_upload(
-                    upload, filename=video.filename or "", content_type=video.content_type or "",
-                    limits=limits, output=normalized,
-                )
-            except ValueError as exc:
-                raise HTTPException(422, str(exc)) from exc
-            job = store.create(owner=username, route_id=route_id or None, route_color=route_color,
-                               source=prepared, original_name=video.filename or f"{digest.hexdigest()}.mp4",
-                               info=info, consent=consent, retention_mode=retention)
+            job = store.create_pending(
+                owner=username, route_id=route_id or None, route_color=route_color,
+                source=upload, original_name=video.filename or f"{digest.hexdigest()}.mp4",
+                content_type=video.content_type or "application/octet-stream",
+                consent=consent, retention_mode=retention,
+                trim_start_seconds=trim_start_seconds, trim_end_seconds=trim_end_seconds,
+            )
             manager.enqueue(job["id"])
             return job
         finally:
             upload.unlink(missing_ok=True)
-            normalized.unlink(missing_ok=True)
 
     @router.post("/uploads")
     def create_upload(payload: ReplayUploadCreate, request: Request):
@@ -2717,10 +2895,12 @@ def create_climb_replay_router(
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         try:
-            return replay_uploads.create(username, total_size=payload.size_bytes, max_size=limits.max_bytes, metadata={
+            return replay_uploads.create(username, total_size=payload.size_bytes, max_size=limits.max_input_bytes, metadata={
                 "filename": payload.filename, "content_type": payload.content_type,
                 "route_id": route_id, "route_color": route_color,
                 "consent": consent, "retention_mode": payload.retention_mode,
+                "trim_start_seconds": payload.trim_start_seconds,
+                "trim_end_seconds": payload.trim_end_seconds,
             })
         except ChunkUploadError as exc:
             raise HTTPException(422, str(exc)) from exc
@@ -2739,31 +2919,26 @@ def create_climb_replay_router(
     @router.post("/uploads/{upload_id}/complete", status_code=202)
     def complete_upload(upload_id: str, request: Request):
         username = owner(request)
-        normalized = store.root / f".normalized-{uuid.uuid4().hex}.mp4"
         try:
             meta, part = replay_uploads.finish(upload_id, username)
             details = meta["metadata"]
             route_id, route_color = resolve_route(username, details.get("route_id", ""), details.get("route_color", ""))
-            try:
-                prepared, info = prepare_video_upload(
-                    part, filename=details["filename"], content_type=details.get("content_type", ""),
-                    limits=limits, output=normalized,
-                )
-            except ValueError as exc:
-                raise HTTPException(422, str(exc)) from exc
-            job = store.create(owner=username, route_id=route_id or None, route_color=route_color,
-                               source=prepared, original_name=details["filename"], info=info,
-                               consent=details["consent"],
-                               retention_mode=retention_choice(
-                                   details.get("retention_mode", REPLAY_RETENTION_DELETE),
-                               ))
+            job = store.create_pending(
+                owner=username, route_id=route_id or None, route_color=route_color,
+                source=part, original_name=details["filename"],
+                content_type=details.get("content_type", "application/octet-stream"),
+                consent=details["consent"],
+                retention_mode=retention_choice(details.get("retention_mode", REPLAY_RETENTION_DELETE)),
+                trim_start_seconds=float(details.get("trim_start_seconds", 0) or 0),
+                trim_end_seconds=(float(details["trim_end_seconds"])
+                                  if details.get("trim_end_seconds") is not None else None),
+            )
             manager.enqueue(job["id"])
             return job
         except ChunkUploadError as exc:
             raise HTTPException(422, str(exc)) from exc
         finally:
             replay_uploads.discard(upload_id)
-            normalized.unlink(missing_ok=True)
 
     @router.get("/jobs")
     def list_jobs(request: Request):

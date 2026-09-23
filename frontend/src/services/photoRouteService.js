@@ -17,7 +17,7 @@ export const photoRouteV2Service = {
   board: (id) => apiClient.get(`/api/photo-routes/v2/boards/${id}`).then(r => r.data),
   upload: (file) => {
     const body = new FormData(); body.append('photo', file)
-    return apiClient.post('/api/photo-routes/v2/boards/upload', body).then(r => r.data)
+    return apiClient.post('/api/photo-routes/v2/boards/upload', body, { timeout: 120000 }).then(r => r.data)
   },
   newBoardVersion: (id) => apiClient.post(`/api/photo-routes/v2/boards/${id}/versions`).then(r => r.data),
   refine: (id, payload) => apiClient.post(`/api/photo-routes/v2/boards/${id}/refine`, payload).then(r => r.data),
@@ -40,7 +40,7 @@ export const photoRouteV2Service = {
       append: (uploadId, offset, chunk) => apiClient.put(`${root}/${uploadId}`, chunk, {
         timeout:120000, headers:{ 'Content-Type':'application/octet-stream', 'X-Upload-Offset':String(offset) },
       }).then(r => r.data),
-      complete: (uploadId) => apiClient.post(`${root}/${uploadId}/complete`).then(r => r.data),
+      complete: (uploadId) => apiClient.post(`${root}/${uploadId}/complete`, null, { timeout: 120000 }).then(r => r.data),
       onProgress,
     })
   },

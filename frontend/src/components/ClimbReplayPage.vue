@@ -12,6 +12,7 @@
       <div class="video-column">
         <template v-if="!playbackUrl">
         <div
+          v-if="!isBusy"
           class="video-drop"
           :class="{ dragging: isDragging }"
           role="button"
@@ -26,11 +27,11 @@
         >
           <VideoCamera class="drop-icon" />
           <strong>选择攀爬视频</strong>
-          <span>MP4、MOV 等常见视频 · 最长 1 分 30 秒 · 不超过 200 MB</span>
+          <span>MP4、MOV 等常见视频 · 系统自动转码和压缩 · 单文件不超过 500 MB</span>
           <button type="button" class="secondary-button">浏览文件</button>
         </div>
 
-        <div v-if="!playbackUrl && testVideoCases.length" class="test-video-cases">
+        <div v-if="!isBusy && testVideoCases.length" class="test-video-cases">
           <div class="test-video-heading">
             <span class="test-video-mark" aria-hidden="true"><VideoCamera /></span>
             <div><strong>本地测试案例</strong><p>仅用于本机验收，不会随生产发布。</p></div>
@@ -132,7 +133,7 @@
               <button
                 type="button"
                 :class="{ active: playbackKind === 'source' }"
-                :disabled="!sourceAvailable"
+                :disabled="!sourcePlayable"
                 :aria-pressed="playbackKind === 'source'"
                 @click="switchPlayback('source')"
               >原视频</button>
@@ -286,14 +287,29 @@
 
         <label class="privacy-check">
           <input v-model="sampleConsent" type="checkbox" :disabled="!consentPolicy || isBusy || isDeleting" />
-          <span>我同意本次处理：原视频仅保存在本系统并按上方选择清理；人体姿态分析会把降帧后的单张画面发送至{{ consentPolicy?.provider || '指定姿态服务' }}，岩点在服务器本地识别。重试时需要重新同意。</span>
+          <span>我同意本次处理：上传的视频在本系统整理为分析副本并按上方选择清理，上传的原始文件在转换成功后从服务器删除；人体姿态分析会把降帧后的单张画面发送至{{ consentPolicy?.provider || '指定姿态服务' }}，岩点在服务器本地识别。重试时需要重新同意。</span>
         </label>
         <p v-if="consentPolicy" class="consent-meta">{{ consentPolicy.service }} · {{ consentPolicy.region }} · 告知版本 {{ consentPolicy.version }}</p>
         <button v-if="activeConsentGranted" type="button" class="consent-action" @click="withdrawConsent">撤回本次授权</button>
 
+        <section v-if="selectedFile" class="video-preflight" aria-label="视频处理说明">
+          <div class="video-preflight__head"><strong>上传后由系统处理视频</strong><span>{{ videoMeta ? formatVideoMeta(videoMeta) : formatBytes(selectedFile.size) }}</span></div>
+          <p>完整文件会上传到本系统，随后在后台自动修正方向、裁剪、降帧并转成不含原音频的 H.264 MP4；分析副本不超过 1920×1080（支持竖屏）、200 MB。手机里的原文件不会修改，只有抽样画面会发送给上述姿态服务。</p>
+          <div v-if="videoMeta?.duration > MAX_VIDEO_SECONDS" class="video-trim">
+            <strong>默认分析前 90 秒，也可以在这里调整片段</strong>
+            <p>选择片段只改变本系统的分析范围，上传的仍是完整文件。</p>
+            <div class="video-trim__fields">
+              <label>开始 <input v-model.number="trimStartSeconds" type="number" min="0" :max="Math.max(0, videoMeta.duration - 1)" step="0.1" /></label>
+              <label>结束 <input v-model.number="trimEndSeconds" type="number" :min="trimStartSeconds + 0.1" :max="videoMeta.duration" step="0.1" /></label>
+            </div>
+            <p class="video-trim__status" :class="{ invalid: !trimIsValid }">当前片段 {{ formatSeconds(trimDuration) }}<span v-if="!trimIsValid">，请选择不超过 90 秒的范围</span></p>
+          </div>
+          <p v-if="!videoMeta">手机浏览器无法预览此编码。仍可上传，服务器会读取视频；超过 90 秒时默认分析前 90 秒。如服务器也无法解码，任务会显示具体原因。</p>
+        </section>
+
         <button type="button" class="primary-action" :disabled="!canSubmit" @click="submit">
           <Loading v-if="isBusy || isSubmitting" />
-          <span>{{ isSubmitting ? (uploadProgress < 100 ? `正在上传 ${uploadProgress}%` : '正在转换视频') : (isBusy ? '正在分析' : '开始 AI 复盘') }}</span>
+          <span>{{ isSubmitting ? (uploadProgress < 100 ? `正在上传 ${uploadProgress}%` : '正在创建后台任务') : (isBusy ? '正在处理' : '开始 AI 复盘') }}</span>
         </button>
         <button v-if="isBusy" type="button" class="cancel-action" @click="cancelJob">取消任务</button>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
@@ -337,6 +353,11 @@ const fileInput = ref(null)
 const videoElement = ref(null)
 const selectedFile = ref(null)
 const previewUrl = ref('')
+const videoMeta = ref(null)
+const trimStartSeconds = ref(0)
+const trimEndSeconds = ref(90)
+const MAX_VIDEO_SECONDS = 90
+const MAX_INPUT_BYTES = 500 * 1024 * 1024
 const routeColor = ref('绿色')
 const retentionMode = ref('delete_after_processing')
 const sampleConsent = ref(false)
@@ -373,6 +394,8 @@ const isJobDeleting = computed(() => deletionReceipt.value
 const result = computed(() => activeJob.value?.result || null)
 const sourceMedia = computed(() => activeJob.value?.media?.source_video || null)
 const sourceAvailable = computed(() => sourceMedia.value?.status === 'available')
+const sourcePlayable = computed(() => sourceAvailable.value &&
+  (!activeJob.value?.preparation || activeJob.value.preparation.status === 'completed'))
 const overlayMedia = computed(() => activeJob.value?.media?.overlay_video || null)
 const overlayAvailable = computed(() => overlayMedia.value?.status === 'available')
 const comparisonCase = computed(() => testVideoCases.value.find((item) => (
@@ -393,9 +416,9 @@ const replayVideoUrl = computed(() => {
 const playbackKind = computed(() => {
   if (previewUrl.value) return 'preview'
   if (preferredPlaybackKind.value === 'overlay' && replayVideoAvailable.value) return 'overlay'
-  if (preferredPlaybackKind.value === 'source' && sourceAvailable.value) return 'source'
+  if (preferredPlaybackKind.value === 'source' && sourcePlayable.value) return 'source'
   if (replayVideoAvailable.value) return 'overlay'
-  if (sourceAvailable.value) return 'source'
+  if (sourcePlayable.value) return 'source'
   return 'none'
 })
 const playbackUrl = computed(() => {
@@ -542,7 +565,9 @@ const currentConsentEvent = computed(() => {
   return [...(activeJob.value?.consent_history || [])].reverse().find((event) => event.attempt === attempt)
 })
 const activeConsentGranted = computed(() => currentConsentEvent.value?.event === 'granted')
-const canSubmit = computed(() => selectedFile.value && routeColor.value && sampleConsent.value && consentPolicy.value && !isBusy.value && !isSubmitting.value && !isDeleting.value)
+const trimDuration = computed(() => Math.max(0, Number(trimEndSeconds.value || 0) - Number(trimStartSeconds.value || 0)))
+const trimIsValid = computed(() => !videoMeta.value || (trimStartSeconds.value >= 0 && trimEndSeconds.value > trimStartSeconds.value && trimDuration.value <= MAX_VIDEO_SECONDS + .05 && trimEndSeconds.value <= videoMeta.value.duration + .05))
+const canSubmit = computed(() => selectedFile.value && routeColor.value && sampleConsent.value && consentPolicy.value && trimIsValid.value && !isBusy.value && !isSubmitting.value && !isDeleting.value)
 const statusTitle = computed(() => isJobDeleting.value ? '正在删除整次记录' : ({
   queued: '任务正在排队', running: activeJob.value?.stage || '正在分析视频',
   succeeded: '分析完成', failed: '分析未完成', cancelled: '任务已取消',
@@ -553,7 +578,7 @@ const statusDetail = computed(() => {
   if (activeJob.value?.status === 'cancelled') return sourceAvailable.value ? '原视频仍可用于重新分析。' : '原视频已删除，本次任务不能重新分析。'
   if (activeJob.value?.status === 'succeeded') return '结果为机器估算，请结合原视频复核。'
   if (activeJob.value?.status === 'queued') return uploadProgress.value < 100 ? `视频上传 ${uploadProgress.value}%` : '前方任务完成后会自动开始。'
-  return '正在识别岩点与攀爬者动作，请保持页面开启。'
+  return '系统正在处理视频并识别动作；可以稍后在任务列表查看结果。'
 })
 const sourceRetentionLabel = computed(() => {
   const source = sourceMedia.value
@@ -582,23 +607,43 @@ const limbRows = computed(() => Object.entries(limbNames).map(([key, label]) => 
 }))
 
 function openPicker() { fileInput.value?.click() }
-function useFile(file) {
+let selectedFileToken = 0
+async function inspectVideo(file) {
+  const url = URL.createObjectURL(file)
+  try {
+    const metadata = await new Promise((resolve, reject) => {
+      const probe = document.createElement('video')
+      const timer = window.setTimeout(() => reject(new Error('浏览器无法预览此视频编码')), 8000)
+      probe.preload = 'metadata'
+      probe.onloadedmetadata = () => { window.clearTimeout(timer); resolve({ width: probe.videoWidth, height: probe.videoHeight, duration: probe.duration }) }
+      probe.onerror = () => { window.clearTimeout(timer); reject(new Error('浏览器无法预览此视频编码')) }
+      probe.src = url
+    })
+    if (!metadata.width || !metadata.height || !Number.isFinite(metadata.duration)) throw new Error('无法读取视频尺寸或时长，请重新选择文件。')
+    return metadata
+  } finally { URL.revokeObjectURL(url) }
+}
+async function useFile(file) {
   formError.value = ''
   formNotice.value = ''
   if (!file) return
+  const token = ++selectedFileToken
   const supportedTypes = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm', 'video/3gpp', 'video/3gpp2', 'video/x-matroska'])
   const supportedExtensions = ['.mp4', '.mov', '.m4v', '.webm', '.3gp', '.3g2', '.mkv']
   if (!supportedTypes.has(file.type.toLowerCase()) && !supportedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension))) {
     formError.value = '请选择 MP4、MOV、M4V、WebM、3GP 或 MKV 视频。'
     return
   }
-  if (file.size > 200 * 1024 * 1024) {
-    formError.value = '视频不能超过 200 MB。'
+  if (file.size > MAX_INPUT_BYTES) {
+    formError.value = '视频不能超过 500 MB。'
     return
   }
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   selectedFile.value = file
   previewUrl.value = URL.createObjectURL(file)
+  videoMeta.value = null
+  trimStartSeconds.value = 0
+  trimEndSeconds.value = MAX_VIDEO_SECONDS
   activeJob.value = null
   deletionReceipt.value = null
   playbackTime.value = 0
@@ -606,9 +651,21 @@ function useFile(file) {
   pendingPlaybackState.value = null
   window.clearTimeout(deletionTimer)
   sampleConsent.value = false
+  try {
+    const metadata = await inspectVideo(file)
+    if (token !== selectedFileToken) return
+    videoMeta.value = metadata
+    trimEndSeconds.value = Math.min(MAX_VIDEO_SECONDS, videoMeta.value.duration)
+    formNotice.value = videoMeta.value.duration > MAX_VIDEO_SECONDS
+      ? '视频已读取。系统默认分析前 90 秒；如需调整，可修改下面的起止时间。'
+      : '视频已读取。上传后系统会自动整理视频。'
+  } catch (_) {
+    if (token !== selectedFileToken) return
+    formNotice.value = '手机浏览器暂时无法预览此视频；仍可上传，服务器会继续尝试处理。'
+  }
 }
-function onFileChange(event) { useFile(event.target.files?.[0]); event.target.value = '' }
-function onDrop(event) { isDragging.value = false; useFile(event.dataTransfer.files?.[0]) }
+function onFileChange(event) { void useFile(event.target.files?.[0]); event.target.value = '' }
+function onDrop(event) { isDragging.value = false; void useFile(event.dataTransfer.files?.[0]) }
 async function loadTestVideoInfo() {
   try {
     const response = await climbReplayService.testVideos()
@@ -622,7 +679,7 @@ async function useTestVideo(testCase) {
   formNotice.value = ''
   try {
     const blob = await climbReplayService.testVideo(testCase.id)
-    useFile(new File([blob], testCase.filename || `${testCase.id}.mp4`, {
+    await useFile(new File([blob], testCase.filename || `${testCase.id}.mp4`, {
       type: 'video/mp4', lastModified: Date.now(),
     }))
     formNotice.value = `已载入${testCase.label}。请选择线路颜色并阅读授权说明后开始复盘。`
@@ -648,7 +705,13 @@ async function submit() {
       consentVersion: consentPolicy.value.version,
       consentGranted: true,
       retentionMode: retentionMode.value,
+      trimStartSeconds: videoMeta.value?.duration > MAX_VIDEO_SECONDS ? Number(trimStartSeconds.value) : 0,
+      trimEndSeconds: videoMeta.value?.duration > MAX_VIDEO_SECONDS ? Number(trimEndSeconds.value) : null,
     }, (value) => { uploadProgress.value = value })
+    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+    selectedFile.value = null
+    videoMeta.value = null
     sampleConsent.value = false
     await loadJobs()
     schedulePoll()
@@ -669,6 +732,7 @@ function schedulePoll() {
 function clearDeletedReplay() {
   activeJob.value = null
   selectedFile.value = null
+  videoMeta.value = null
   sampleConsent.value = false
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   previewUrl.value = ''
@@ -782,6 +846,7 @@ function selectJob(job) {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   previewUrl.value = ''
   selectedFile.value = null
+  videoMeta.value = null
   playbackTime.value = 0
   preferredPlaybackKind.value = 'overlay'
   pendingPlaybackState.value = null
@@ -819,7 +884,7 @@ function capturePlaybackState() {
 function switchPlayback(kind) {
   if (kind === playbackKind.value) return
   if (kind === 'overlay' && !replayVideoAvailable.value) return
-  if (kind === 'source' && !sourceAvailable.value) return
+  if (kind === 'source' && !sourcePlayable.value) return
   pendingPlaybackState.value = capturePlaybackState()
   preferredPlaybackKind.value = kind
   formNotice.value = ''
@@ -838,7 +903,7 @@ function handlePlaybackLoaded() {
   updatePlaybackEvidence()
 }
 function handlePlaybackError() {
-  if (playbackKind.value !== 'overlay' || !sourceAvailable.value) return
+  if (playbackKind.value !== 'overlay' || !sourcePlayable.value) return
   pendingPlaybackState.value = capturePlaybackState()
   preferredPlaybackKind.value = 'source'
   formNotice.value = '复盘视频暂时无法加载，已自动切换到原视频。'
@@ -907,6 +972,14 @@ function formatBytes(value) {
   const bytes = Number(value)
   if (!Number.isFinite(bytes) || bytes <= 0) return '大小未知'
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+function formatSeconds(value) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds)) return '待计算'
+  return `${seconds.toFixed(seconds < 10 ? 1 : 0)} 秒`
+}
+function formatVideoMeta(meta) {
+  return `${meta.width}×${meta.height} · ${formatSeconds(meta.duration)} · ${formatBytes(selectedFile.value?.size)}`
 }
 function jobStatusLabel(job) {
   if (job.deletion?.state === 'queued') return '删除中'
@@ -977,6 +1050,7 @@ onBeforeUnmount(() => {
 .retention-options{display:grid;gap:7px}.retention-options label{padding:11px;border:1px solid var(--ui-line);border-radius:var(--ui-radius-small);display:grid;grid-template-columns:16px 1fr;gap:9px;align-items:start;cursor:pointer}.retention-options label.selected{border-color:var(--ui-ink);background:var(--ui-surface-subtle)}.retention-options input{width:15px;height:15px;margin:2px 0 0;accent-color:var(--ui-ink)}.retention-options span{display:grid;gap:3px}.retention-options strong{font-size:12px}.retention-options small{color:var(--ui-ink-muted);font-size:11px;line-height:1.5}
 .privacy-check{margin-top:22px;display:grid;grid-template-columns:17px 1fr;gap:9px;color:var(--ui-ink-muted);font-size:12px;line-height:1.5;cursor:pointer}.privacy-check input{width:16px;height:16px;margin:1px 0;accent-color:var(--ui-ink)}
 .consent-meta{margin:8px 0 0 26px;color:var(--ui-ink-faint);font-size:11px;line-height:1.5;overflow-wrap:anywhere}.consent-action{margin:8px 0 0 26px;padding:0;border:0;background:transparent;color:var(--ui-ink-muted);font:inherit;font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}.consent-action:hover{color:var(--ui-ink)}
+.video-preflight{margin-top:16px;padding:14px 16px;border:1px solid var(--ui-line);border-radius:var(--ui-radius-control);background:var(--ui-surface-subtle);color:var(--ui-ink-muted);font-size:12px;line-height:1.55}.video-preflight__head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;color:var(--ui-ink)}.video-preflight__head span{font-size:11px;color:var(--ui-ink-faint);font-variant-numeric:tabular-nums}.video-preflight p{margin:7px 0 0}.video-trim{margin-top:12px;padding-top:12px;border-top:1px solid var(--ui-line);color:var(--ui-ink)}.video-trim>p{color:var(--ui-ink-muted)}.video-trim__fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.video-trim__fields label{display:grid;gap:5px;color:var(--ui-ink-muted);font-size:11px}.video-trim__fields input{width:100%;min-height:34px;padding:0 9px;border:1px solid var(--ui-line-strong);border-radius:8px;background:var(--ui-surface);color:var(--ui-ink);font:inherit}.video-trim__status{font-variant-numeric:tabular-nums}.video-trim__status.invalid{color:var(--ui-danger)}
 .primary-action{width:100%;min-height:48px;margin-top:16px;border:0;border-radius:var(--ui-radius-control);background:var(--ui-brand);color:var(--ui-brand-ink);display:flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-weight:700;cursor:pointer}.primary-action:hover:not(:disabled){background:var(--ui-brand-hover)}.primary-action:disabled{cursor:not-allowed;opacity:.45}.primary-action svg{width:17px;animation:spin 1s linear infinite}.cancel-action{width:100%;margin-top:8px}.form-error,.form-notice{margin:12px 0 0;font-size:12px;line-height:1.5}.form-error{color:var(--ui-danger)}.form-notice{color:var(--ui-success)}
 .shooting-guide{margin-top:28px;padding-top:22px;border-top:1px solid var(--ui-line)}.shooting-guide h3,.sequence-block h3{margin:0;font-size:13px}.shooting-guide ul{margin:13px 0 0;padding:0;list-style:none;display:grid;gap:12px}.shooting-guide li{display:grid;grid-template-columns:22px 1fr;gap:8px;color:var(--ui-ink-muted);font-size:12px;line-height:1.5}.shooting-guide li span{width:21px;height:21px;border-radius:7px;background:var(--ui-surface-subtle);color:var(--ui-ink);display:grid;place-items:center;font-weight:600}
 .result-report{padding:24px;border-top:1px solid var(--ui-line)}.result-summary{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.result-summary p{margin:5px 0 0;color:var(--ui-ink-muted);font-size:13px}.result-summary>strong{font-size:26px;font-variant-numeric:tabular-nums}.sequence-block{margin-top:25px}.hold-sequence{margin-top:11px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.hold-sequence span{width:32px;height:32px;border-radius:9px;background:var(--ui-brand);color:var(--ui-brand-ink);display:grid;place-items:center;font-weight:700}.hold-sequence svg{width:14px;color:var(--ui-ink-faint)}.empty-result{color:var(--ui-ink-muted);font-size:13px}

@@ -1,5 +1,6 @@
 import { computed, reactive } from 'vue'
 import api from '../services/apiClient.js'
+import { isHeifPhoto } from '../utils/mediaNormalize.js'
 
 const root = '/api/photo-routes/workflow'
 function pendingStore(user, value, write = false) {
@@ -30,7 +31,7 @@ export function createPhotoWorkflow(user) {
     if (value && state.session?.id===value.id && value.version<state.session.version) return
     state.session=value
   }
-  function preview(file) { if(state.preview) URL.revokeObjectURL(state.preview); state.preview=file?URL.createObjectURL(file):'' }
+  function preview(file) { if(state.preview) URL.revokeObjectURL(state.preview); state.preview=file && !isHeifPhoto(file)?URL.createObjectURL(file):'' }
   async function refresh() {
     if(reading || state.uploading || state.saving || state.interacting || disposed) return
     reading=true
@@ -80,7 +81,7 @@ export function createPhotoWorkflow(user) {
     state.uploading=true; state.uploadProgress=0; state.error=''; generation++
     try {
       const body=new FormData(); body.append('photo',state.pending.file); body.append('request_id',state.pending.id)
-      apply((await api.post(root+'/upload',body,{timeout:60000,onUploadProgress:event=>{if(event.total)state.uploadProgress=Math.round(event.loaded/event.total*100)}})).data)
+      apply((await api.post(root+'/upload',body,{timeout:120000,onUploadProgress:event=>{if(event.total)state.uploadProgress=Math.round(event.loaded/event.total*100)}})).data)
       state.pending=null; preview(null); await pendingWrite.catch(()=>{}); try { await pendingStore(user,null,true) } catch { /* Server already owns the uploaded photo. */ }
     } catch(error) { state.error=typeof error.response?.data?.detail==='string'?error.response.data.detail:'上传未完成，照片已保留，请重试'; }
     finally { state.uploading=false }

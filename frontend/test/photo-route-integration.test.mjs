@@ -76,10 +76,27 @@ test('线路记录使用完整线路列表并支持多照片和多视频', async
   assert.match(page, /route\.updated_at \|\| route\.created_at/)
   assert.match(page, /class="record-media__grid"/)
   assert.match(page, /multiple accept="video\/mp4,video\/quicktime,video\/webm"/)
+  assert.match(page, /image\/heic,image\/heif/)
+  assert.match(page, /系统会转换 HEIC\/HEIF/)
   assert.match(page, /照片最多 8 张，视频最多 2 个/)
+  assert.match(page, /此资料入口暂不自动转码/)
+  assert.match(page, /@error="mediaPlaybackErrors\[item\.id\] = true"/)
   assert.match(page, /grid-template-columns:118px minmax\(0,1fr\) 18px/)
   assert.match(page, /stroke:#fff;stroke-width:1\.4/)
   assert.match(page, /drop-shadow\(0 0 4px rgba\(255,255,255,\.8\)\)/)
+})
+
+test('手机 HEIC 由服务器处理且上传请求留出转换时间', async () => {
+  const [page, service, workflow] = await Promise.all([
+    source('components/PhotoRouteWorkflowPage.vue'),
+    source('services/photoRouteService.js'),
+    source('composables/usePhotoWorkflow.js'),
+  ])
+  assert.match(page, /手机里的原照片不会修改/)
+  assert.match(page, /JPG、PNG、WebP 或 HEIC/)
+  assert.match(service, /boards\/upload', body, \{ timeout: 120000 \}/)
+  assert.match(service, /\/complete`, null, \{ timeout: 120000 \}/)
+  assert.match(workflow, /root\+'\/upload',body,\{timeout:120000/)
 })
 
 test('抱石线路使用黄色设计变量与中性技术岩板，不再使用木纹或青绿色基调', async () => {

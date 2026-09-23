@@ -1,10 +1,13 @@
 import tempfile
 import unittest
 import uuid
+import io
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from PIL import Image
+from pillow_heif import register_heif_opener
 from core.photo_route_v2 import PhotoRouteV2Store
 from core.photo_route_workflow import PhotoWorkflow, Change, Notes
 from core.photo_route_analysis import analyze_board_photo
@@ -34,6 +37,15 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:self.flow.upload('owner','another','sample.jpg',data)
         self.assertEqual(error.exception.status_code,409)
         with self.assertRaises(HTTPException):self.flow.get(sid,'other')
+    def test_heic_upload_is_converted_without_browser_decoder(self):
+        register_heif_opener()
+        encoded=io.BytesIO()
+        Image.open(io.BytesIO(photo_bytes())).save(encoded,format='HEIF')
+        session=self.flow.upload('owner',uuid.uuid4().hex,'phone.heic',encoded.getvalue(),'image/heic')
+        asset=session['board']['original_asset']
+        self.assertTrue(asset['filename'].endswith('.jpg'))
+        with Image.open(self.store.asset_path(asset['filename'])) as stored:
+            self.assertEqual(stored.format,'JPEG')
     def test_palette_survives_reopen_and_selected_color_is_single(self):
         value=self.palette();self.assertEqual(value['status'],'awaiting_color');self.assertIn('黄色',value['colors'])
         restored=PhotoWorkflow(self.store,start=False);self.assertEqual(restored.current('owner')['id'],value['id'])
