@@ -9,8 +9,10 @@ RELEASE_TAG="${1:-}"
 CLIMBING_MODEL_CHECKPOINT="/var/lib/ai-climbing/models/climbing/verified-model_final.pth"
 CLIMBING_MODEL_SHA256="995960a74819e21bd66d7be56ae6e1c8124ec0a06fece4fae13812887d86ebea"
 DETECTRON2_WHEEL_CACHE="/var/cache/ai-climbing/detectron2"
-DETECTRON2_WHEEL="${DETECTRON2_WHEEL_CACHE}/detectron2-py312-torch2.8-cpu.whl"
+DETECTRON2_WHEEL="${DETECTRON2_WHEEL_CACHE}/detectron2-0.6-cp312-cp312-linux_x86_64.whl"
 DETECTRON2_WHEEL_SHA256="${DETECTRON2_WHEEL}.sha256"
+DETECTRON2_LEGACY_WHEEL="${DETECTRON2_WHEEL_CACHE}/detectron2-py312-torch2.8-cpu.whl"
+DETECTRON2_LEGACY_WHEEL_SHA256="${DETECTRON2_LEGACY_WHEEL}.sha256"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Release deployment must run as root." >&2
@@ -118,6 +120,12 @@ grep -vE '/detectron2-[^/]+\.tar\.gz$' \
   "${building_release}/backend/requirements-production.lock" \
   > "${requirements_without_detectron2}"
 "${building_release}/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "${requirements_without_detectron2}"
+if [[ ! -f "${DETECTRON2_WHEEL}" && -f "${DETECTRON2_LEGACY_WHEEL}" &&
+  -f "${DETECTRON2_LEGACY_WHEEL_SHA256}" ]] &&
+  sha256sum --check --status "${DETECTRON2_LEGACY_WHEEL_SHA256}"; then
+  install -m 0644 "${DETECTRON2_LEGACY_WHEEL}" "${DETECTRON2_WHEEL}"
+  printf '%s  %s\n' "$(sha256sum "${DETECTRON2_WHEEL}" | awk '{print $1}')" "${DETECTRON2_WHEEL}" > "${DETECTRON2_WHEEL_SHA256}"
+fi
 if [[ -f "${DETECTRON2_WHEEL}" && -f "${DETECTRON2_WHEEL_SHA256}" ]] &&
   sha256sum --check --status "${DETECTRON2_WHEEL_SHA256}"; then
   echo "Using cached detectron2 wheel: ${DETECTRON2_WHEEL}"
@@ -133,6 +141,10 @@ else
   detectron2_wheel_candidate="$(find "${detectron2_wheel_build}" -maxdepth 1 -type f -name 'detectron2-*.whl' -print -quit)"
   [[ -n "${detectron2_wheel_candidate}" && -f "${detectron2_wheel_candidate}" ]] || {
     echo "detectron2 wheel build produced no wheel." >&2
+    exit 1
+  }
+  [[ "$(basename "${detectron2_wheel_candidate}")" == "$(basename "${DETECTRON2_WHEEL}")" ]] || {
+    echo "detectron2 wheel filename does not match the pinned production runtime." >&2
     exit 1
   }
   install -m 0644 "${detectron2_wheel_candidate}" "${DETECTRON2_WHEEL}"
