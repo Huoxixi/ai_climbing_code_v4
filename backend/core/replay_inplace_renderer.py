@@ -32,7 +32,8 @@ def ease(value):
 @lru_cache(maxsize=12)
 def font(size, weight=400):
     candidates = [os.environ.get("REPLAY_NOTO_FONT"), "C:/Windows/Fonts/NotoSansSC-VF.ttf",
-                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"]
+                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                  str(Path(__file__).resolve().parents[1] / "vendor/NotoSansSC-VF.ttf")]
     for path in candidates:
         if path and Path(path).is_file():
             value = ImageFont.truetype(path, size)

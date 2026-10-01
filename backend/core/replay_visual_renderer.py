@@ -290,11 +290,12 @@ def _font(size: int):
     paths = (os.environ.get("REPLAY_FONT_PATH"), "C:/Windows/Fonts/msyh.ttc",
              "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
              "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+             str(Path(__file__).resolve().parents[1] / "vendor/NotoSansSC-VF.ttf"),
              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
     for path in paths:
         if path and Path(path).is_file():
             try:
-                return ImageFont.truetype(path, size), "CJK" if any(s in path.lower() for s in ("msyh", "cjk", "wqy")) else "latin"
+                return ImageFont.truetype(path, size), "CJK" if any(s in path.lower() for s in ("msyh", "cjk", "wqy", "notosanssc")) else "latin"
             except OSError:
                 pass
     return ImageFont.load_default(), "latin"

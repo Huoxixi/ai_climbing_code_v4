@@ -423,6 +423,7 @@ _CJK_FONT_CANDIDATES = (
     Path("C:/Windows/Fonts/simhei.ttf"),
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
     Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+    Path(__file__).resolve().parents[1] / "vendor/NotoSansSC-VF.ttf",
 )
 _CJK_FONT_PATH = next((path for path in _CJK_FONT_CANDIDATES if path.is_file()), None)
 _CJK_FONT_CACHE: dict[int, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}

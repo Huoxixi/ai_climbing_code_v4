@@ -34,6 +34,7 @@ def font(size, bold=False):
     names = ([os.environ.get("REPLAY_CJK_FONT_BOLD")] if bold else [os.environ.get("REPLAY_CJK_FONT")])
     names += (["C:/Windows/Fonts/msyhbd.ttc"] if bold else ["C:/Windows/Fonts/msyh.ttc"])
     names += ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"]
+    names += [str(Path(__file__).resolve().parents[1] / "vendor/NotoSansSC-VF.ttf")]
     for name in names:
         if name and Path(name).is_file():
             return ImageFont.truetype(name, size)
