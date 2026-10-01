@@ -28,9 +28,20 @@ for tag in "${tags[@]:3}"; do
   release="${releases}/${tag}"
   [[ ! -L "${release}" && "$(realpath -e "${release}")" == "${release}" && -f "${release}/RELEASE_SHA" ]] || { echo "Invalid release: ${tag}; stopped." >&2; exit 1; }
   [[ -L "${release}/backend/data" && "$(readlink -f "${release}/backend/data")" == /var/lib/ai-climbing/data ]] || { echo "Data boundary cannot be verified: ${tag}; stopped." >&2; exit 1; }
-  if find "${release}" -xdev \( -type d \( -name .git -o -name .local -o -name .private \) -o -type f \( -name .env -o -name '*.sqlite*' -o -name '*.db' -o -name '*.pem' -o -name '*.key' \) \) -print -quit | grep -q .; then
+  if find "${release}" -xdev \( -type d \( -name .git -o -name .local -o -name .private \) -o -type f \( -name .env -o -name '*.sqlite*' -o -name '*.db' -o -name '*.key' \) \) -print -quit | grep -q .; then
     echo "Protected material inside ${tag}; stopped." >&2; exit 1
   fi
+  # Public CA bundles from installed certifi are rebuildable dependencies.
+  # Other PEM files, including keys or unknown bundles, remain protected.
+  while IFS= read -r -d '' pem; do
+    case "${pem#"${release}/"}" in
+      backend/.venv/lib/python*/site-packages/certifi/cacert.pem|backend/.venv/lib/python*/site-packages/pip/_vendor/certifi/cacert.pem)
+        command -v openssl >/dev/null && openssl x509 -in "${pem}" -noout >/dev/null 2>&1 &&
+          ! grep -q 'PRIVATE KEY' "${pem}" || { echo "Unverified certificate bundle inside ${tag}; stopped." >&2; exit 1; }
+        ;;
+      *) echo "Unknown PEM material inside ${tag}; stopped." >&2; exit 1 ;;
+    esac
+  done < <(find "${release}" -xdev -type f -name '*.pem' -print0)
   printf 'REMOVE_CANDIDATE=%s SHA=%s\n' "${tag}" "$(cat "${release}/RELEASE_SHA")"
   du -xsh "${release}"
 done
