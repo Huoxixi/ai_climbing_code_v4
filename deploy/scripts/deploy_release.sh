@@ -170,30 +170,7 @@ find "${building_release}/frontend/dist" -type f -exec chmod 0644 {} +
 
 cd "${building_release}/backend"
 LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
-  "${building_release}/backend/.venv/bin/python" -m unittest \
-  test_ai_lab_experiments \
-  test_hold_image_processing \
-  test_local_only_mode \
-  test_photo_route_benchmark \
-  test_photo_route_drafts \
-  test_photo_route_processing \
-  test_photo_route_v2 \
-  test_photo_route_evaluation \
-  test_photo_route_experiments \
-  test_photo_route_instance_masks \
-  test_hole_grid_topology \
-  test_climb_replay \
-  test_media_normalization \
-  test_photo_wall_processing \
-  test_pilot_access \
-  test_member_accounts \
-  test_release_hardening \
-  test_release_readiness \
-  test_standard_board \
-  test_standard_board_activity \
-  test_standard_board_difficulty \
-  test_standard_board_local_first \
-  test_standard_board_tags
+  "${building_release}/backend/.venv/bin/python" scripts/run_release_tests.py
 
 APP_ENV=production LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false ENABLE_CLIMB_REPLAY=true RELEASE_SHA="${release_sha}" \
   "${building_release}/backend/.venv/bin/python" -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1 \

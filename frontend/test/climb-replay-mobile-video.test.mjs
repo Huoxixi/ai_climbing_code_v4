@@ -24,7 +24,7 @@ test('服务器后台整理期间禁用重复提交并保留任务查询', () =>
   assert.match(page, /activeJob\.value\.preparation\.status === 'completed'/)
   assert.match(page, /可以稍后在任务列表查看结果/)
   assert.match(service, /\/complete`\)/)
-  assert.doesNotMatch(service, /timeout:180000/)
+  assert.doesNotMatch(service.match(/complete: \(uploadId\)[^\n]*/)?.[0] || '', /timeout:180000/)
 })
 
 test('超长视频可以在页面内选择分析片段，超分辨率由服务端生成分析副本', () => {

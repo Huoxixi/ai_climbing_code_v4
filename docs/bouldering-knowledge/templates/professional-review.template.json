@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "REPLACE-WITH-ACTUAL-REVIEW-ID",
+  "kind": "professional_review",
+  "status": "pending",
+  "claim_id": "",
+  "claim_version": 1,
+  "claim_sha256": "",
+  "scope": {"population": "adults", "activity": "indoor_bouldering", "camera": "fixed", "movement": "slow_continuous"},
+  "revoked": false,
+  "revoked_at": null,
+  "reviewed_at": "",
+  "reviewers": [],
+  "evidence_links": [],
+  "evidence_sha256": "",
+  "evidence_matches_claim": false,
+  "adult_transfer_reviewed": false,
+  "decision_rationale": "",
+  "unresolved_disagreements": [],
+  "record_notice": "模板不是审核。审核人须逐项核对主张、适用条件、来源迁移、固定建议与不能推出的结论，记录真实审核后才可迁入 reviews。"
+}

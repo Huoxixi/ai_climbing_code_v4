@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import { parse, compileTemplate } from 'vue/compiler-sfc'
+
+const source = readFileSync(new URL('../src/components/ClimbReplayPage.vue', import.meta.url), 'utf8')
+const { descriptor, errors } = parse(source)
+const root = descriptor.template.ast
+const elements = []
+function visit(node, ancestors = []) {
+  if (node.type === 1) elements.push({ node, ancestors })
+  for (const child of node.children || []) visit(child, node.type === 1 ? [...ancestors, node] : ancestors)
+}
+visit(root)
+const attribute = (node, name) => node.props.find(prop => prop.type === 6 && prop.name === name)?.value?.content
+const directive = (node, name, arg) => node.props.find(prop => prop.type === 7 && prop.name === name && (!arg || prop.arg?.content === arg))?.exp?.content
+const hasClass = (node, name) => (attribute(node, 'class') || '').split(/\s+/).includes(name)
+const findClass = name => elements.find(({ node }) => hasClass(node, name))
+
+test('精简后的复盘模板可以编译，低频内容使用默认关闭的原生折叠', () => {
+  assert.deepEqual(errors, [])
+  assert.deepEqual(compileTemplate({ source: descriptor.template.content, filename: 'ClimbReplayPage.vue', id: 'replay-test' }).errors, [])
+  for (const name of ['result-details', 'media-retention', 'analysis-evidence', 'shooting-guide']) {
+    const { node } = findClass(name)
+    assert.equal(node.tag, 'details', name)
+    assert.equal(node.props.some(prop => (prop.type === 6 && prop.name === 'open') || (prop.type === 7 && prop.arg?.content === 'open')), false, name)
+    assert.equal(node.children.find(child => child.type === 1)?.tag, 'summary', name)
+  }
+})
+
+test('视频、当前动作、动作顺序、状态和授权不会被折叠隐藏', () => {
+  for (const name of ['video-stage', 'action-focus', 'event-timeline', 'analysis-state', 'primary-action', 'retention-options']) {
+    const match = findClass(name)
+    assert.ok(match, name)
+    assert.equal(match.ancestors.some(node => node.tag === 'details'), false, name)
+  }
+  const consent = elements.find(({ node }) => directive(node, 'model') === 'sampleConsent')
+  assert.ok(consent)
+  assert.equal(consent.ancestors.some(node => node.tag === 'details'), false)
+})
+
+test('统一复盘保留文件管理，旧手动动作编辑退出主流程', () => {
+  const expected = {
+    'deleteSourceVideo': 'media-retention',
+    'deleteOverlayVideo': 'media-retention',
+    'deleteEntireReplay': 'media-retention',
+  }
+  for (const [handler, parent] of Object.entries(expected)) {
+    const match = elements.find(({ node }) => directive(node, 'on', 'click') === handler)
+    assert.ok(match, handler)
+    assert.ok(match.ancestors.some(node => hasClass(node, parent)), handler)
+  }
+  const exportLink = findClass('export-action')
+  assert.equal(exportLink.ancestors.some(node => node.tag === 'details'), false)
+  assert.equal(findClass('segment-review'), undefined)
+  assert.match(source, /<UnifiedReplayPlayer/)
+})
+
+test('历史在空闲入口可见，查看某次复盘时收起且切换记录重置折叠状态', () => {
+  const recent = findClass('recent-section').node
+  assert.equal(recent.tag, 'details')
+  assert.equal(directive(recent, 'bind', 'open'), '!activeJob && !selectedFile')
+  assert.equal(directive(findClass('replay-detail-sections').node, 'bind', 'key'), 'activeJob.id')
+  assert.equal(directive(findClass('result-details').node, 'bind', 'key'), 'activeJob.id')
+  assert.match(source, /confirmedSegmentCount = computed/)
+  assert.match(source, /segment\.source === 'user_confirmed'/)
+})
+
+test('详细计量不重复常显，折叠标题支持键盘焦点与移动端换行', () => {
+  assert.equal(directive(findClass('run-summary').node, 'if'), 'isBusy && analysisEvidence')
+  assert.match(source, /:is\(button,input,select,a,summary\):focus-visible/)
+  assert.match(source, /\.disclosure-meta\{[^}]*overflow-wrap:anywhere/)
+  assert.match(source, /@media\(max-width:520px\).*\.replay-disclosure>summary/)
+  assert.match(source, /prefers-reduced-motion:reduce.*\.disclosure-chevron\{transition:none/)
+  assert.equal(elements.filter(({ node, ancestors }) => node.tag === 'details' && hasClass(node, 'replay-disclosure') && ancestors.some(parent => hasClass(parent, 'replay-disclosure'))).length, 0)
+})

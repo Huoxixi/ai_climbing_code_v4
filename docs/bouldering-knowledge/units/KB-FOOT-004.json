@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-004",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "同一点换脚与脚部匹配",
+  "aliases": [
+    "换脚",
+    "同点换脚",
+    "Foot switch",
+    "Foot swap",
+    "脚部匹配"
+  ],
+  "questions": [
+    "换脚和两只脚同时踩一个点有什么区别？",
+    "换脚后脚掉了，应该先看哪一段？"
+  ],
+  "tags": [
+    "交换脚",
+    "脚点空间",
+    "滚动换脚",
+    "接触顺序"
+  ],
+  "action_codes": [
+    "FOOT_SWAP",
+    "FOOT_MATCH"
+  ],
+  "stage_tags": [
+    "准备",
+    "接触建立",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-001",
+    "KB-FOOT-002"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "已确认两只脚使用同一物理脚点。",
+      "讨论接触交替而非两脚同时跳到不同脚点。"
+    ],
+    "exclusions": [
+      "无法确认是不是同一脚点时仅记候选关系。",
+      "交接瞬间未覆盖时不判定具体换脚形式。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "Foot switch 是同一脚点上两只脚的接替。原教学页介绍：空间够时先给第二只脚留出位置；小点面可让旧脚移出与新脚进入相配合，形成滚动交替。这是两种教学形式，不是所有任务唯一可用的换脚方法。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-SWITCH-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "本库把一段内的两脚共存接触与接管顺序分别记录；短暂共存也可能处在换脚过程中。",
+      "basis": "product_rule",
+      "evidence_ids": []
+    },
+    {
+      "id": "C3",
+      "statement": "可把旧脚位置、新脚进入和换后下一步作为复盘顺序，比较阻碍发生在进入还是交接之后。",
+      "basis": "teaching_hypothesis",
+      "evidence_ids": []
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "同一脚点、两只鞋与交替瞬间。",
+      "换脚后下一动作的片段。"
+    ],
+    "events": [
+      "记录新脚首次接触和旧脚离开的区间；无法分辨先后时记重叠/未知。",
+      "分别记新脚是否保留接触、以及之后是否继续任务。"
+    ],
+    "unknowns": [
+      "抽样间隔中的跳换或短暂双脚离点。",
+      "离点是计划释放还是意外丢失。"
+    ],
+    "cannot_infer": [
+      "不能把跳换统一判为错误。",
+      "换脚后结束尝试不证明问题必然来自脚序。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先定位新脚进入、两脚交接或换后衔接中的可见差异，再核对点面空间和下一步；不根据结果直接选定原因。",
+    "conditions": [
+      "需要两只脚与同一岩点的身份可靠。",
+      "观察候选交接可回看原视频；采样不足不补造中间事件。"
+    ],
+    "compare": [
+      "交接顺序、接触位置与下一步任务。",
+      "调整次数变化同时结合是否完成同一后续动作。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "右脚进入同点，左脚离开，右脚接触保留并出左手。",
+      "allowed": "可按接触关系描述同点换脚及下一步。",
+      "disallowed": "换脚一定节省了多少体力。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "前一采样帧左脚在点，后一帧右脚在点。",
+      "allowed": "可见前后接管，具体交接形式尚未知。",
+      "disallowed": "确认发生了滚动换脚且没有腾空。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "需要专项高时间分辨率片段验证接触交接。",
+    "现有程序关系代码与中文总表 R03/R04 类目录代码仍应以映射表衔接。"
+  ]
+}

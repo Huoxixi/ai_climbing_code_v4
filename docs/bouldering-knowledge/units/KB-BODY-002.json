@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-BODY-002",
+  "version": 1,
+  "batch_id": "B003",
+  "title": "外侧旗式：自由腿、贴墙与下一步",
+  "aliases": ["外侧旗式", "侧旗", "旗式", "Flagging", "Outside flag", "Flag out"],
+  "questions": ["旗式脚一定要悬空吗？", "一条腿伸出去就是正确旗式吗？", "脚伸向右边就一定要出左手吗？"],
+  "tags": ["自由腿", "旗式脚贴墙", "平衡配置", "支撑脚"],
+  "action_codes": [],
+  "stage_tags": ["准备", "移动", "稳定/衔接"],
+  "related_units": ["KB-BODY-003", "KB-DYN-001", "KB-FOOT-003"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["解释一腿使用脚点、另一腿向外侧伸出的旗式配置。", "需要区分旗式腿的位置与该脚是否贴墙、接点或完全离墙。"],
+    "exclusions": ["伸腿可能是移向下一脚点或其他动作，不能仅凭静态形状命名。", "不把未踩指定点理解为该腿绝对无接触或零受力。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Momentum 的 Outside flag 描述一腿向中线外伸出、另一脚使用脚点；伸出脚可贴墙而非踩指定点。因此其“自由腿”不必始终悬空。", "basis": "source_summary", "evidence_ids": ["E-MOM-OUTSIDEFLAG-01"]},
+    {"id": "C2", "statement": "REI 将旗式作为用肢体位置调节平衡的手段，目的包括减少身体向外摆离；这解释了教学目的，不保证每次旗式都达到该效果。", "basis": "source_summary", "evidence_ids": ["E-REI-FLAG-01"]},
+    {"id": "C3", "statement": "本库将自由腿路径、旗式脚接触、留手及下一步分别记录，不采用固定“旗右必出左”的规则。", "basis": "product_rule", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["躯干、使用脚点的脚、伸出腿及脚与墙面的局部关系。", "伸腿前后和下一次出手/回脚的连续片段。"],
+    "events": ["记录自由腿向哪侧经过，并标明脚是贴墙、在点、离墙还是看不清。", "记录留手、出手和旗式腿返回或转为下一脚的顺序。"],
+    "unknowns": ["脚贴墙但接触力不可测时的实际平衡贡献。", "伸腿是预定配置、暂时寻找脚点还是其他意图。"],
+    "cannot_infer": ["伸得远或腿更直不等于平衡更好。", "旗式后仍摆动不能独自证明旗式错误或核心不足。", "未踩岩点不能自动写成只有两点接触。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先核对伸出脚是否有墙面接触，再查看伸腿前后实际出手与下一脚；比较配置是否服务同一任务，而非腿的造型。",
+    "conditions": ["保留原手脚点和目标，不能把不同任务下的旗式幅度直接排优劣。", "接触不可见则不判断支撑数量或给强制伸腿口令。"],
+    "compare": ["旗式脚的接触状态与伸出方向。", "出手后能否继续已定义的下一步，以及何处发生可见变化。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "左脚在点，右腿向右侧伸出且鞋侧贴墙，右手随后去目标。", "allowed": "可记录外侧伸腿候选与贴墙接触；出右手的事实另记。", "disallowed": "旗式腿必须悬空，而且伸右腿只能出左手。"},
+    {"kind": "constructed", "scenario": "单帧右腿伸直，下一帧缺失，目标脚点也不在画面内。", "allowed": "仅确认右腿可见位置，旗式意图与下一步未知。", "disallowed": "已完成外侧旗式并有效抵消旋转。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["Outside flag 与不同教材的 standard flag、前旗式等叫法不强行统一；目录 P06 不进入业务动作代码。", "贴墙旗式与动态过渡的授权视频尚缺，未验证平衡或动作效果。"]
+}

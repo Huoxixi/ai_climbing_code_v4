@@ -67,6 +67,7 @@ pillow-heif==1.7.0
 portalocker==3.2.0
 protobuf==6.32.1
 propcache==0.5.2
+psutil==7.0.0
 pycocotools==2.0.10
 pycparser==3.0
 pydantic==2.13.1

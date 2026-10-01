@@ -183,6 +183,7 @@ import { photoSampleFile } from '../utils/photoSample'
 import { pickPhotoObject } from '../utils/photoHitTest.js'
 import { photoObjectLabel } from '../utils/photoObjectLabel.js'
 import { isPhotoFlowScreen, parsePhotoWorkflowHash, photoWorkflowHash, photoWorkflowScreen } from '../utils/photoWorkflowRoute.js'
+import { ROUTE_COLOR_NAMES } from '../constants/routeColors.js'
 import one from '../assets/boulder-samples/boulder-1.jpg'
 import two from '../assets/boulder-samples/boulder-2.jpg'
 const workflow=inject('photoWorkflow'), access=inject('pilotAccess'), state=workflow.state
@@ -192,7 +193,7 @@ const session=computed(()=>state.session), board=computed(()=>session.value?.boa
 const editable=computed(()=>true)
 const samples=[{name:'抱石路线1',url:one},{name:'抱石路线2',url:two}]
 const previewColor=ref(''), previewObject=ref(''), assignedColor=ref('')
-const assignableColors=['红色','橙色','黄色','绿色','蓝色','紫色','粉色','黑色','白色','灰色']
+const assignableColors=ROUTE_COLOR_NAMES
 const colorGroups=computed(()=>session.value?.color_groups || [])
 const previewObjects=computed(()=>board.value?.objects.filter(obj=>obj.color_group===previewColor.value)||[])
 const selectedPreviewObject=computed(()=>board.value?.objects.find(obj=>obj.id===previewObject.value))

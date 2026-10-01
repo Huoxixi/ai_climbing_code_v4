@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-HAND-002",
+  "version": 1,
+  "batch_id": "B002",
+  "title": "双手同点：匹配、换手与下一步",
+  "aliases": ["双手匹配", "并手", "双手同点", "Hand match", "Matching hands", "换手", "Hand swap"],
+  "questions": ["并手和换手是一回事吗？", "两只手先后抓过同一点，算双手匹配吗？", "并手后为什么还要调整第一只手？"],
+  "tags": ["手点空间", "接管顺序", "双手接触", "匹配"],
+  "action_codes": ["HAND_MATCH", "HAND_SWAP"],
+  "stage_tags": ["准备", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-HAND-003", "KB-HAND-006", "KB-FOOT-004"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["两手身份与同一物理岩点可以核对。", "需要解释两手会合、接替或会合后的出手安排。"],
+    "exclusions": ["相邻同色点不是同一岩点，不能仅按颜色判匹配。", "只有交接前后两帧时，不能确认中间是否存在双手共存。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Hand match 指两只手在同一手点会合。Momentum 将它与后续换手联系起来，并以小点面为例讨论给第二只手留空间、再让它接管后出下一手。", "basis": "source_summary", "evidence_ids": ["E-MOM-HANDMATCH-01"]},
+    {"id": "C2", "statement": "本库把两手共存接触与同点接管顺序分别记录：一次换手过程可能有短暂匹配，也可能只能确认前后接替。匹配不是全段动作结果。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C3", "statement": "比较下一手受阻时，可以先检查第二手进入空间、旧手退出以及接替后的实际下一步；该顺序是待验证的复盘方法。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["同一岩点上两只手从进入到离开的连续片段。", "会合之后的下一只手或脚，及足以辨别接触的时间分辨率。"],
+    "events": ["记第二手首次接触、旧手是否仍接触，以及共存区间是否可见。", "再记哪手先离开、是否重新抓持及下一目标。"],
+    "unknowns": ["遮挡期间两手是否短暂共存或一起离点。", "两手各承担多少负荷，是否主观用于休息。"],
+    "cannot_infer": ["双手同点不等于两臂平均用力或已经稳定。", "出现匹配不能证明它多余，也不能证明所有后续失败都由并手造成。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "将两手进入、共存、接管和下一步排成事件顺序；先确认是不是同一点与同一段，再讨论空间或手序差异。",
+    "conditions": ["共存与先后必须有连续证据，不能把抽样帧间隔当作接触时长。", "比较手序时还需记录脚位和下一目标，不能只数并手次数。"],
+    "compare": ["旧手是否给新手留出了可见进入空间。", "接管后实际由哪只手继续，是否完成同一后续任务。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "左手在 A，右手进入 A；两手共存可见，随后左手去 B。", "allowed": "可描述双手匹配及右手接管后的左手出手。", "disallowed": "并手使力量均分，必然比直接去 B 更省力。"},
+    {"kind": "constructed", "scenario": "前帧左手在 A，后帧右手在 A，交接瞬间未拍到。", "allowed": "可见前后由不同手接触 A，匹配是否发生未知。", "disallowed": "确认双手匹配持续了两帧之间的全部时间。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["HAND_SWAP 已在词典定义，但当前动作生成函数未完整实现换手关系及经验证的时间窗。", "HAND_MATCH 的接触候选仍需核对原始片段，不能自动提升为专业判定。", "需覆盖小点、短暂共存和遮挡交接的真实授权样本。"]
+}

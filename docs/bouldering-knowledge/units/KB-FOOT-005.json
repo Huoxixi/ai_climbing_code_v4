@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-005",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "Rock over：落脚后的身体转移",
+  "aliases": [
+    "Rock over",
+    "Rockover",
+    "翻重心",
+    "身体转移",
+    "重心转移"
+  ],
+  "questions": [
+    "脚已经踩到，为什么身体还是过不去？",
+    "落脚后髋部移动和出手先后怎么看？"
+  ],
+  "tags": [
+    "站上去",
+    "髋部移动",
+    "侧向转移"
+  ],
+  "action_codes": [],
+  "stage_tags": [
+    "准备",
+    "移动",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-001",
+    "KB-FOOT-002",
+    "KB-FOOT-006"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "已知目标脚点和下一手目标，讨论落脚后的身体转移。",
+      "能区分相机运动与身体在画面中的位置变化。"
+    ],
+    "exclusions": [
+      "连续协调动作不机械套用三个停顿。",
+      "脚点或身体被遮挡时不判定转移是否完成。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "Rock Over 教学页描述了把脚放在身体一侧、将身体移向该脚上方、再接下一目标的组织方式。落脚后的转移服务于后续够点，也可与高抬脚组合。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-ROCKOVER-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "借用这一教学结构，可以比较脚接触、可见身体位置变化与出手之间的关系。",
+      "basis": "conditional_transfer",
+      "evidence_ids": [
+        "E-MOM-ROCKOVER-01"
+      ],
+      "transfer_note": "原文使用重心教学语言；本项目只能记录二维可见位置，不能宣称测得真实重心或承重转移。"
+    },
+    {
+      "id": "C3",
+      "statement": "“身体过不去”先作为用户对结果的描述，候选原因需由具体接触、通道和目标信息区分。",
+      "basis": "product_rule",
+      "evidence_ids": []
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "目标脚点和落脚过程。",
+      "骨盆附近的可见位置、其他接触以及出手时段。"
+    ],
+    "events": [
+      "记录脚接触前后，身体投影如何变化及何时出手。",
+      "保留旧接触是否改变、是否回撤和下一目标是否触达。"
+    ],
+    "unknowns": [
+      "画面深度方向的身体位置。",
+      "其他支点承担的力和脚点真实负荷。"
+    ],
+    "cannot_infer": [
+      "身体中点不是人体三维重心。",
+      "未完成动作不能单独证明缺力量、柔韧性或必须更贴墙。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "回看落脚、身体移动和出手三个环节，列出最先出现的可见差异；缺乏接触或机位信息时先补信息。",
+    "conditions": [
+      "比较前确认相同目标与实际点面。",
+      "任何具体调整都需说明当时可用的其他支点和后续通道。"
+    ],
+    "compare": [
+      "身体投影变化与出手顺序。",
+      "是否继续完成同一下一步；动作更快本身不作为改进。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "已确认左脚落点后身体向左移动，再出右手。",
+      "allowed": "可描述该时序；可辅助理解 Rock over 候选。",
+      "disallowed": "已证实重心完全压到左脚。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "手机向左平移，人物位置也向左变化。",
+      "allowed": "先排除机位影响再比较身体位移。",
+      "disallowed": "重心转移幅度比上次更大。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "术语与既有动作代码的对应待核。",
+    "需要相同任务的授权视频和专业复核，验证观察是否有助于选择下一步。"
+  ]
+}

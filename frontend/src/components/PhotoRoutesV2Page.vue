@@ -230,6 +230,7 @@ import PhotoRouteBoardCanvas from './PhotoRouteBoardCanvas.vue'
 import PhotoReviewViewport from './PhotoReviewViewport.vue'
 import { photoRouteV2Service as service, photoV2AssetUrl } from '../services/photoRouteService.js'
 import { clone, createHistory, nearestPhotoHole, photoHoles, snapObjectToHole, translateObjects } from '../utils/photoBoard.js'
+import { routeColorHex } from '../constants/routeColors.js'
 
 const emit = defineEmits(['status'])
 const access = inject('pilotAccess')
@@ -282,7 +283,7 @@ function report() { emit('status', { count:board.value?.objects.length || 0, dir
 function formatDate(value) { return new Intl.DateTimeFormat('zh-CN', { dateStyle:'medium', timeStyle:'short' }).format(new Date(value)) }
 function boardStatus(value) { return ({ processing:'识别中', review:'待复核', ready:'可定线', failed:'失败' })[value] || value }
 function kindLabel(value) { return value === 'volume' ? '造型' : '岩点' }
-function swatch(color) { return ({ 黄色:'#d6a800',蓝色:'#2474a6',红色:'#b84336',绿色:'#3d8061',紫色:'#7b5aa6',橙色:'#c56b2b',粉色:'#bb6683',黑色:'#30343a',白色:'#eeeae1',灰色:'#7c858c' })[color] || '#7b7468' }
+function swatch(color) { return routeColorHex(color) }
 function routeDisplayColor(item) { const palette = ['#176b78','#b14e35','#6b5aa6','#93701c','#407752','#b04470']; return palette[routes.value.findIndex(route => route.id === item.id) % palette.length] }
 function contourPoints(object) { return object.contour.map(point => point.join(',')).join(' ') }
 function syncHistory() { canUndo.value = history.canUndo; canRedo.value = history.canRedo }

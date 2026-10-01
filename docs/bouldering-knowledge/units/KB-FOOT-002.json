@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-002",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "内外侧踩点与身体朝向",
+  "aliases": [
+    "内侧踩点",
+    "外侧踩点",
+    "Instep",
+    "Backstep",
+    "内外刃"
+  ],
+  "questions": [
+    "外侧踩点就是 Drop knee 吗？",
+    "内侧和外侧踩点怎么与转体配合？"
+  ],
+  "tags": [
+    "脚边",
+    "鞋边",
+    "侧身",
+    "转体"
+  ],
+  "action_codes": [],
+  "stage_tags": [
+    "准备",
+    "接触建立",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-001",
+    "KB-FOOT-005",
+    "KB-FOOT-006"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "能看清鞋的接触边缘，并分别记录身体朝向。",
+      "讨论原接触和下一目标之间的关系。"
+    ],
+    "exclusions": [
+      "仅有膝盖或髋部投影时不确认具体鞋边。",
+      "本条不将外侧踩点和 Drop knee 合为一个技术标签。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "Instep 教学页用鞋内侧边缘接触解释这一脚位，并将其与高抬脚等动作连接。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-INSTEP-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "Backstep 教学页用外侧边缘接触说明一种与侧身相关的脚位。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-BACKSTEP-01"
+      ]
+    },
+    {
+      "id": "C3",
+      "statement": "协会框架分别列出内外侧脚法、转动及身体转移，因此本库分别保存接触方式和身体朝向标签。",
+      "basis": "conditional_transfer",
+      "evidence_ids": [
+        "E-CEC-FOOT-01"
+      ],
+      "transfer_note": "目录可支持主题组织；分层标签是项目设计，不是该框架提供的识别算法。"
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "鞋与点面的接触细节。",
+      "同段胸廓/骨盆朝向以及下一个手脚目标。"
+    ],
+    "events": [
+      "先标内侧、外侧或无法分辨，再记可见转向的发生区间。",
+      "比较脚部是否离开、重放或保持接触；身体转向与出手先后未知时不强排顺序。"
+    ],
+    "unknowns": [
+      "遮挡时的鞋边与脚点关系。",
+      "二维投影中的朝向变化是否来自相机运动。"
+    ],
+    "cannot_infer": [
+      "外侧踩点不自动证明 Drop knee。",
+      "不可由脚位名称推出受力方向、关节负荷或最优手序。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "把脚位与身体朝向分两栏复查，结合下一目标理解这次组合；先确认接触细节，再附专业名称。",
+    "conditions": [
+      "机位变化要先排除；足部细节不足时只保留基础上点/换点名称。"
+    ],
+    "compare": [
+      "相同任务下，脚位、身体朝向与下一步的可见关系。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "鞋外侧接触清楚，随后上身转侧，但膝盖被挡住。",
+      "allowed": "可描述外侧踩点和可见转侧；Drop knee 尚不能确认。",
+      "disallowed": "这是标准 Drop knee。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "只有膝盖朝里的一张截图。",
+      "allowed": "鞋边和转动时序未知。",
+      "disallowed": "脚一定外侧发力。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "本批暂不写入专业脚位代码，需与既有中文总表核对映射。",
+    "不同教材对脚位名称的边界需要补充比较。"
+  ]
+}

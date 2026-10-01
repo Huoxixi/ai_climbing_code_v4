@@ -191,12 +191,30 @@ photo_route_jobs = PhotoRouteJobManager(photo_route_v2_store)
 app.include_router(create_photo_route_v2_router(photo_route_v2_store, photo_route_jobs))
 climb_replay_manager = None
 if CLIMB_REPLAY_ENABLED:
+    def replay_route_reference(route_id: str, owner: str) -> dict | None:
+        route = photo_route_v2_store.get_route(route_id, owner)
+        board = photo_route_v2_store.get_board(route["board_version_id"], owner)
+        member_ids = {member["object_id"] for member in route["members"]}
+        confirmed = [
+            {"object_id": item["id"], "contour": item["contour"]}
+            for item in board["objects"]
+            if item["id"] in member_ids and item["review_status"] == "confirmed"
+            and item["kind"] == "hold" and len(item["contour"]) >= 3
+        ]
+        if not confirmed:
+            return None
+        return {
+            "asset_path": str(photo_route_v2_store.asset_path(board["original_asset"]["filename"])),
+            "board_id": board["id"], "members": confirmed,
+        }
+
     climb_replay_store = ClimbReplayStore(PHOTO_ROUTE_DATA_ROOT / "climb_replay")
     climb_replay_manager = ClimbReplayManager(climb_replay_store, AliyunReplayAnalyzer())
     app.include_router(create_climb_replay_router(
         climb_replay_store,
         climb_replay_manager,
         route_lookup=photo_route_v2_store.get_route,
+        route_reference_lookup=replay_route_reference,
         test_video_path=(Path(CLIMB_REPLAY_TEST_VIDEO_PATH)
                          if CLIMB_REPLAY_TEST_VIDEO_PATH else None),
         test_video_source_url=CLIMB_REPLAY_TEST_VIDEO_SOURCE_URL or None,

@@ -279,6 +279,16 @@ def _mobilesam_masks(image: np.ndarray, deadline: float,
 def _climbing_model_masks(image: np.ndarray, deadline: float,
                           cancelled: Callable[[], bool], progress=lambda stage, value: None):
     """Return hold masks from the configured climbing-specific instance model."""
+    outputs, version = _climbing_model_masks_batch([image], deadline, cancelled, progress)
+    return outputs[0][0], outputs[0][1], version
+
+
+def _climbing_model_masks_batch(images: list[np.ndarray], deadline: float,
+                                cancelled: Callable[[], bool], progress=lambda stage, value: None,
+                                pack_masks: bool = False):
+    """Run multiple video frames with one model load and the same production profile."""
+    if not images:
+        raise ValueError("没有可识别的画面")
     config_value = os.getenv(
         "PHOTO_ROUTE_CLIMBING_MODEL_CONFIG", str(PACKAGED_CLIMBING_MODEL_CONFIG)
     )
@@ -322,21 +332,29 @@ def _climbing_model_masks(image: np.ndarray, deadline: float,
     del weights
     model.eval()
     transform = ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
-    resized = transform.get_transform(image).apply_image(image)
-    tensor = torch.as_tensor(np.ascontiguousarray(resized.transpose(2, 0, 1)).astype("float32"))
-    progress("识别岩点轮廓", 45)
-    with torch.inference_mode():
-        instances = model([{"image": tensor, "height": image.shape[0], "width": image.shape[1]}])[0]["instances"].to("cpu")
-    if cancelled():
-        raise InterruptedError("任务已取消")
-    if time.monotonic() > deadline:
-        raise TimeoutError("识别任务超过 180 秒")
-    classes = instances.pred_classes.numpy()
-    keep = classes == 0
-    masks = [(mask.astype(np.uint8) * 255) for mask in instances.pred_masks.numpy()[keep]]
-    scores = [float(value) for value in instances.scores.numpy()[keep]]
+    outputs = []
+    for index, image in enumerate(images):
+        if cancelled():
+            raise InterruptedError("任务已取消")
+        if time.monotonic() > deadline:
+            raise TimeoutError("识别任务超过 180 秒")
+        resized = transform.get_transform(image).apply_image(image)
+        tensor = torch.as_tensor(np.ascontiguousarray(resized.transpose(2, 0, 1)).astype("float32"))
+        progress("识别岩点轮廓", 45 + round(45 * index / len(images)))
+        with torch.inference_mode():
+            instances = model([{"image": tensor, "height": image.shape[0], "width": image.shape[1]}])[0]["instances"].to("cpu")
+        classes = instances.pred_classes.numpy()
+        keep = classes == 0
+        if pack_masks:
+            masks = [np.packbits(mask.astype(np.uint8), axis=1)
+                     for mask in instances.pred_masks.numpy()[keep]]
+        else:
+            masks = [(mask.astype(np.uint8) * 255) for mask in instances.pred_masks.numpy()[keep]]
+        scores = [float(value) for value in instances.scores.numpy()[keep]]
+        outputs.append((masks, scores))
+        progress("识别岩点轮廓", 45 + round(45 * (index + 1) / len(images)))
     digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12]
-    return masks, scores, (
+    return outputs, (
         f"indoor-maskrcnn-{digest}"
         f"+min{PRODUCTION_CLIMBING_MIN_SIZE}-cap{PRODUCTION_CLIMBING_CANDIDATE_CAP}"
     )

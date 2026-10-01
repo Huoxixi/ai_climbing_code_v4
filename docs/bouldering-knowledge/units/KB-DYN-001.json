@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-DYN-001",
+  "version": 1,
+  "batch_id": "B003",
+  "title": "Pogo：摆腿、支撑脚与手部的协调",
+  "aliases": ["Pogo", "Moon kick", "Moonkick", "摆腿起动", "摆腿借力", "动态旗式"],
+  "questions": ["Pogo 是只靠甩腿把身体带上去吗？", "摆腿越大就一定跳得更好吗？", "Pogo 接到目标后为什么还要看回脚？"],
+  "tags": ["自由腿摆动", "支撑脚释放", "摆腿换向", "接后任务"],
+  "action_codes": [],
+  "stage_tags": ["准备", "移动", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-BODY-002", "KB-DYN-002", "KB-HAND-006"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["解释含自由腿摆动的动态到点配合，或比较已有连续片段。", "能够分别说明起动时的留手、支撑脚、自由腿与目标。"],
+    "exclusions": ["仅见接后腿摆动，不能倒推起动阶段一定是 Pogo。", "不把动态旗式与全部 Pogo 变式无条件视为同一技巧，也不覆盖跑跳或完整飞跃教学。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Connor Griffith 的 Pogo 教学示例把自由腿摆动与双臂配合、支撑脚起动及目标手接触相连；该页也使用 Moon Kick 别名。文字描述的是一种方案，并非只由自由腿单独完成起动。", "basis": "source_summary", "evidence_ids": ["E-GRIFFITH-POGO-01"]},
+    {"id": "C2", "statement": "本库按自由腿、支撑脚、留手/出手及目标接触分栏，记录可见换向和释放顺序；不预设各种 Pogo 都具有固定脚序、摆幅或离点时刻。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C3", "statement": "可从摆腿前一直比较到接后回脚或下一步，检验变化发生在起动、触达还是接后；单次够到目标不证明更大摆幅更好。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["从摆腿前旧接触到目标接触及接后任务的连续片段。", "自由腿完整路径、支撑脚与双手；记录原始帧时间及抽样遗漏。"],
+    "events": ["标明哪条腿摆动、何时换向，与支撑脚/手的接触变化并列。", "分别记目标首次接触、是否保留，以及之后摆动、回脚或下一动作。"],
+    "unknowns": ["遮挡或低采样间隔中，手脚释放的实际先后。", "每条肢体的真实动量贡献、用力大小与个人主观意图。"],
+    "cannot_infer": ["腿摆得快不证明它独自产生全部起动能力。", "摆幅更大、腿更直不自动更好，也不能从未触达确定力量不足。", "接后有摆动不证明起动失败，更不能把它统一诊断为核心弱。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先还原摆腿、旧接触变化、目标接触和接后任务四段；缺关键帧时先整理已有片段，不为验证假设要求加大摆幅。",
+    "conditions": ["目标、起始手脚和后续任务明确，原作者文字配置不能补造用户视频中的接触。", "本文未核验示范视频，不提供按秒起动或现场动态练习指令。"],
+    "compare": ["摆腿换向与支撑脚/出手变化的可见先后。", "是否触达、接触是否保留、接后是否进入同一回脚任务。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "片段可见右腿摆动、左脚仍接触一段时间，右手触目标后腿继续摆动。", "allowed": "记录上述事件及先后，Pogo 为候选；脚最后离点时刻若被挡住仍未知。", "disallowed": "右腿提供了全部动力，接后继续摆说明核心必定不足。"},
+    {"kind": "constructed", "scenario": "只保留接到点后的两帧，双脚已离墙，起动过程缺失。", "allowed": "可描述接后双脚离墙状态；不能确定起动是 Pogo、其他动态还是意外离点。", "disallowed": "确认 Moonkick，且应该再把腿甩大一点。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["原作者嵌入的连续示范未核验，视频定位、左右变式与实际回脚细节仍待补。", "动态旗式仅为相关检索入口，不是全部 Pogo 的严格同义词；D09 为目录编号，未映射业务检测代码。", "缺少独立时序/受力研究与真实授权视频；不采纳网页中的尺寸、强度或轨迹通则。"]
+}

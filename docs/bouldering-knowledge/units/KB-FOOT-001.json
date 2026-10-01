@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-001",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "落脚位置与下一步",
+  "aliases": [
+    "落脚",
+    "踩点",
+    "鞋尖落点",
+    "Toe placement",
+    "脚点调整"
+  ],
+  "questions": [
+    "踩上点以后为什么还要挪脚？",
+    "落脚位置怎么影响下一步转身或换脚？"
+  ],
+  "tags": [
+    "脚步",
+    "原点调整",
+    "脚尖",
+    "踩稳"
+  ],
+  "action_codes": [
+    "FOOT_CONTACT",
+    "FOOT_READJUST"
+  ],
+  "stage_tags": [
+    "接触建立",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-002",
+    "KB-FOOT-004",
+    "KB-FOOT-005"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "讨论一只脚进入目标脚点，以及之后的转向或另一脚进入。",
+      "能区分岩点与鞋的局部接触区域，或仅做知识解释。"
+    ],
+    "exclusions": [
+      "脚点被遮挡时不能判接触位置。",
+      "踩墙、勾脚跟或鞋尖勾挂需另看对应接触方式。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "鞋尖落脚以鞋前端接触选定脚点。Momentum 的教学强调，这个位置要考虑后续能否转向，以及是否给另一只脚留下进入空间。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-TOE-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "抱石复盘可将首次落脚、原点调整及下一步作为一段观察，比较接触位置是否服务后续动作。",
+      "basis": "conditional_transfer",
+      "evidence_ids": [
+        "E-MOM-TOE-01"
+      ],
+      "transfer_note": "原资料是青少年教学；这里提出成人/一般抱石的视频复盘问题，效果未经验证。"
+    },
+    {
+      "id": "C3",
+      "statement": "本项目把可见重复调整记为事件；不以次数直接判为脚法差。",
+      "basis": "product_rule",
+      "evidence_ids": []
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "从脚接近点面到下一步的连续片段。",
+      "鞋与脚点接触区域；若要判断鞋边，需足够细节。"
+    ],
+    "events": [
+      "记录首次看见接触的帧，以及随后可见的重新落点或转向。",
+      "分别记接触位置变化和下一只手/脚何时开始移动。"
+    ],
+    "unknowns": [
+      "没拍到的接触变化次数。",
+      "是否因准备换脚、探索点面或其他意图而调整。"
+    ],
+    "cannot_infer": [
+      "接触持续时长不能直接证明承重和稳定。",
+      "不能从调整次数推出脚部力量、摩擦大小或动作优劣。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先确认调整是否实际发生，再看调整前后下一步的通道是否不同；若脚点看不清，先补局部观察。",
+    "conditions": [
+      "必须保留当时下一步任务；比较时说明是否换了线路、脚点或机位。"
+    ],
+    "compare": [
+      "同一脚点上调整的可见顺序。",
+      "调整后是否实际进入了下一步，而非只看次数是否下降。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "左脚在同一点转了方向后右脚进入该点。",
+      "allowed": "可记录左脚转向与右脚进入的先后，检查是否为换脚留空间。",
+      "disallowed": "你多挪了一下，所以落脚错误。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "脚点被身体挡住，之后脚的位置不同。",
+      "allowed": "两帧状态不同，中间如何调整仍未知。",
+      "disallowed": "你在遮挡时踩了三次。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "需要不同点面与机位的授权视频验证调整事件。",
+    "教学中的鞋尖使用建议需与其他脚法情境交叉核对。"
+  ]
+}

@@ -4,35 +4,35 @@
 
 | 文件 | 角色 | 重点参考 |
 |---|---|---|
-| [01-dashboard-desktop.png](./effects/01-dashboard-desktop.png) | 总览桌面基准 | 64px 横向顶栏、暖白环境、岩点样品架、60/40 主辅区、稀缺香蕉黄 |
-| [02-dashboard-596.png](./effects/02-dashboard-596.png) | 窄桌面/平板总览 | 内容纵向重排、样品横滑、固定底部导航与卡片密度 |
-| [03-dashboard-mobile.png](./effects/03-dashboard-mobile.png) | 移动总览基准 | 56px 品牌栏、48px 上下文、五入口底栏、单列阅读顺序 |
-| [04-studio-desktop.png](./effects/04-studio-desktop.png) | 定线桌面基准 | 样品区—技术画布—检查器三栏结构，画布视觉中心 |
-| [05-studio-596.png](./effects/05-studio-596.png) | 窄屏定线基准 | 画布保护、工具坞与移动壳体切换方式 |
-| [06-studio-mobile.png](./effects/06-studio-mobile.png) | 移动定线基准 | 画布优先、四项工具坞、五入口底栏、触控密度 |
-| [07-board-ratio-contract.png](./effects/07-board-ratio-contract.png) | 岩板几何合同 | `2440:3660` 外框比例、`11×18` 孔阵、边距与等比缩放 |
+| [01-dashboard-desktop.png](effects/01-dashboard-desktop.png) | 总览桌面基准 | 64px 横向顶栏、暖白环境、岩点样品架、60/40 主辅区、稀缺香蕉黄 |
+| [02-dashboard-596.png](effects/02-dashboard-596.png) | 窄桌面/平板总览 | 内容纵向重排、样品横滑、固定底部导航与卡片密度 |
+| [03-dashboard-mobile.png](effects/03-dashboard-mobile.png) | 移动总览基准 | 56px 品牌栏、48px 上下文、五入口底栏、单列阅读顺序 |
+| [04-studio-desktop.png](effects/04-studio-desktop.png) | 定线桌面基准 | 样品区—技术画布—检查器三栏结构，画布视觉中心 |
+| [05-studio-596.png](effects/05-studio-596.png) | 窄屏定线基准 | 画布保护、工具坞与移动壳体切换方式 |
+| [06-studio-mobile.png](effects/06-studio-mobile.png) | 移动定线基准 | 画布优先、四项工具坞、五入口底栏、触控密度 |
+| [07-board-ratio-contract.png](effects/07-board-ratio-contract.png) | 岩板几何合同 | `2440:3660` 外框比例、`11×18` 孔阵、边距与等比缩放 |
 
 ## 快速预览
 
 ### 总览桌面
 
-![总览桌面效果](./effects/01-dashboard-desktop.png)
+![总览桌面效果](effects/01-dashboard-desktop.png)
 
 ### 总览移动端
 
-![总览移动端效果](./effects/03-dashboard-mobile.png)
+![总览移动端效果](effects/03-dashboard-mobile.png)
 
 ### 定线桌面
 
-![定线桌面效果](./effects/04-studio-desktop.png)
+![定线桌面效果](effects/04-studio-desktop.png)
 
 ### 定线移动端
 
-![定线移动端效果](./effects/06-studio-mobile.png)
+![定线移动端效果](effects/06-studio-mobile.png)
 
 ### 岩板物理比例
 
-![岩板物理比例契约](./effects/07-board-ratio-contract.png)
+![岩板物理比例契约](effects/07-board-ratio-contract.png)
 
 ## 参考边界
 

@@ -22,8 +22,8 @@ test('接触事件能定位到原视频时间且复盘视频可导出', () => {
   assert.match(service, /download=true/)
 })
 
-test('纯中文动作序列在原视频和叠加视频中都能精确跳帧', () => {
-  assert.match(page, /v-if="playbackUrl && actionEvents\.length"/)
+test('旧触点跳转保留兼容，主流程使用统一动作播放器', () => {
+  assert.match(page, /<UnifiedReplayPlayer v-if="result/)
   assert.match(page, /sourceFrame \/ fps/)
   assert.match(page, /left\.seek_time_seconds - right\.seek_time_seconds/)
   assert.match(page, /videoElement\.value\.pause\(\)/)
@@ -96,5 +96,5 @@ test('切换视频保留进度和播放状态且叠加失败自动回退原视�
 test('切换后动作按钮继续控制同一个播放器', () => {
   assert.match(page, /@click="switchPlayback\('overlay'\)"/)
   assert.match(page, /@click="seekToEvent\(event\)"/)
-  assert.match(page, /videoElement\.value\.currentTime = Math\.max/)
+  assert.match(page, /videoElement\.value\.currentTime = analysisSeekTime\(activeJob\.value, event\.seek_time_seconds\)/)
 })

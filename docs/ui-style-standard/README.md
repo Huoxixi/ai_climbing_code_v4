@@ -8,11 +8,11 @@
 
 ## 文件导航
 
-- [DESIGN.md](./DESIGN.md)：视觉语言、排版、布局、组件与响应式硬规则。
-- [PROMPTS.md](./PROMPTS.md)：可直接复用的总提示词、页面提示词、负面约束和验收提示词。
-- [EFFECTS.md](./EFFECTS.md)：效果图目录、使用范围和已知边界。
-- [design-standard.json](./design-standard.json)：供自动化工具和生成式工作流读取的结构化设计约束。
-- [effects/](./effects/)：本轮确认方向下的桌面、596px、390px 和岩板比例参考图。
+- [DESIGN.md](DESIGN.md)：视觉语言、排版、布局、组件与响应式硬规则。
+- [PROMPTS.md](PROMPTS.md)：可直接复用的总提示词、页面提示词、负面约束和验收提示词。
+- [EFFECTS.md](EFFECTS.md)：效果图目录、使用范围和已知边界。
+- [design-standard.json](design-standard.json)：供自动化工具和生成式工作流读取的结构化设计约束。
+- [effects/](effects)：本轮确认方向下的桌面、596px、390px 和岩板比例参考图。
 
 ## 冲突处理顺序
 

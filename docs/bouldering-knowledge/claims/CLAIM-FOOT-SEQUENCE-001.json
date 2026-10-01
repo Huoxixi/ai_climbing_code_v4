@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "CLAIM-FOOT-SEQUENCE-001",
+  "version": 1,
+  "unit_id": "KB-TACTIC-001",
+  "source_claim_id": "C1",
+  "kind": "technical_adjustment",
+  "category": "existing_foot_sequence",
+  "status": "draft",
+  "automatic_use": false,
+  "scope": {"population": "adults", "activity": "indoor_bouldering", "camera": "fixed", "movement": "slow_continuous"},
+  "statement": "待验证教学假设：在保留已有方案的前提下，预先确认已知下一步脚序，随后比较同类调整是否仍发生。来源只提供预想顺序的教学说明，不证明此建议适合成人或有效。",
+  "evidence_links": [{"source_id": "SRC-MOM-ROUTEREADING", "evidence_id": "E-MOM-ROUTEREADING-01", "locator": "Route Reading 标题下定义段及五项清单"}],
+  "required_conditions": [
+    {"id": "camera_fixed", "statement": "候选过程机位固定。", "source": "visual_fact"},
+    {"id": "slow_continuous", "statement": "动作缓慢连续，关键过程采样完整。", "source": "visual_fact"},
+    {"id": "limbs_and_next_target_visible", "statement": "相关手脚与下一目标清楚可见。", "source": "visual_fact"},
+    {"id": "single_wall_clear_perspective", "statement": "单一墙面，无强透视或人物交叠。", "source": "visual_fact"},
+    {"id": "existing_plan_unchanged", "statement": "只比较已经执行过的同一局部线路任务，不指定新落点。", "source": "visual_fact"},
+    {"id": "foot_sequence_visible", "statement": "前后脚序及相关落点过程可见。", "source": "visual_fact"},
+    {"id": "adjustment_confirmed", "statement": "需要核对的调整实际发生，且并非标签或遮挡造成。", "source": "visual_fact"}
+  ],
+  "exclusions": [{"id": "key_occlusion", "statement": "关键鞋部或目标被挡。"}, {"id": "new_technique_required", "statement": "需要新增复杂技术或改变原线路任务。"}],
+  "adjustment_template": "在保留已经采用的动作方案时，先确认下一步原有脚序。",
+  "verification_template": "下次核对同一区间是否仍需相同调整，并保留为转身或换脚做准备的解释。",
+  "cannot_infer": ["重复调整不等于脚法差。", "不能指定模型猜测的新脚点。", "不承诺减少用力、提升完攀或降低伤害。"],
+  "professional_review_id": "",
+  "validation_record_id": ""
+}

@@ -23,6 +23,7 @@ from core.climb_replay import (AliyunReplayAnalyzer, ClimbReplayManager,
                                fit_hold_map_rect, prepare_video_upload, probe_video,
                                native_mask_polygon,
                                render_replay_overlay_video)
+from core.replay_hold_fusion import fuse_hold_detections
 
 
 def make_video(path: Path, *, frames=8, fps=4.0, width=96, height=64):
@@ -599,9 +600,12 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                         "track_id": 0, "kpts_xy": points, "kpts_score": [0.9] * 17,
                         "bbox_xywh": [0.1, 0.1, 0.4, 0.8]}
 
-            with patch.object(analyzer, "_sample_frames",
-                              return_value=[np.zeros((64, 96, 3), np.uint8)] * 9), \
-                 patch.object(analyzer, "_local_holds", return_value=(holds, "hold-checkpoint-v1")), \
+            with patch.object(analyzer, "_hold_frames",
+                              return_value=[(0, np.zeros((64, 96, 3), np.uint8))]), \
+                 patch.object(analyzer, "_video_holds", return_value=(
+                     holds, [], {"reference_frame": 0, "frames_aligned": 1, "frames_decoded": 1},
+                     None, "hold-checkpoint-v1")), \
+                 patch("core.climb_replay.align_to_reference", return_value=(np.eye(3), {})), \
                  patch.object(analyzer, "_pose_frame", side_effect=pose_frame):
                 result = analyzer.analyze(
                     video, route_color="绿色", video_info=info,
@@ -834,12 +838,15 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
 
     def test_hold_consensus_and_contact_summary_are_deterministic(self):
         detections = [
-            [{"bbox_xywh": [0.1, 0.8, 0.1, 0.08], "score": 0.9},
-             {"bbox_xywh": [0.5, 0.2, 0.1, 0.08], "score": 0.95}],
-            [{"bbox_xywh": [0.105, 0.8, 0.1, 0.08], "score": 0.85},
-             {"bbox_xywh": [0.505, 0.2, 0.1, 0.08], "score": 0.9}],
+            [{"bbox": [0.1, 0.8, 0.1, 0.08], "score": 0.9, "route_candidate": True},
+             {"bbox": [0.5, 0.2, 0.1, 0.08], "score": 0.95, "route_candidate": True}],
+            [{"bbox": [0.105, 0.8, 0.1, 0.08], "score": 0.85, "route_candidate": True},
+             {"bbox": [0.505, 0.2, 0.1, 0.08], "score": 0.9, "route_candidate": True}],
         ]
-        holds = AliyunReplayAnalyzer._consensus_holds(detections)
+        holds = fuse_hold_detections(detections)
+        holds.sort(key=lambda hold: -hold["bbox"][1])
+        for index, hold in enumerate(holds, 1):
+            hold["id"] = index
         self.assertEqual([hold["id"] for hold in holds], [1, 2])
         self.assertGreater(holds[0]["bbox"][1], holds[1]["bbox"][1])
 

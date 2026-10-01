@@ -1,0 +1,4 @@
+interface:
+  display_name: "抱石知识库建设"
+  short_description: "检索原始资料，核对技术主张，编写抱石知识卡并保存进度供下次继续"
+  default_prompt: "使用 $boulder-knowledge 读取项目进度，完成下一批抱石知识单元并报告来源、验证结果和缺口。"

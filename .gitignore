@@ -54,3 +54,6 @@ frontend/playwright-report/
 # Member credentials and personal content live only in persistent storage.
 backend/data/accounts.sqlite3*
 backend/data/members/
+
+# Private local replay photos, videos and derived evidence stay on this machine.
+docs/replay-visual-evidence-20260928/
