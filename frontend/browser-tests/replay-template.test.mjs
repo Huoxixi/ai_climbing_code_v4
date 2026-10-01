@@ -1,27 +1,12 @@
+import { startFixtureServer } from './fixtures/server.mjs'
+import { fileURLToPath } from 'node:url'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdir } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '@playwright/test')
-const base = process.env.TEMPLATE_TEST_URL || 'http://127.0.0.1:4193'
-if (!process.env.TEMPLATE_TEST_URL) {
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4193', '--strictPort'], {
-    cwd: fileURLToPath(new URL('../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  try {
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Template fixture server startup timed out.')), 15000)
-      server.once('error', error => { clearTimeout(timeout); reject(error) })
-      server.once('exit', code => { clearTimeout(timeout); reject(new Error(`Template fixture server exited (${code}).`)) })
-      server.stdout.on('data', chunk => { if (chunk.toString().includes('Local:')) { clearTimeout(timeout); resolve() } })
-    })
-  } catch (failure) { server.kill(); throw failure }
-  after(() => server.kill())
-  process.once('exit', () => server.kill())
-}
+const base = await startFixtureServer(4193, process.env.TEMPLATE_TEST_URL)
 const shots = new URL('../test-results/template/', import.meta.url)
 await mkdir(shots, { recursive: true })
 const policy = { version: 'fixture-v2', enabled: true, configured: true, advice_available: true, budget: { amount: .2, estimate_min: 0, estimate_max: .2 }, provider: '构造测试服务', data_types: ['抽样画面'], full_video_sent: false }

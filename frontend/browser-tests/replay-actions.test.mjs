@@ -1,24 +1,14 @@
+import { startFixtureServer } from './fixtures/server.mjs'
+import { fileURLToPath } from 'node:url'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '@playwright/test')
 import { mkdir } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
 import { summarySeconds } from '../src/services/replayPresentation.js'
 import { organized, syntheticMedia } from './fixtures/actions.mjs'
-const base = 'http://127.0.0.1:4195'
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4195', '--strictPort'], {
-  cwd: fileURLToPath(new URL('../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-})
-await new Promise((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error('Preview startup timeout')), 15000)
-  server.once('error', reject)
-  server.stdout.on('data', chunk => { if (chunk.toString().includes('Local:')) { clearTimeout(timeout); resolve() } })
-})
-after(() => server.kill())
-process.once('exit', () => server.kill())
+const base = await startFixtureServer(4195)
 const shots = new URL('../test-results/actions-page/', import.meta.url)
 const captureScreenshots = !process.env.REPLAY_SKIP_SCREENSHOTS
 await mkdir(shots, { recursive: true })

@@ -1,21 +1,10 @@
+import { startFixtureServer } from './fixtures/server.mjs'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '@playwright/test')
-const base = 'http://127.0.0.1:4197'
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4197', '--strictPort'], {
-  cwd: fileURLToPath(new URL('../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-})
-await new Promise((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error('Preview startup timeout')), 15000)
-  server.once('error', reject)
-  server.stdout.on('data', chunk => { if (chunk.toString().includes('Local:')) { clearTimeout(timeout); resolve() } })
-})
-after(() => server.kill())
-process.once('exit', () => server.kill())
+const base = await startFixtureServer(4197)
 const browser = await chromium.launch({ headless: true })
 after(() => browser.close())
 

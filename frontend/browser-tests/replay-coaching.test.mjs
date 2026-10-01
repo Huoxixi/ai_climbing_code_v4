@@ -1,9 +1,8 @@
+import { startFixtureServer } from './fixtures/server.mjs'
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdir } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
-import { spawn } from 'node:child_process'
 const require = createRequire(import.meta.url)
 let playwright
 try { playwright = require(process.env.PLAYWRIGHT_MODULE || '@playwright/test') }
@@ -12,28 +11,7 @@ catch (failure) {
   playwright = require('playwright')
 }
 const { chromium } = playwright
-const base = process.env.COACHING_TEST_URL || 'http://127.0.0.1:4181'
-if (!process.env.COACHING_TEST_URL) {
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4181', '--strictPort'], {
-    cwd: fileURLToPath(new URL('../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  let output = ''
-  try {
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Coaching test server did not start within 15 seconds.')), 15000)
-      const stopWaiting = () => clearTimeout(timeout)
-      server.once('error', error => { stopWaiting(); reject(error) })
-      server.once('exit', code => { stopWaiting(); reject(new Error(`Coaching test server exited (${code}): ${output}`)) })
-      server.stdout.on('data', chunk => {
-        output += chunk.toString()
-        if (output.includes('Local:')) { stopWaiting(); resolve() }
-      })
-      server.stderr.on('data', chunk => { output += chunk.toString() })
-    })
-  } catch (failure) { server.kill(); throw failure }
-  after(() => server.kill())
-  process.once('exit', () => server.kill())
-}
+const base = await startFixtureServer(4181, process.env.COACHING_TEST_URL)
 const shots = new URL('../test-results/coaching/', import.meta.url)
 await mkdir(shots, { recursive: true })
 
