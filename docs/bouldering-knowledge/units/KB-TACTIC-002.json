@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-TACTIC-002",
+  "version": 1,
+  "batch_id": "B004",
+  "title": "探索动作：次数、耗时与信息价值不混用",
+  "aliases": ["探索动作", "重复摸点", "探索次数", "探索耗时", "Exploratory movements", "Touched holds", "Perceptual-motor exploration"],
+  "questions": ["摸点次数少了就一定进步了吗？", "同一点试了几次是不是多余动作？", "探索少了，是指次数少还是时间短？"],
+  "tags": ["动作探索", "测量定义", "学习与迁移", "重复接触"],
+  "action_codes": [],
+  "stage_tags": ["移动", "首次接触", "接后衔接", "复盘"],
+  "related_units": ["KB-HAND-003", "KB-HAND-006", "KB-TACTIC-003", "KB-TACTIC-005"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["要讨论摸点、重复接触或尝试之间的探索差异，且明确记录窗口及计数口径。", "原始视频足以检查目标接触及后续；不足时只描述可确认事件。"],
+    "exclusions": ["不把抽样未覆盖的接触记为零，也不把调整抓法全部并入探索次数。", "不由一次事件推断探索意图、信息收益、能力或心理状态。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Seifert 等分别测量摸点探索、实际抓持、耗时和髋路径几何熵；练习后的次数变化与几何熵变化并不一致，迁移任务也出现较多探索而几何熵差异未显著的情况。", "basis": "source_summary", "evidence_ids": ["E-SEIFERT-TOUCH-2015-01", "E-SEIFERT-LEARNING-2015-01"]},
+    {"id": "C2", "statement": "用于抱石复盘时，可保留“次数、时长和后续变化分别看”的问题框架，不设多摸一次就扣分的规则。", "basis": "conditional_transfer", "evidence_ids": ["E-SEIFERT-LEARNING-2015-01"], "transfer_note": "原研究为 9 名男性在垂直顶绳路线上的学习任务，不能外推为所有抱石动态动作的效率指标；不显著不等于已证明相同。"},
+    {"id": "C3", "statement": "本库先标触到、离开、原点调整或后续继续；是否符合某研究的探索定义另行核查。想比较信息价值时，另问后续计划或动作是否改变，仍不据此确认学习原因。", "basis": "product_rule", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["目标手点的连续片段及接触前后动作；保留原始时间和采样信息。", "两次尝试的同一比较窗口，以及实际练习和计划修订记录。"],
+    "events": ["逐次标可见接触和离开；尚未看清是否作为支撑使用时保留未知。", "次数与时长分字段记录，说明一次事件怎样划界，不混同手连动与原点微调。", "看后续是否选择其他面、点或顺序，记录变化而不命名为已学会。"],
+    "unknowns": ["短暂接触是否被采样遗漏，是否有被遮挡的再抓。", "动作是否用于获得新信息、纠错或重复旧方案，以及实际承重。"],
+    "cannot_infer": ["摸得少、时间短或髋投影更直均不能单独证明更省力或技术更好。", "重复接触不自动代表浪费；也不能反过来声称每次重复都有学习价值。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先核对计数定义与覆盖范围，再对照下一步发生了什么；若只有总数，回到已有接触记录，不先建议减少所有摸点。",
+    "conditions": ["比较前说明路线是否熟悉、目标是否相同，以及两次之间是否试攀。", "未看见的事件单列为未知，不填零。"],
+    "compare": ["次数相同而耗时不同，或次数更多但后续方案发生变化。", "重复发生在首次接触前、原点调整还是接后下一步；不同事件不合并归因。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "同一窗口两次都出现三次可见接触，第二次这些事件占用的时间较短。", "allowed": "接触次数相同、所记耗时较短；信息价值和实际承重仍未知。", "disallowed": "探索次数下降，技术效率提高。"},
+    {"kind": "constructed", "scenario": "一段完整录像有两次摸点，另一段低频抽样只见一次。", "allowed": "覆盖程度不同，不能确认第二次实际少摸了一次。", "disallowed": "把未记录的接触当零，计算探索减少 50%。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["尚无已验证的探索自动标签；HAND_CONTACT/HAND_ATTEMPT 不能直接等同研究的功能性分类。", "计数边界、标注者一致性与信息价值判断尚待专业及真实视频验证。"]
+}

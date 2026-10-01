@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "CLAIM-TRANSITION-001",
+  "version": 1,
+  "unit_id": "KB-TACTIC-001",
+  "source_claim_id": "C1",
+  "kind": "technical_adjustment",
+  "category": "existing_transition_preparation",
+  "status": "draft",
+  "automatic_use": false,
+  "scope": {"population": "adults", "activity": "indoor_bouldering", "camera": "fixed", "movement": "slow_continuous"},
+  "statement": "待验证教学假设：在不改变线路任务的情况下，核对执行原有动作前是否确认下一目标，再观察衔接变化。一般预想顺序的教学资料不能证明某次停顿是问题。",
+  "evidence_links": [{"source_id": "SRC-MOM-ROUTEREADING", "evidence_id": "E-MOM-ROUTEREADING-01", "locator": "Route Reading 标题下定义段及五项清单"}],
+  "required_conditions": [
+    {"id": "camera_fixed", "statement": "候选过程机位固定。", "source": "visual_fact"},
+    {"id": "slow_continuous", "statement": "动作缓慢连续，关键过程采样完整。", "source": "visual_fact"},
+    {"id": "limbs_and_next_target_visible", "statement": "相关手脚与下一目标清楚可见。", "source": "visual_fact"},
+    {"id": "single_wall_clear_perspective", "statement": "单一墙面，无强透视或人物交叠。", "source": "visual_fact"},
+    {"id": "existing_plan_unchanged", "statement": "只比较已经执行过的同一局部线路任务，不指定新目标。", "source": "visual_fact"},
+    {"id": "before_pause_after_visible", "statement": "前一动作、停顿和后一动作的连续过程可见。", "source": "visual_fact"},
+    {"id": "next_target_confirmed", "statement": "后一动作实际进入的目标清楚，不倒填攀爬者意图。", "source": "visual_fact"}
+  ],
+  "exclusions": [{"id": "key_occlusion", "statement": "前后片段存在剪切、关键遮挡或过程缺失。"}, {"id": "new_technique_required", "statement": "需要强行加速、不许休息或改变原有技术。"}],
+  "adjustment_template": "在保留原有任务时，先确认下一目标，再按原有方式衔接。",
+  "verification_template": "比较下一次同一区间的目标确认与衔接情况，同时保留停顿可能用于休息或准备的解释。",
+  "cannot_infer": ["停顿不一定是错误。", "不规定必须更快或不能休息。", "不推断恐惧、疲劳或力量不足。"],
+  "professional_review_id": "",
+  "validation_record_id": ""
+}

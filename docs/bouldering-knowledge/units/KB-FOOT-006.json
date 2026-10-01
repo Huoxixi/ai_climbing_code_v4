@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-006",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "高抬脚：触达与后续转移",
+  "aliases": [
+    "高抬脚",
+    "高踩点",
+    "High step",
+    "Highstep"
+  ],
+  "questions": [
+    "脚能抬到高点，为什么站不上去？",
+    "高抬脚之后应该比较什么？"
+  ],
+  "tags": [
+    "抬腿",
+    "高脚点",
+    "后续转移",
+    "髋部"
+  ],
+  "action_codes": [],
+  "stage_tags": [
+    "准备",
+    "接触建立",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-002",
+    "KB-FOOT-005"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "任务包含较高脚点及之后的身体移动；高低按具体任务描述。",
+      "脚部接触、其他支点和后续动作可分别核对。"
+    ],
+    "exclusions": [
+      "没有统一高度/角度阈值时不自动给出高抬脚标签。",
+      "仅看见脚抬高、没看见接触时不记成功上点。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "Highstep 教学将较高脚点上的接触与后续 Rock over 相连：髋部向高脚点上方移动，留点手的推拉等配合可参与这一过程。抬脚触到点与身体随后移过去是可分开讨论的环节。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-HIGHSTEP-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "在抱石复盘中，将抬脚触达、接触保留、身体继续移动与后续任务分开，可以把“站不上去”转成可核对问题。",
+      "basis": "conditional_transfer",
+      "evidence_ids": [
+        "E-MOM-HIGHSTEP-01"
+      ],
+      "transfer_note": "迁移的是分析问题的组织方式；未验证这套视频记录能提高完攀率。"
+    },
+    {
+      "id": "C3",
+      "statement": "不以脚抬得更高自动评价更好；先确认高脚点是否服务当前任务。",
+      "basis": "product_rule",
+      "evidence_ids": []
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "抬脚到目标点的连续过程。",
+      "接触后身体、旧脚和留点手的变化。"
+    ],
+    "events": [
+      "分别记录触到、是否保留接触、身体是否继续移动以及下一手/脚。",
+      "若在抬脚过程中其他接触丢失，单独记录其先后关系。"
+    ],
+    "unknowns": [
+      "本人活动范围、力量和主观不适。",
+      "被身体挡住的脚点使用方式。"
+    ],
+    "cannot_infer": [
+      "单段失败不能诊断髋活动度不足。",
+      "仅凭二维膝角不能评价关节负荷。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先确定任务停在触达、接触保留还是后续转移，再比较其他支点与下一目标；不要只要求把脚抬得更高。",
+    "conditions": [
+      "保留目标点和下一步任务，关键接触不明时先补信息。",
+      "若用户报告疼痛或控制下降，停止推进该尝试，建议现场获得帮助。"
+    ],
+    "compare": [
+      "同任务的触达结果、接触保留与后续完成分别比较。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "左脚触到高点，但身体还没移动就离开。",
+      "allowed": "这次出现了触达后离开的事件；原因仍需核对。",
+      "disallowed": "已经完成高抬脚，只是核心不足。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "完整画面显示脚抬高后未触到目标点。",
+      "allowed": "可记录本次未触达；检查距离、通道和既有接触资料。",
+      "disallowed": "一定是柔韧性不好。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "高抬脚标签需与既有词典核对，不采用凭空制定的角度阈值。",
+    "需补一般成人抱石教学、活动范围与任务差异的研究材料。"
+  ]
+}

@@ -1,25 +1,25 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { PHOTO_BOARD, photoHoles, fitPhotoObjects, union, withinBoard, translateObjects, scaleObjects, patchObject, createHistory, zoomCamera, nearestPhotoHole, snapObjectToHole } from '../src/utils/photoBoard.js'
+import { PHOTO_BOARD, calibratedObjectSize, photoGridOverlay, photoHoles, fitPhotoObjects, objectInstallationPoint, photoRouteAxisLayout, relativePhotoLayout, union, withinBoard, translateObjects, scaleObjects, patchObject, createHistory, zoomCamera, nearestPhotoHole, snapObjectToHole } from '../src/utils/photoBoard.js'
 import { createDraftAutosave } from '../src/utils/photoDraftAutosave.js'
 
 const source = () => [{ id:'a', source_bbox_px:[100,100,100,200], z_index:0 }, { id:'b', source_bbox_px:[600,700,200,100], z_index:1 }]
-test('600 physical reference holes, A–AD and exact edge distances', () => {
+test('600 physical reference holes form the real portrait 20 by 30 wall', () => {
   const holes = photoHoles()
-  assert.equal(holes.length,600); assert.equal(holes[0].id,'A1'); assert.equal(holes.at(-1).id,'AD20')
-  assert.deepEqual([holes[0].x,holes[0].y,holes.at(-1).x,holes.at(-1).y],[200,100,6000,3900])
-  assert.equal(PHOTO_BOARD.board_width_mm,6200); assert.equal(PHOTO_BOARD.board_height_mm,4100)
+  assert.equal(holes.length,600); assert.equal(holes[0].id,'A1'); assert.equal(holes.at(-1).id,'T30')
+  assert.deepEqual([holes[0].x,holes[0].y,holes.at(-1).x,holes.at(-1).y],[200,100,4000,5900])
+  assert.equal(PHOTO_BOARD.board_width_mm,4100); assert.equal(PHOTO_BOARD.board_height_mm,6200)
 })
 test('fit preserves relative geometry, flips y and centers union', () => {
   const objects=fitPhotoObjects(source()), box=union(objects)
   assert.ok(withinBoard(objects)); assert.equal(objects[0].scale_mm_per_px,objects[1].scale_mm_per_px)
   assert.ok(objects[0].center_y_mm>objects[1].center_y_mm)
-  assert.ok(Math.abs(box.bottom-100)<1e-6); assert.ok(Math.abs(box.top-3900)<1e-6)
-  assert.ok(Math.abs((box.left+box.right)/2-3100)<1e-6)
+  assert.ok(Math.abs(box.left-200)<1e-6); assert.ok(Math.abs(box.right-3900)<1e-6)
+  assert.ok(Math.abs((box.left+box.right)/2-2050)<1e-6)
 })
 test('group movement clamps without altering relative positions and never snaps', () => {
   const objects=fitPhotoObjects(source()), moved=translateObjects(objects,10000,-10000)
-  assert.ok(withinBoard(moved)); assert.equal(union(moved).right,6200)
+  assert.ok(withinBoard(moved)); assert.equal(union(moved).right,4100)
   assert.ok(Math.abs((moved[0].center_x_mm-moved[1].center_x_mm)-(objects[0].center_x_mm-objects[1].center_x_mm))<1e-6)
   const precise=translateObjects(objects,3.7,1.2); assert.ok(Math.abs(precise[0].center_x_mm-objects[0].center_x_mm-3.7)<1e-6)
 })
@@ -48,6 +48,56 @@ test('snap preview uses the nearest physical hole and release confirms an anchor
   assert.deepEqual([snapped.object.center_x_mm, snapped.object.center_y_mm], [200, 100])
   assert.deepEqual(snapped.object.anchors[0], { hole_id:'A1', x_mm:200, y_mm:100, confidence:1, confirmed:true })
   assert.equal(snapObjectToHole({ center_x_mm:350, center_y_mm:250 }, 40).preview, null)
+})
+
+test('calibration controls displayed physical size and confirmed holes control placement', () => {
+  const matrix = [[2,0,100],[0,-3,4000],[0,0,1]]
+  const size = calibratedObjectSize({ source_bbox_px:[10,20,100,40] }, matrix)
+  assert.deepEqual(size,{ width:200, height:120 })
+  assert.deepEqual(objectInstallationPoint({ center_x_mm:333, center_y_mm:444, anchors:[] }), { x:400, y:500, anchored:false, suggested:true, label:'B3' })
+  assert.deepEqual(objectInstallationPoint({ center_x_mm:333, center_y_mm:444, anchors:[{ hole_id:'A1', x_mm:200, y_mm:100, confirmed:true }] }), { x:200, y:100, anchored:true, suggested:false, label:'A1' })
+})
+
+test('photo overlay projects the electronic grid back onto the real photograph', () => {
+  const calibration={matrix:[[10,0,-100],[0,-10,6000],[0,0,1]]}
+  const grid=photoGridOverlay(calibration)
+  assert.equal(grid.columns.length,20); assert.equal(grid.rows.length,30); assert.equal(grid.centerColumn,10)
+  assert.deepEqual(grid.columns[0].start,{x:30,y:10})
+  assert.deepEqual(grid.columns[0].end,{x:30,y:590})
+})
+
+test('relative layout locks the center lane and gives left and right their own shared offset', () => {
+  const objects = [
+    { id:'a', center_x_mm:230, center_y_mm:130, source_bbox_px:[], anchors:[{ hole_id:'A1', x_mm:200, y_mm:100, confirmed:true }] },
+    { id:'b', center_x_mm:645, center_y_mm:545, source_bbox_px:[], anchors:[] },
+    { id:'c', center_x_mm:1035, center_y_mm:940, source_bbox_px:[], anchors:[] },
+  ]
+  const layout = relativePhotoLayout(objects, null)
+  assert.deepEqual([layout[0].dx,layout[0].dy],[-30,-30])
+  assert.deepEqual(layout.map(point=>point.side),['left','axis','right'])
+  assert.equal(layout[1].x,layout[1].axisX)
+  assert.deepEqual([layout[1].x-layout[0].x,layout[1].y-layout[0].y],[400,405])
+  assert.deepEqual([layout[2].x-layout[1].x,layout[2].y-layout[1].y],[400,395])
+  assert.equal(layout[1].target.id,'C3')
+})
+
+test('axis layout chooses one physical hole column and calibrates both sides independently', () => {
+  const objects = [
+    { id:'left-a', center_x_mm:900, center_y_mm:620, source_bbox_px:[], anchors:[{ hole_id:'D4', x_mm:800, y_mm:700, confirmed:true }] },
+    { id:'left-b', center_x_mm:1100, center_y_mm:1020, source_bbox_px:[], anchors:[] },
+    { id:'axis', center_x_mm:2100, center_y_mm:1420, source_bbox_px:[], anchors:[] },
+    { id:'right-a', center_x_mm:3100, center_y_mm:620, source_bbox_px:[], anchors:[{ hole_id:'P4', x_mm:3200, y_mm:700, confirmed:true }] },
+    { id:'right-b', center_x_mm:3500, center_y_mm:1020, source_bbox_px:[], anchors:[] },
+  ]
+  const model = photoRouteAxisLayout(objects, null)
+  assert.equal(model.axis.label, 'K')
+  assert.deepEqual(model.axis.counts, { left:2, axis:1, right:2 })
+  assert.equal(model.points.find(point => point.id === 'axis').x, model.axis.x)
+  const left = model.points.filter(point => point.side === 'left')
+  const right = model.points.filter(point => point.side === 'right')
+  assert.deepEqual([left[1].x-left[0].x,left[1].y-left[0].y],[200,400])
+  assert.deepEqual([right[1].x-right[0].x,right[1].y-right[0].y],[400,400])
+  assert.notDeepEqual([left[0].dx,left[0].dy],[right[0].dx,right[0].dy])
 })
 
 function fixture(save) {

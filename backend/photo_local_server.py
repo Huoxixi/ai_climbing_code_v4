@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'backend'))
-DATA=ROOT/'.local/photo-development'
+DATA=Path(os.getenv('PHOTO_LOCAL_DATA_DIR', str(ROOT/'.local/photo-development')))
 from dotenv import load_dotenv
 # Explicit local-only secret file; never load the application's production .env.
 load_dotenv(ROOT/'.local/photo-vision.env',override=False)
@@ -24,5 +24,7 @@ from main import app
 
 @app.on_event('shutdown')
 def shutdown_photos():
-    from main import photo_workflow, photo_route_jobs
+    from main import climb_replay_manager, photo_workflow, photo_route_jobs
     photo_workflow.close(); photo_route_jobs.close()
+    if climb_replay_manager is not None:
+        climb_replay_manager.close()

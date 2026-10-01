@@ -8,11 +8,13 @@ from types import SimpleNamespace
 
 import cv2
 import numpy as np
+from PIL import Image
+from pillow_heif import register_heif_opener
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.photo_route_analysis import (assess_capture_quality, board_holes, compute_homography,
-                                       map_point, nearest_hole)
+from core.photo_route_analysis import (assess_capture_quality, board_holes, compute_homography, detect_photo_hole_grid,
+                                       map_point, nearest_hole, projected_bbox_scale_mm_per_px)
 from core.photo_route_v2 import (ColorRouteCreate, PhotoRouteV2Store, RouteMemberInput,
                                  RouteUpdate, create_photo_route_v2_router)
 
@@ -60,7 +62,7 @@ class PhotoRouteV2Tests(unittest.TestCase):
         ref_data = photo_bytes(120, 80)
         ref = self.store.save_asset(ref_data, 'jpg', 120, 80)
         self.store.set_analysis_result(board_id, {
-            'calibration': {'matrix': [[6.2,0,0],[0,-5.125,4100],[0,0,1]], 'status':'confirmed'},
+            'calibration': {'matrix': [[3.4167,0,0],[0,-7.75,6200],[0,0,1]], 'status':'confirmed'},
             'model_version': 'test',
             'objects': [{
                 'id':'object-001','kind':'hold','color_group':color,
@@ -76,11 +78,40 @@ class PhotoRouteV2Tests(unittest.TestCase):
     def test_grid_and_homography_are_deterministic(self):
         holes = board_holes()
         self.assertEqual(len(holes), 600)
-        self.assertEqual((holes[0]['id'], holes[-1]['id']), ('A1', 'AD20'))
+        self.assertEqual((holes[0]['id'], holes[-1]['id']), ('A1', 'T30'))
         matrix = compute_homography([[0,0],[100,0],[100,100],[0,100]],
-                                    [[0,4100],[6200,4100],[6200,0],[0,0]])
-        self.assertAlmostEqual(map_point(matrix, 50, 50)[0], 3100, places=4)
+                                    [[0,6200],[4100,6200],[4100,0],[0,0]])
+        self.assertAlmostEqual(map_point(matrix, 50, 50)[0], 2050, places=4)
         self.assertEqual(nearest_hole(205, 103)[0]['id'], 'A1')
+        self.assertAlmostEqual(projected_bbox_scale_mm_per_px([[2,0,0],[0,-8,1000],[0,0,1]], [10,20,100,50]), 4)
+
+    def test_real_hole_lattice_fit_survives_missing_and_occluded_points(self):
+        image = np.full((1200, 720, 3), 188, np.uint8)
+        origin = np.asarray([22.0, 43.0]); column = np.asarray([34.0, 2.0]); row = np.asarray([-1.8, 36.0])
+        for y in range(30):
+            for x in range(20):
+                if not (6 <= x <= 11 and 8 <= y <= 14):
+                    point = origin + x * column + y * row
+                    cv2.circle(image, tuple(np.rint(point).astype(int)), 2, (38,38,38), -1)
+        cv2.rectangle(image, (205,330), (410,575), (235,205,30), -1)
+        fitted = detect_photo_hole_grid(image)
+        self.assertIsNotNone(fitted)
+        self.assertGreater(fitted['detected_hole_count'], 250)
+        mapped = map_point(fitted['matrix'], *origin)
+        self.assertLess(abs(mapped[0]-200), 35)
+        self.assertLess(abs(mapped[1]-5900), 35)
+
+    def test_processing_config_persists_without_rewriting_completed_results(self):
+        board=self.create_board()['board']; original=board['quality']
+        config={'color_version':'interior-v3','boundary_version':'grabcut-band-v1'}
+        self.store.set_analysis_result(board['id'],{'calibration':{},'model_version':'test',
+            'processing_config':config,'objects':[]})
+        reopened=PhotoRouteV2Store(Path(self.tmp.name)).get_board(board['id'],'owner')
+        self.assertEqual(reopened['quality']['processing_config'],config)
+        for key,value in original.items():self.assertEqual(reopened['quality'][key],value)
+        self.store.set_analysis_result(board['id'],{'calibration':{},'model_version':'new',
+            'processing_config':{'color_version':'interior-v4'},'objects':[]})
+        self.assertEqual(self.store.get_board(board['id'],'owner')['quality']['processing_config'],config)
 
     def test_capture_gate_rejects_blur_and_upload_queues_job(self):
         blur = np.full((800, 1200, 3), 170, np.uint8)
@@ -160,6 +191,83 @@ class PhotoRouteV2Tests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/archive").status_code, 200)
         self.assertEqual(self.client.get('/api/photo-routes/v2/routes').json(), [])
         self.assertEqual(self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/restore").status_code, 200)
+
+    def test_route_accepts_multiple_private_photos_and_videos_with_v1_limits(self):
+        created = self.create_board(); board = self.seed_analysis(created['board']['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色', name='黄色横移'))
+        photo = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                 files={'media': ('try-1.jpg', photo_bytes(120, 80), 'image/jpeg')})
+        self.assertEqual(photo.status_code, 200, photo.text)
+        videos = []
+        for index in range(2):
+            response = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                        files={'media': (f'try-{index}.mp4', b'local-test-video-'+bytes([index]), 'video/mp4')})
+            self.assertEqual(response.status_code, 200, response.text); videos.append(response.json())
+        overflow = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                    files={'media': ('try-3.mp4', b'another-video', 'video/mp4')})
+        self.assertEqual(overflow.status_code, 422)
+        saved = self.client.get(f"/api/photo-routes/v2/routes/{route['id']}").json()
+        self.assertEqual([item['kind'] for item in saved['media']].count('photo'), 1)
+        self.assertEqual([item['kind'] for item in saved['media']].count('video'), 2)
+        asset_url = f"/api/photo-routes/v2/assets/{videos[0]['asset']['filename']}"
+        self.assertEqual(self.client.get(asset_url).status_code, 200)
+        self.assertEqual(self.client.get(asset_url, headers={'x-test-owner':'another-owner'}).status_code, 404)
+
+    def test_heic_board_and_route_photo_are_converted_by_server(self):
+        register_heif_opener()
+        source = cv2.imdecode(np.frombuffer(photo_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        encoded = io.BytesIO()
+        Image.fromarray(cv2.cvtColor(source, cv2.COLOR_BGR2RGB)).save(encoded, format='HEIF')
+        heic = encoded.getvalue()
+        upload = self.client.post('/api/photo-routes/v2/boards/upload',
+                                  files={'photo': ('wall.heic', heic, 'image/heic')})
+        self.assertEqual(upload.status_code, 200, upload.text)
+        board = upload.json()['board']
+        self.assertTrue(board['original_asset']['filename'].endswith('.jpg'))
+        board = self.seed_analysis(board['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色'))
+        root = f"/api/photo-routes/v2/routes/{route['id']}/media/uploads"
+        started = self.client.post(root, json={
+            'filename': 'attempt.heic', 'content_type': 'image/heic', 'size_bytes': len(heic),
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']
+        self.client.put(f'{root}/{upload_id}', content=heic, headers={'x-upload-offset': '0'})
+        completed = self.client.post(f'{root}/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 200, completed.text)
+        photo = completed.json()
+        self.assertEqual(photo['mime_type'], 'image/jpeg')
+        self.assertTrue(photo['asset']['filename'].endswith('.jpg'))
+        self.assertEqual(Image.open(io.BytesIO(self.client.get(
+            f"/api/photo-routes/v2/assets/{photo['asset']['filename']}").content)).format, 'JPEG')
+        direct = self.client.post(f"/api/photo-routes/v2/routes/{route['id']}/media",
+                                  files={'media': ('second.heif', heic, 'application/octet-stream')})
+        self.assertEqual(direct.status_code, 200, direct.text)
+        self.assertEqual(direct.json()['mime_type'], 'image/jpeg')
+        self.assertTrue(direct.json()['asset']['filename'].endswith('.jpg'))
+
+    def test_route_media_supports_proxy_safe_chunk_uploads(self):
+        created = self.create_board(); board = self.seed_analysis(created['board']['id'])
+        route = self.store.create_route_from_color('owner', ColorRouteCreate(
+            board_version_id=board['id'], color_group='黄色', name='分片视频'))
+        content = b'chunk-one-' + b'chunk-two'
+        root = f"/api/photo-routes/v2/routes/{route['id']}/media/uploads"
+        started = self.client.post(root, json={
+            'filename':'attempt.mp4', 'content_type':'video/mp4', 'size_bytes':len(content),
+        })
+        self.assertEqual(started.status_code, 200, started.text)
+        upload_id = started.json()['id']
+        first = self.client.put(f'{root}/{upload_id}', content=content[:10], headers={'x-upload-offset':'0'})
+        self.assertEqual(first.json()['offset'], 10)
+        second = self.client.put(f'{root}/{upload_id}', content=content[10:], headers={'x-upload-offset':'10'})
+        self.assertTrue(second.json()['complete'])
+        completed = self.client.post(f'{root}/{upload_id}/complete')
+        self.assertEqual(completed.status_code, 200, completed.text)
+        self.assertEqual(completed.json()['size_bytes'], len(content))
+        asset_url = f"/api/photo-routes/v2/assets/{completed.json()['asset']['filename']}"
+        self.assertEqual(self.client.get(asset_url).content, content)
 
     def test_cancel_retry_and_restart_recovery(self):
         created = self.create_board(); job = created['job']

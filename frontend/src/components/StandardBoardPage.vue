@@ -1,17 +1,19 @@
 <template>
   <section class="page standard-board-page">
-      <div class="page-header">
+      <div class="page-header standard-page-header">
         <div>
           <p class="eyebrow">标准线路数据</p>
           <h2>标准线路库</h2>
+          <p class="standard-page-summary">浏览标准线路、查看岩板预览，或生成新的候选线路。</p>
         </div>
-        <div class="command-row">
-          <el-button :icon="Refresh" :loading="standardBoard.loading" @click="fetchStandardRoutes">刷新</el-button>
+        <div class="command-row standard-header-actions">
+          <el-button class="standard-refresh-button" :icon="Refresh" aria-label="刷新线路" title="刷新线路" :loading="standardBoard.loading" @click="fetchStandardRoutes"><span>刷新</span></el-button>
           <el-button type="primary" :loading="standardBoard.generating" @click="generateStandardRoute">生成候选线路</el-button>
         </div>
       </div>
 
       <el-segmented
+        class="standard-mode-switch"
         v-model="standardBoard.mode"
         :options="[
           { label: '线路库', value: 'routes' },
@@ -20,75 +22,23 @@
         @change="handleStandardModeChange"
       />
 
-      <section class="section-block standard-filters">
-        <el-input
-          v-if="standardBoard.mode === 'routes'"
-          v-model="standardBoard.filters.q"
-          clearable
-          placeholder="搜索名称、来源 ID 或定线者"
-          :prefix-icon="Search"
-          @keyup.enter="applyStandardFilters"
-        />
-        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.difficulty" placeholder="难度">
-          <el-option v-for="grade in standardBoard.difficulties" :key="grade" :label="grade" :value="grade" />
-        </el-select>
-        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.sort" placeholder="排序">
-          <el-option label="综合评分优先" value="score_desc" />
-          <el-option label="难度指数从高到低" value="difficulty_score_desc" />
-          <el-option label="难度指数从低到高" value="difficulty_score_asc" />
-          <el-option label="难度错配优先" value="grade_mismatch_desc" />
-          <el-option label="重复次数优先" value="repeats_desc" />
-          <el-option label="横向跨度优先" value="span_desc" />
-          <el-option label="岩点更少优先" value="holds_asc" />
-        </el-select>
-        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.predicted_grade" clearable placeholder="模型复核等级">
-          <el-option v-for="grade in standardBoard.difficulties" :key="`predicted-${grade}`" :label="grade" :value="grade" />
-        </el-select>
-        <el-select v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.grade_warning" clearable placeholder="难度复核">
-          <el-option label="轻微错配" value="soft" />
-          <el-option label="严重错配" value="hard" />
-          <el-option label="可信度不足" value="uncertain" />
-        </el-select>
-        <el-checkbox v-if="standardBoard.mode === 'routes'" v-model="standardBoard.filters.benchmark_only">只看标杆线</el-checkbox>
-        <el-select
-          v-if="standardBoard.mode === 'routes'"
-          v-model="standardBoard.filters.tag_ids"
-          multiple
-          clearable
-          collapse-tags
-          collapse-tags-tooltip
-          placeholder="路线标签"
-        >
-          <el-option-group v-for="group in standardRouteTagGroups" :key="group.key" :label="group.label">
-            <el-option v-for="tag in group.tags" :key="tag.id" :label="tag.label" :value="tag.id" />
-          </el-option-group>
-        </el-select>
-        <el-segmented
-          v-if="standardBoard.mode === 'routes'"
-          v-model="standardBoard.filters.tag_match"
-          :options="[{ label: '全部满足', value: 'all' }, { label: '满足任一', value: 'any' }]"
-        />
-        <el-select v-if="standardBoard.mode === 'repairs'" v-model="standardBoard.repairFilters.status" placeholder="修复状态">
-          <el-option label="已生成修复候选" value="repaired" />
-          <el-option label="可尝试但未通过" value="repairable" />
-          <el-option label="不可修复" value="unrepairable" />
-        </el-select>
-        <el-input
-          v-if="standardBoard.mode === 'repairs'"
-          v-model="standardBoard.repairFilters.q"
-          clearable
-          placeholder="搜索名称、来源 ID 或定线者"
-          :prefix-icon="Search"
-          @keyup.enter="applyRepairFilters"
-        />
-        <el-button
-          type="primary"
-          plain
-          :loading="standardBoard.mode === 'routes' ? standardBoard.loading : standardBoard.repairLoading"
-          @click="standardBoard.mode === 'routes' ? applyStandardFilters() : applyRepairFilters()"
-        >
-          应用筛选
-        </el-button>
+      <button class="mobile-filter-toggle" type="button" :aria-expanded="filtersExpanded" @click="filtersExpanded = !filtersExpanded">
+        <span><strong>筛选与排序</strong><small>{{ filterSummary }}</small></span>
+        <ArrowDown :class="{ rotated: filtersExpanded }" />
+      </button>
+
+      <section class="section-block standard-filters" :class="{ 'is-mobile-open': filtersExpanded }">
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field filter-search-field"><span>搜索</span><el-input v-model="standardBoard.filters.q" clearable placeholder="名称、来源 ID 或定线者" :prefix-icon="Search" @keyup.enter="applyAndClose" /></label>
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field"><span>难度</span><el-select v-model="standardBoard.filters.difficulty" placeholder="选择难度"><el-option v-for="grade in standardBoard.difficulties" :key="grade" :label="grade" :value="grade" /></el-select></label>
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field filter-sort-field"><span>排序</span><el-select v-model="standardBoard.filters.sort" placeholder="选择排序"><el-option label="综合评分优先" value="score_desc" /><el-option label="难度指数从高到低" value="difficulty_score_desc" /><el-option label="难度指数从低到高" value="difficulty_score_asc" /><el-option label="难度错配优先" value="grade_mismatch_desc" /><el-option label="重复次数优先" value="repeats_desc" /><el-option label="横向跨度优先" value="span_desc" /><el-option label="岩点更少优先" value="holds_asc" /></el-select></label>
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field"><span>模型复核等级</span><el-select v-model="standardBoard.filters.predicted_grade" clearable placeholder="不限"><el-option v-for="grade in standardBoard.difficulties" :key="`predicted-${grade}`" :label="grade" :value="grade" /></el-select></label>
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field"><span>难度复核</span><el-select v-model="standardBoard.filters.grade_warning" clearable placeholder="不限"><el-option label="轻微错配" value="soft" /><el-option label="严重错配" value="hard" /><el-option label="可信度不足" value="uncertain" /></el-select></label>
+        <label v-if="standardBoard.mode === 'routes'" class="filter-field filter-tags-field"><span>路线标签</span><el-select v-model="standardBoard.filters.tag_ids" multiple clearable collapse-tags collapse-tags-tooltip placeholder="不限"><el-option-group v-for="group in standardRouteTagGroups" :key="group.key" :label="group.label"><el-option v-for="tag in group.tags" :key="tag.id" :label="tag.label" :value="tag.id" /></el-option-group></el-select></label>
+        <div v-if="standardBoard.mode === 'routes'" class="filter-field filter-match-field"><span>标签匹配</span><el-segmented v-model="standardBoard.filters.tag_match" :options="[{ label: '全部满足', value: 'all' }, { label: '满足任一', value: 'any' }]" /></div>
+        <label v-if="standardBoard.mode === 'routes'" class="benchmark-filter"><el-checkbox v-model="standardBoard.filters.benchmark_only">只看标杆线</el-checkbox></label>
+        <label v-if="standardBoard.mode === 'repairs'" class="filter-field"><span>修复状态</span><el-select v-model="standardBoard.repairFilters.status" clearable placeholder="全部状态"><el-option label="已生成修复候选" value="repaired" /><el-option label="可尝试但未通过" value="repairable" /><el-option label="不可修复" value="unrepairable" /></el-select></label>
+        <label v-if="standardBoard.mode === 'repairs'" class="filter-field filter-search-field"><span>搜索</span><el-input v-model="standardBoard.repairFilters.q" clearable placeholder="名称、来源 ID 或定线者" :prefix-icon="Search" @keyup.enter="applyAndClose" /></label>
+        <el-button class="apply-filter-button" type="primary" :loading="standardBoard.mode === 'routes' ? standardBoard.loading : standardBoard.repairLoading" @click="applyAndClose">应用筛选</el-button>
       </section>
 
       <el-alert v-if="standardBoard.error" type="error" :closable="false" :title="standardBoard.error" />
@@ -479,15 +429,16 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BoardCanvas from './BoardCanvas.vue'
 import BoardComparisonPanel from './BoardComparisonPanel.vue'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { ArrowDown, Refresh, Search } from '@element-plus/icons-vue'
 
 const standardBoardColumns = Array.from({ length: 11 }, (_, index) => String.fromCharCode(65 + index))
 const standardBoardRows = Array.from({ length: 18 }, (_, index) => index + 1)
 const nonRouteHoldsStorageKey = 'climb-setter:standard-board:show-non-route-holds'
 const showNonRouteHolds = ref(readNonRouteHoldsPreference())
+const filtersExpanded = ref(false)
 
 watch(showNonRouteHolds, (value) => {
   try {
@@ -505,7 +456,7 @@ function readNonRouteHoldsPreference() {
   }
 }
 
-defineProps({
+const props = defineProps({
   standardBoard: { type: Object, required: true },
   standardRouteTagGroups: { type: Array, default: () => [] },
   standardBoardSpec: { type: Object, required: true },
@@ -548,4 +499,33 @@ defineProps({
   calibrationLabel: { type: Function, required: true },
   confidenceLabel: { type: Function, required: true },
 })
+
+const sortLabels = {
+  score_desc: '综合评分优先',
+  difficulty_score_desc: '难度从高到低',
+  difficulty_score_asc: '难度从低到高',
+  grade_mismatch_desc: '难度错配优先',
+  repeats_desc: '重复次数优先',
+  span_desc: '横向跨度优先',
+  holds_asc: '岩点更少优先',
+}
+const filterSummary = computed(() => props.standardBoard.mode === 'routes'
+  ? `${props.standardBoard.filters.difficulty || '全部难度'} · ${sortLabels[props.standardBoard.filters.sort] || '综合评分优先'}`
+  : `${props.standardBoard.repairFilters.status ? '已选择状态' : '全部状态'} · ${props.standardBoard.repairTotal} 条线路`)
+
+watch(() => props.standardBoard.mode, () => { filtersExpanded.value = false })
+
+function applyAndClose() {
+  const action = props.standardBoard.mode === 'routes' ? props.applyStandardFilters : props.applyRepairFilters
+  action()
+  filtersExpanded.value = false
+}
 </script>
+
+<style scoped>
+.standard-page-summary{max-width:54ch;margin:3px 0 0}.standard-mode-switch{width:fit-content}.mobile-filter-toggle{display:none}.filter-field{min-width:0;display:grid;gap:6px}.filter-field>span{color:var(--ui-ink-muted);font-size:11px;font-weight:500}.benchmark-filter{min-height:44px;display:flex;align-items:end}.apply-filter-button{align-self:end}
+@media(min-width:1101px){.filter-search-field,.filter-tags-field{grid-column:span 2}.filter-match-field{min-width:260px}.standard-filters{grid-template-columns:repeat(4,minmax(150px,1fr))}}
+@media(max-width:860px){.standard-board-page{gap:12px;padding-top:14px}.standard-page-header{margin-bottom:2px;align-items:center}.standard-page-header>div:first-child{display:none}.standard-header-actions{width:100%;display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px}.standard-header-actions .el-button{width:100%;margin:0}.standard-refresh-button :deep(span span){display:none}.standard-mode-switch{box-sizing:border-box;width:100%;padding:4px}.standard-mode-switch :deep(.el-segmented__item){min-height:42px}.mobile-filter-toggle{width:100%;min-height:62px;padding:10px 13px;border:1px solid var(--ui-line);border-radius:var(--ui-radius-control);background:var(--ui-surface);display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;cursor:pointer}.mobile-filter-toggle>span{min-width:0;display:grid;gap:2px}.mobile-filter-toggle strong{font-size:14px}.mobile-filter-toggle small{overflow:hidden;color:var(--ui-ink-muted);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.mobile-filter-toggle svg{width:18px;transition:transform .18s ease}.mobile-filter-toggle svg.rotated{transform:rotate(180deg)}.standard-filters{display:none;padding:14px;grid-template-columns:1fr 1fr;gap:12px}.standard-filters.is-mobile-open{display:grid}.filter-search-field,.filter-sort-field,.filter-tags-field,.filter-match-field,.benchmark-filter,.apply-filter-button{grid-column:1/-1}.filter-match-field :deep(.el-segmented){width:100%}.benchmark-filter{min-height:36px;align-items:center}.apply-filter-button{min-height:46px}.route-list-panel{padding:14px}.route-list-panel>.section-heading{align-items:center}.standard-route-row{padding:13px 12px}.standard-route-row>span:first-of-type small:nth-of-type(n+3){display:none}.standard-route-row>span:last-child{flex:none}.standard-route-row em{font-size:18px}.quality-tier{font-size:10px}.standard-preview-toolbar{position:sticky;top:104px;z-index:4}}
+@media(max-width:420px){.standard-filters{grid-template-columns:1fr}.filter-field,.filter-search-field,.filter-sort-field,.filter-tags-field,.filter-match-field,.benchmark-filter,.apply-filter-button{grid-column:1}.standard-route-row{gap:9px}.standard-route-row>span:first-of-type small{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.mobile-filter-toggle svg{transition:none}}
+</style>

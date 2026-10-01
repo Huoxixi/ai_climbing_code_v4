@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "dataset_id": "",
+  "generation_versions": {"model": "", "prompt": "", "sampling": "", "knowledge": "", "ranking": "", "media_compression": ""},
+  "reviewer_ids": [],
+  "independent_blind_review": false,
+  "disagreements_resolved": false,
+  "attempts": [],
+  "record_notice": "空样本无正确率，也不形成放行记录。按 claim-contract.md 填写每次独立尝试；失败、拒绝和无建议均保留。"
+}

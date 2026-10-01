@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "status": "draft",
+  "frozen_at": "",
+  "dataset_id": "",
+  "claim_id": "",
+  "claim_version": 1,
+  "category": "existing_foot_sequence",
+  "generation_versions": {"model": "", "prompt": "", "sampling": "", "knowledge": "", "ranking": "", "media_compression": ""},
+  "development_groups": {"attempt_ids": [], "participant_groups": [], "route_groups": []},
+  "sampling_plan": "冻结前记录纳入/排除标准、场景分层、正常与拒绝样本、停止规则及两名审核者；不得反复调规则后继续称该集合独立。",
+  "authorization_records_location": "使用受控位置引用，不保存个人身份、真实素材或授权文件正文于本知识库。",
+  "effect_improvement_established": false
+}

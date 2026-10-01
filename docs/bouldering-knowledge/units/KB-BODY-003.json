@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "KB-BODY-003",
+  "version": 1,
+  "batch_id": "B003",
+  "title": "后旗式与内侧旗式：先辨自由腿路径",
+  "aliases": ["后旗式", "后旗", "内侧旗式", "内侧旗", "前旗式", "Back flag", "Back flagging", "French flag", "Inside flag", "Inside flagging"],
+  "questions": ["后旗式和内侧旗式怎么区分？", "两条腿在画面里交叉就能确认后旗吗？", "必须换脚，还是可以改变自由腿路径？"],
+  "tags": ["支撑腿后方", "内侧路径", "前后遮挡", "旗式变式"],
+  "action_codes": [],
+  "stage_tags": ["准备", "移动", "稳定/衔接"],
+  "related_units": ["KB-BODY-002", "KB-BODY-001", "KB-FOOT-004"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["留点脚和另一腿可以辨认，讨论自由腿经过支撑腿哪侧。", "比较换脚、后方经过或内侧经过等候选及后续目标。"],
+    "exclusions": ["前后深度关系被遮挡时不确定命名。", "同样画面位置可能来自不同动作过程，不能只凭两腿交叉的终态。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Momentum 把 Back flag 描述为自由腿从支撑腿后方越过中线，右腿可伸向身体左侧，反之亦然；该页也用 French flag 这一别名。", "basis": "source_summary", "evidence_ids": ["E-MOM-BACKFLAG-01"]},
+    {"id": "C2", "statement": "Neil Gresham 将自由腿经支撑腿后方与内侧经过作为不同旗式方案，并与换脚方案作比较；本文采用路径区分，不采用由脚点高低直接决定唯一解的说法。", "basis": "source_summary", "evidence_ids": ["E-GRESHAM-FLAG-01"]},
+    {"id": "C3", "statement": "本库对前方、后方和内侧的可见路径分别描述，术语需附来源。“前旗式”作为本地检索入口，不声明它在所有教学体系中与 Inside flag 完全等价。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C4", "statement": "可比较改变自由腿路径后是否仍能完成同一出手，以及是否需要换脚；这只是待验证的候选比较，不预设旗式替代换脚一定更好。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["两腿从分开到经过、伸出、返回的连续片段。", "支撑脚与墙面、骨盆及下一只出手；必要时需要能区分前后深度的视角。"],
+    "events": ["标明哪只脚留点，自由腿是否从其后方或内侧经过，不能把屏幕左右当人体前后。", "随后记留手释放、目标接触、自由腿返回及换脚是否发生。"],
+    "unknowns": ["被遮挡时自由脚的墙面接触与前后路径。", "备选路径是否真的可行，或当前动作是否有意安排。"],
+    "cannot_infer": ["两腿投影相交不等于确认后旗式。", "脚点较低不证明 Inside flag 必然优于 Back flag 或换脚。", "不能从一次出手失败确定自由腿方向是唯一原因。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先用留点脚和自由腿路径描述已见关系，再附术语候选；若深度不清，保留多种解释，不据一张图要求换一种旗式。",
+    "conditions": ["同一出手目标和支撑条件下才比较路径。", "未经核对的下一脚与退出条件不由教材示例补齐。"],
+    "compare": ["后方/内侧经过是否可见，以及脚是否触墙。", "变化发生在出手前、接后还是回脚时；是否实际减少了需要的换脚。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "侧后视角清楚显示左脚在点、右腿从左腿后方伸到身体左侧，之后左手出手。", "allowed": "可按该教材记录右腿后旗式候选及左手出手顺序。", "disallowed": "已证明后旗式比所有其他方案更省力。"},
+    {"kind": "constructed", "scenario": "正面单帧两腿重叠，膝以下一部分被体积点遮住。", "allowed": "投影交叉可见，后方或内侧路径无法确认。", "disallowed": "确认 French flag，并推断背后脚完全悬空。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["前/内/外旗式各语言别名需建立连续示范映射，尚未统一；不新增业务代码。", "只核对文字来源，未逐帧验证原作者旗式与出手衔接。"]
+}

@@ -42,10 +42,10 @@
     </main>
     <main v-else-if="stage === 'upload'" class="route-v2__upload">
       <section class="route-v2__drop" :class="{ 'is-busy': uploading }">
-        <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" :disabled="uploading || jobBusy || !editable" @change="upload" />
+        <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" :disabled="uploading || jobBusy || !editable" @change="upload" />
         <div class="route-v2__drop-copy">
           <h2>{{ uploading ? '正在检查并创建本地任务…' : '上传完整正面岩壁照片' }}</h2>
-          <p>需要看清岩壁四周边界、全部岩点和孔阵列。画面模糊、过曝或大面积遮挡会要求重拍。</p>
+          <p>需要看清岩壁四周边界、全部岩点和孔位。HEIC/HEIF 会在服务器转换为 JPEG，手机里的原照片不会修改。</p>
           <button class="route-v2__primary" type="button" :disabled="uploading || jobBusy || !editable" @click="fileInput?.click()">选择照片</button>
         </div>
       </section>
@@ -135,7 +135,7 @@
         <div class="route-v2__editor-grid">
           <section class="route-v2__canvas-wrap">
             <div v-if="background" class="route-v2__clean-result"><img :src="photoV2AssetUrl(background.composite_asset)" alt="净化墙面结果，目标路线像素来自原图" /><p>净化结果不会覆盖原图；人物、告示牌和贴纸默认保留。</p></div>
-            <PhotoRouteBoardCanvas v-else :objects="routeObjects" :selected-id="selectedId" :mode="interactionMode" :editable="routeEditable"
+            <PhotoRouteBoardCanvas v-else :objects="routeObjects" :selected-id="selectedId" :calibration-matrix="board.calibration?.matrix" :mode="interactionMode" :editable="routeEditable"
               snapping :snap-preview="snapPreview" :asset-url="photoV2AssetUrl" @select="selectRouteObject" @begin="beginDrag"
               @move="moveDrag" @end="endDrag" @nudge="nudge" />
           </section>
@@ -206,7 +206,7 @@
         <section class="route-v2__overlay">
           <div class="route-v2__section-heading"><h2>同板线路叠加</h2><span>{{ overlayRoutes.length }} 条</span></div>
           <div v-if="overlayRoutes.length" class="route-v2__overlay-legend"><span v-for="item in overlayRoutes" :key="item.id"><i :style="{ background:routeDisplayColor(item) }"></i>{{ item.name }}</span></div>
-          <PhotoRouteBoardCanvas v-if="overlayObjects.length" :objects="overlayObjects" mode="browse" :editable="false" :asset-url="photoV2AssetUrl" />
+          <PhotoRouteBoardCanvas v-if="overlayObjects.length" :objects="overlayObjects" :calibration-matrix="board?.calibration?.matrix" mode="browse" :editable="false" :asset-url="photoV2AssetUrl" />
           <p v-else class="route-v2__empty">勾选同一岩板版本中的线路进行叠加查看。</p>
         </section>
       </div>
@@ -223,13 +223,14 @@
 import { nextTick, watch, computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { UploadFilled, Collection, ArrowRight } from '@element-plus/icons-vue'
-import sampleOne from '../assets/boulder-samples/boulder-1.jpg?inline'
-import sampleTwo from '../assets/boulder-samples/boulder-2.jpg?inline'
+import sampleOne from '../assets/boulder-samples/boulder-1.jpg'
+import sampleTwo from '../assets/boulder-samples/boulder-2.jpg'
 import { photoSampleFile } from '../utils/photoSample.js'
 import PhotoRouteBoardCanvas from './PhotoRouteBoardCanvas.vue'
 import PhotoReviewViewport from './PhotoReviewViewport.vue'
 import { photoRouteV2Service as service, photoV2AssetUrl } from '../services/photoRouteService.js'
 import { clone, createHistory, nearestPhotoHole, photoHoles, snapObjectToHole, translateObjects } from '../utils/photoBoard.js'
+import { routeColorHex } from '../constants/routeColors.js'
 
 const emit = defineEmits(['status'])
 const access = inject('pilotAccess')
@@ -282,7 +283,7 @@ function report() { emit('status', { count:board.value?.objects.length || 0, dir
 function formatDate(value) { return new Intl.DateTimeFormat('zh-CN', { dateStyle:'medium', timeStyle:'short' }).format(new Date(value)) }
 function boardStatus(value) { return ({ processing:'识别中', review:'待复核', ready:'可定线', failed:'失败' })[value] || value }
 function kindLabel(value) { return value === 'volume' ? '造型' : '岩点' }
-function swatch(color) { return ({ 黄色:'#d6a800',蓝色:'#2474a6',红色:'#b84336',绿色:'#3d8061',紫色:'#7b5aa6',橙色:'#c56b2b',粉色:'#bb6683',黑色:'#30343a',白色:'#eeeae1',灰色:'#7c858c' })[color] || '#7b7468' }
+function swatch(color) { return routeColorHex(color) }
 function routeDisplayColor(item) { const palette = ['#176b78','#b14e35','#6b5aa6','#93701c','#407752','#b04470']; return palette[routes.value.findIndex(route => route.id === item.id) % palette.length] }
 function contourPoints(object) { return object.contour.map(point => point.join(',')).join(' ') }
 function syncHistory() { canUndo.value = history.canUndo; canRedo.value = history.canRedo }
@@ -383,7 +384,7 @@ async function uploadSample(sample) {
   if (!editable.value || uploading.value || jobBusy.value) return
   uploading.value = true; error.value = ''
   try {
-    const file = photoSampleFile(sample.url, sample.name)
+    const file = await photoSampleFile(sample.url, sample.name)
     await uploadFile(file, true)
   } catch { error.value = '样例照片准备失败，请刷新页面后重试。' }
   finally { uploading.value = false }
@@ -429,7 +430,7 @@ async function openBoard(id) {
     if (stage.value === 'upload') { activeJob.value = board.value.latest_job || null; if (jobBusy.value) watchJob() }
   } catch (cause) { error.value = detail(cause, '无法打开照片，请重试。') }
 }
-function startCalibration() { if (!editable.value) return; refineMode.value = false; addMode.value = false; calibrationMode.value = !calibrationMode.value; calibrationPoints.value = []; if (calibrationMode.value) error.value = '请依次点击最外侧四个孔位：左下 A1、右下 AD1、右上 AD20、左上 A20（不是岩板外边缘）。' }
+function startCalibration() { if (!editable.value) return; refineMode.value = false; addMode.value = false; calibrationMode.value = !calibrationMode.value; calibrationPoints.value = []; if (calibrationMode.value) error.value = '请依次点击最外侧四个孔位：左下 A1、右下 T1、右上 T30、左上 A30（不是岩板外边缘）。' }
 function editObject(patch) { if (!selectedObject.value) return; mutate(() => Object.assign(selectedObject.value, patch)) }
 function editAnchors(value) {
   const ids = [...new Set(value.toUpperCase().split(/[,，\s]+/).filter(Boolean))]
@@ -469,7 +470,7 @@ async function addAtPhoto(event) {
   if (calibrationMode.value) {
     calibrationPoints.value = [...calibrationPoints.value, [x,y]]
     if (calibrationPoints.value.length === 4) {
-      try { board.value = await service.calibrate(board.value.id, { photo_points:calibrationPoints.value, board_hole_ids:['A1','AD1','AD20','A20'] }); savedSnapshot = snapshot(); error.value = '' }
+      try { board.value = await service.calibrate(board.value.id, { photo_points:calibrationPoints.value, board_hole_ids:['A1','T1','T30','A30'] }); savedSnapshot = snapshot(); error.value = '' }
       catch (cause) { error.value = detail(cause, '标定失败，请重新选择四个角点。') }
       finally { calibrationMode.value = false }
     }
@@ -522,7 +523,7 @@ function moveDrag({ id, dx, dy }) {
   if (!dragBaseline) return
   const base = dragBaseline.board.objects.find(item => item.id === id); if (!base) return
   const moved = translateObjects([base], dx, dy)[0]
-  const index = board.value.objects.findIndex(item => item.id === id); board.value.objects[index] = { ...board.value.objects[index], center_x_mm:moved.center_x_mm, center_y_mm:moved.center_y_mm }
+  const index = board.value.objects.findIndex(item => item.id === id); board.value.objects[index] = { ...board.value.objects[index], center_x_mm:moved.center_x_mm, center_y_mm:moved.center_y_mm, anchors:[] }
   const hole = nearestPhotoHole(moved.center_x_mm, moved.center_y_mm)
   snapPreview.value = hole ? { ...hole, fromX:moved.center_x_mm, fromY:moved.center_y_mm } : null
 }

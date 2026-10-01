@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "KB-BODY-001",
+  "version": 1,
+  "batch_id": "B003",
+  "title": "身体朝向：骨盆、胸廓与出手分别记录",
+  "aliases": ["身体朝向", "身体转向", "转体", "侧身", "Turning in", "Turning out", "Open hip", "Closed hip", "Pelvic orientation"],
+  "questions": ["肩膀转了就算整个身体转了吗？", "侧身是不是一定比正面好？", "转体、外侧踩点和 Drop knee 是同一个动作吗？"],
+  "tags": ["骨盆朝向", "胸廓朝向", "转向时序", "局部墙面"],
+  "action_codes": [],
+  "stage_tags": ["准备", "移动", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-FOOT-002", "KB-HAND-004", "KB-BODY-004"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["需要比较出手前后身体各部分的可见朝向。", "能说明所参照的局部墙面；仅有单目时将三维朝向标为估计或未知。"],
+    "exclusions": ["只看头或单侧肩，不能确定骨盆朝向。", "转角、对撑等多墙面任务不能直接沿用单墙面正面/侧身分类。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Dech/Kittel 提议用骨盆相对墙面的空间关系区分正面与旋转技术，并指出头、肩可相对身体转动；多墙面情境需另作分类。这里采用的是作者的概念框架，而非统一识别标准。", "basis": "source_summary", "evidence_ids": ["E-DECH-ORIENTATION-2026-01"]},
+    {"id": "C2", "statement": "Momentum 用膝和髋相对中线的向内、向外朝向解释 turning in/out 与 closed/open hip。", "basis": "source_summary", "evidence_ids": ["E-MOM-TURN-01"]},
+    {"id": "C3", "statement": "本库分开记录骨盆、胸廓、脚接触和出手时序；身体转向、外侧踩点和 Drop knee 不合并成一个自动标签。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C4", "statement": "可比较朝向变化前后下一手或下一脚的可见通道，但不预设转体应先于出手，或肩髋必须同步。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["出手前、移动中和接后连续片段，包含胸廓、骨盆、双脚及局部墙面。", "机位与遮挡说明；需要判三维转动时应有足够不同视角或经验证的测量。"],
+    "events": ["逐段记录胸廓与骨盆可见朝向是否变化，而非只看最终姿态。", "并列记录脚在原点转动、换点或离点，以及移动手何时离开旧点和接触目标。"],
+    "unknowns": ["被身体挡住的脚是否仍接触及实际鞋边。", "二维投影之外的转角、身体深度与真实重心。"],
+    "cannot_infer": ["不能由肩线或髋部投影直接得出真实重心、旋转力矩或发力来源。", "侧身不一定优于正面，转得更多也不一定更容易继续。", "不能用固定腰先甩或肩髋同步口令填补缺失时序。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先确定局部墙面与实际接触，再对齐朝向变化和出手事件；只有材料可区分时，才比较候选配置怎样影响下一步。",
+    "conditions": ["同一目标和接触条件优先比较；更换脚点须另记。", "三维关系看不清时保留未知，不以单帧姿态强制转体。"],
+    "compare": ["胸廓与骨盆是否同段变化、脚是否仍在原接触。", "到目标后下一手/脚的实际通道与任务结果。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "连续片段中胸廓先转，骨盆随后改变朝向；右手在两者之间离开旧点。", "allowed": "分别记录三件事及可见顺序，不合称同时甩腰发力。", "disallowed": "肩先转证明顺序错误，必须骨盆先转。"},
+    {"kind": "constructed", "scenario": "转角线路只拍到一面墙和一侧肩，双脚与骨盆不完整。", "allowed": "可描述该肩的可见朝向；全身分类与另一面接触未知。", "disallowed": "肩与画面平行，所以确认正面技术和重心位置。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["尚无可用于此分类的经验证三维估计或角度阈值。", "Turning in/out 与正面/旋转技术来自不同术语体系；未作为业务枚举合并。", "原作者连续示范及复杂墙面例子仍需逐段核查。"]
+}

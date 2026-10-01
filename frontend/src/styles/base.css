@@ -28,8 +28,9 @@ a { color: inherit; text-underline-offset: 3px; }
 ::selection { color: var(--ui-ink); background: var(--ui-brand-soft); }
 
 :focus-visible {
-  outline: 3px solid rgba(244, 196, 48, 0.72);
-  outline-offset: 3px;
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ui-focus-halo);
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -81,8 +82,7 @@ small { font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

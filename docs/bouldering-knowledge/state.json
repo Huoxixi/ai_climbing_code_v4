@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "updated": "2026-09-25",
+  "last_run": "runs/2026-09-25-B005.md",
+  "batches": [
+    {
+      "id": "B001",
+      "topic": "落脚与身体转移",
+      "status": "authored",
+      "unit_ids": [
+        "KB-FOOT-001",
+        "KB-FOOT-002",
+        "KB-FOOT-003",
+        "KB-FOOT-004",
+        "KB-FOOT-005",
+        "KB-FOOT-006"
+      ],
+      "next_action": "内容与工具试用完成。保留专业审核、真实视频验证和其他教学体系交叉核查缺口；下一内容批次见全库进度。"
+    },
+    {
+      "id": "B002",
+      "topic": "手部接触、匹配与动作衔接",
+      "status": "authored",
+      "unit_ids": ["KB-HAND-001", "KB-HAND-002", "KB-HAND-003", "KB-HAND-004", "KB-HAND-005", "KB-HAND-006"],
+      "next_action": "6 个单元内容与来源核对完成，首轮 23 项工具测试通过；保留术语映射差异、专业审核、真实视频及跨教学体系核查缺口。下一内容批次见全库进度。"
+    },
+    {
+      "id": "B003",
+      "topic": "身体朝向、旗式与动态回脚",
+      "status": "authored",
+      "unit_ids": ["KB-BODY-001", "KB-BODY-002", "KB-BODY-003", "KB-BODY-004", "KB-DYN-001", "KB-DYN-002"],
+      "next_action": "6 个文字知识单元与来源核对完成，28 项工具测试通过。连续示范、术语映射、专业审核及实拍验证仍待核查，转入 B005 跟踪；下一批见全库进度。"
+    },
+    {
+      "id": "B004",
+      "topic": "读线、探索与同线路比较",
+      "status": "authored",
+      "unit_ids": ["KB-TACTIC-001", "KB-TACTIC-002", "KB-TACTIC-003", "KB-TACTIC-004", "KB-TACTIC-005", "KB-TACTIC-006"],
+      "next_action": "6 个单元及来源核对完成，33 项工具测试通过；研究任务、计时定义和来源限制已保留。专业审核、真实视频及比较方法验证转入 B005。"
+    },
+    {
+      "id": "B005",
+      "topic": "跨主题质量评测与视频验证准备",
+      "status": "in_progress",
+      "unit_ids": [],
+      "next_action": "本地开发检查与准备完成：40 道固定开发题、8 项来源抽查、12 个构造短答、58 条缺口及验证方案。继续核验原作者连续示范；另行安排独立未见题与评分、专业复核，并在用户指定授权素材后启动视频试标。当前开发集不作独立验收，全部自动建议仍禁用；详见 quality/README.md。"
+    }
+  ]
+}

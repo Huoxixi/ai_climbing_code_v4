@@ -5,10 +5,10 @@
       <output aria-label="照片缩放比例">{{ Math.round(zoom * 100) }}%</output>
       <button type="button" :disabled="zoom >= 8" @click="scale(zoom * 1.25)">放大</button>
       <button type="button" @click="reset">完整显示</button>
-      <span>滚轮或双指缩放 · 放大后拖动</span>
+      <span>触摸板双指或滚轮滑动查看 · 捏合或按钮缩放</span>
     </div>
-    <div ref="viewport" class="photo-review-viewer__viewport" tabindex="0" aria-label="岩壁照片，可缩放和拖动"
-      @wheel.prevent="wheel" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up"
+    <div ref="viewport" class="photo-review-viewer__viewport" :class="{ 'is-zoomed': zoom > 1 }" tabindex="0" aria-label="岩壁照片，可缩放和拖动"
+      @wheel="wheel" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up"
       @click.capture="click" @keydown="key">
       <div class="photo-review-viewer__image" :style="imageStyle"><slot /></div>
     </div>
@@ -17,6 +17,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { photoWheelGesture } from '../utils/photoViewportGesture.js'
 const props = defineProps({ width: { type:Number, required:true }, height: { type:Number, required:true }, imageKey:String })
 const viewport = ref(null), size = ref({ width:0, height:0 }), zoom = ref(1), offset = ref({ x:0, y:0 })
 const fit = computed(() => Math.min(size.value.width / props.width, size.value.height / props.height))
@@ -36,7 +37,16 @@ function scale(value, anchor = {x:0,y:0}) {
 }
 function wheel(event) {
   const rect = viewport.value.getBoundingClientRect()
-  scale(zoom.value * Math.exp(-Math.max(-100, Math.min(100, event.deltaY))*.002), {x:event.clientX-rect.left-rect.width/2,y:event.clientY-rect.top-rect.height/2})
+  const gesture = photoWheelGesture(event, zoom.value, rect.height)
+  if (gesture.type === 'page') return
+  if (gesture.type === 'zoom') {
+    event.preventDefault()
+    scale(zoom.value * gesture.factor, {x:event.clientX-rect.left-rect.width/2,y:event.clientY-rect.top-rect.height/2})
+    return
+  }
+  const before = offset.value
+  offset.value = {x:before.x+gesture.x,y:before.y+gesture.y}; clamp()
+  if (offset.value.x !== before.x || offset.value.y !== before.y) event.preventDefault()
 }
 function down(event) {
   if (event.button !== 0) return
@@ -82,7 +92,8 @@ onBeforeUnmount(() => { observer?.disconnect(); window.removeEventListener('poin
 .photo-review-viewer__tools button:disabled { opacity:.45; cursor:default; }
 .photo-review-viewer__tools output { min-width:4ch; font-variant-numeric:tabular-nums; }
 .photo-review-viewer__tools span { font-size:12px; }
-.photo-review-viewer__viewport { flex:1; min-height:180px; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#e7e3da; touch-action:none; user-select:none; cursor:grab; }
+.photo-review-viewer__viewport { flex:1; min-height:180px; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#e7e3da; touch-action:pan-y; user-select:none; cursor:grab; }
+.photo-review-viewer__viewport.is-zoomed { touch-action:none; }
 .photo-review-viewer__viewport:active { cursor:grabbing; }
 .photo-review-viewer__image { flex:none; transform-origin:center; }
 .photo-review-viewer__image :deep(img) { pointer-events:none; -webkit-user-drag:none; }

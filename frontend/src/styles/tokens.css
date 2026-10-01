@@ -41,7 +41,8 @@
   --ui-brand-hover: #e7b821;
   --ui-brand-soft: #fff3b2;
   --ui-brand-ink: #2d2500;
-  --ui-focus: rgba(244, 196, 48, 0.72);
+  --ui-focus: #6b5000;
+  --ui-focus-halo: rgba(244, 196, 48, 0.52);
   --ui-success: #27775a;
   --ui-warning: #9b6710;
   --ui-danger: #bd4343;

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "KB-HAND-001",
+  "version": 1,
+  "batch_id": "B002",
+  "title": "手点方向：侧拉、反扣与 Gaston",
+  "aliases": ["手点方向", "侧拉", "Sidepull", "Side pull", "反扣", "Undercling", "Undercut", "Gaston", "外推侧拉", "肩推"],
+  "questions": ["侧拉、反扣和 Gaston 有什么区别？", "岩点朝右就一定要用右手吗？", "手肘朝外能确认用了 Gaston 吗？"],
+  "tags": ["点面方向", "手部朝向", "脚部配合", "侧向抓持"],
+  "action_codes": [],
+  "stage_tags": ["准备", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-HAND-005", "KB-FOOT-002"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["解释手部使用方向，或可辨认接触点面和身体相对位置。", "复盘同时保留脚部接触及下一步目标。"],
+    "exclusions": ["只看到岩点轮廓，不知道手触哪一面时，不能确认技术。", "不用于判断真实拉力、关节负荷或指定必须采用的姿态。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Sidepull 教学把侧向点面的使用与身体相对位置、脚部配合联系起来；仅知道点朝哪边，还没有描述它如何被使用。", "basis": "source_summary", "evidence_ids": ["E-MOM-SIDEPULL-01"]},
+    {"id": "C2", "statement": "Undercling 的典型描述是从点下侧抓持、掌心朝上并向上拉；原教学同时提到脚部的对抗配合。", "basis": "source_summary", "evidence_ids": ["E-MOM-UNDERCLING-01"]},
+    {"id": "C3", "statement": "Gaston 的典型描述是拇指偏下、肘朝外，向外推压使用点面；这不是所有侧拉的同义词。", "basis": "source_summary", "evidence_ids": ["E-MOM-GASTON-01"]},
+    {"id": "C4", "statement": "本库分开记点面朝向、可见手部姿态与推测使用方向；不会由岩点朝向直接指定左右手，也不会由单个肘部姿态确认实际受力。", "basis": "product_rule", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["接触点的局部可用面和手掌/手指方向。", "同一时段双脚、躯干及下一目标；注明机位。"],
+    "events": ["记录进入目标时抓的是上侧、下侧或侧面；遮挡处保留未知。", "分别记录手部转向、脚部换点、身体位置变化及下一次出手的顺序。"],
+    "unknowns": ["被遮挡的手指、拇指和实际接触面。", "身体各接触点分别承担多少力。"],
+    "cannot_infer": ["点面朝右不能单独证明应当用右手或已经侧拉。", "身体更高、手臂更直或肘更外展，不等于动作一定更合适。", "不能凭姿态判断肩部或手腕的安全性。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先标出手真正接触的局部面，再核对脚位和下一步；若使用方向仍不可见，只比较候选，不给强制转体或抬肘口令。",
+    "conditions": ["需要点面与手的关系清楚；不由路线图补造实际使用方式。", "比较不同尝试时保留岩点、脚位和目标变化记录。"],
+    "compare": ["接触面与手姿是否变化，以及变化后实际发生的下一步。", "原手仍留点时，脚部与身体位置怎样先后改变。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "近景可见右手从点下侧进入、掌心朝上，之后左脚移高。", "allowed": "可描述下侧抓持，与反扣典型姿态相符；脚位变化另记。", "disallowed": "已经测出向上拉力，且左脚越高越省力。"},
+    {"kind": "constructed", "scenario": "只看见右肘朝外，岩点和手掌被躯干挡住。", "allowed": "肘部朝外可见，接触面及 Gaston 是否成立未知。", "disallowed": "确认 Gaston，继续抬肘即可解决。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["中文总表 G09/G10/G11/P14 是目录标签，未作为业务动作代码入库。", "需增加其他原作者对方向与抓握组合的资料，以及授权多机位样本。", "Undercling/Undercut 在此用于术语检索，不把所有局部用法视为完全等同。"]
+}

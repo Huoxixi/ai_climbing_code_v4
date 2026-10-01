@@ -1,0 +1,469 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "SRC-MOM-TOE",
+      "title": "Toe Placement",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/toe-placement/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-TOE-01",
+          "locator": "Toe Placement 正文；#2 Pivoting 与 #3 Foot Switching",
+          "supports": "该教学页把鞋尖落点与后续脚部转向、给另一只脚留空间联系起来。",
+          "limits": "不能推出任何脚点都必须只用鞋尖；没有量化其对本项目用户的效果。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-INSTEP",
+      "title": "Instep",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/instep/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-INSTEP-01",
+          "locator": "Instep 标题下第一段",
+          "supports": "该页以鞋内侧边缘接触说明 Instep，并把它与高抬脚、Rock over 等连接。",
+          "limits": "没有给出可直接用于单目视频的识别阈值。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-BACKSTEP",
+      "title": "Backstep",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/backstep/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-BACKSTEP-01",
+          "locator": "Backstep 标题下第一段",
+          "supports": "该页把外侧边缘接触与侧身配置联系起来。",
+          "limits": "不能把所有外侧踩点等同于 Drop knee，也不能推出固定膝角或最优朝向。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-SMEAR",
+      "title": "Smearing",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/smearing/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-SMEAR-01",
+          "locator": "Smearing 开头三段",
+          "supports": "该页讨论缺少突出脚点时在墙面或体积点面上建立鞋底接触，并提到局部面和身体位置的关系。",
+          "limits": "属于教学描述；不提供摩擦系数、压力测量或所有情境统一的脚跟高度。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-SWITCH",
+      "title": "Foot Switch",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/foot-switch/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-SWITCH-01",
+          "locator": "Foot Switch 定义；#1 Rollover foot switch 与 #2 Optimal Toe Placement",
+          "supports": "该页将换脚定义为同一脚点上的两脚交替，并介绍为另一脚留位置与滚动交替两种教学形式。",
+          "limits": "不能据其评价词把其他换脚变式统一判错；未验证本项目的识别与建议。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-ROCKOVER",
+      "title": "Rock Over",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/rock-over/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-ROCKOVER-01",
+          "locator": "Rock Over (place, shift, move) 标题下第一段",
+          "supports": "该页以落脚、身体转移、继续移动组织 Rock over 的教学说明。",
+          "limits": "没有用视频测量真实重心，也未证明所有动作都必须按三个停顿步骤执行。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-HIGHSTEP",
+      "title": "Highstep",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/highstep/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年攀岩教学；用于中文抱石技术解释时记录情境迁移。",
+      "limitations": "同一机构的系列教学页，不计为彼此独立的实验验证。文本段落已阅读；页面示意图未逐幅验证。",
+      "evidence": [
+        {
+          "id": "E-MOM-HIGHSTEP-01",
+          "locator": "Highstep 标题下首段与随后要点",
+          "supports": "该页将高抬脚后的身体转移与后续 Rock over 联系起来，列举手部推拉等可能配合。",
+          "limits": "不是每个人必须完成的动作处方，也没有给出高度或关节角的统一判定线。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-CEC-ADM-2021",
+      "title": "Athlete Development Matrix v1 (2021)",
+      "author": "Climbing Escalade Canada",
+      "url": "https://climbingcanada.ca/wp-content/uploads/2021/09/CEC_Athlete-Development-Matrix-ADM-v1-2021.pdf",
+      "source_type": "federation",
+      "published": "2021，文件标示 v1",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "加拿大攀岩运动员发展框架；本轮仅借用列为抱石相关的技术目录。",
+      "limitations": "没有逐项采用年龄分级、训练量或全部生物力学解释；属于协会框架而非动作有效性试验。",
+      "evidence": [
+        {
+          "id": "E-CEC-FOOT-01",
+          "locator": "PDF 第 4 页（零基页索引 3），印刷页 4；TECHNICAL SKILLS 的 Footwork、Smearing、Foot placement、Foot matching、Pivots、Lateral weight transfer、Rock overs 各行；B 的含义见第 2 页图例。",
+          "supports": "内外侧脚法、踩墙、落脚、脚部匹配、转动、侧向身体转移与 Rock over 被列为抱石相关技术。",
+          "limits": "仅支持知识分类和术语关联，不支持识别阈值或某一 beta 更优。"
+        }
+      ]
+    },
+    {
+      "id": "SRC-MOM-SIDEPULL",
+      "title": "Sidepull",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/sidepull/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；采用方向与身体、脚部配合的有限定义。",
+      "limitations": "与本库其他 Momentum 页面属于同一教学体系；不提供力测量、最优姿态或个体效果验证。",
+      "evidence": [{
+        "id": "E-MOM-SIDEPULL-01",
+        "locator": "Sidepull 标题下首段及 Use oppositional feet 要点",
+        "supports": "侧向点面使用与身体相对位置及脚部配合相关。",
+        "limits": "不采纳必须直臂等全情境口令；点面朝向不等于实际测得的拉力方向。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-UNDERCLING",
+      "title": "Undercling",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/undercling/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；用于说明从下侧抓持的方向关系。",
+      "limitations": "同一机构教学，未独立验证。仅采用开头定义与脚部配合，不推广高度与易用性的单调关系。",
+      "evidence": [{
+        "id": "E-MOM-UNDERCLING-01",
+        "locator": "Undercling 标题下首段前两句及 opposing feet 句",
+        "supports": "从点下侧、掌心朝上抓持并向上拉的定义，以及脚部对抗配合的教学描述。",
+        "limits": "没有个体手腕/肩部承受能力、关节负荷或统一身体高度结论。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-GASTON",
+      "title": "Gaston",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/gaston/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；Gaston 的典型手部与肘部配置。",
+      "limitations": "正文已读，图示未用于证明动作时序；不能把典型配置当作强制姿态。",
+      "evidence": [{
+        "id": "E-MOM-GASTON-01",
+        "locator": "Gaston 标题下首段；不采用后续脚位为固定方案",
+        "supports": "拇指偏下、肘朝外及向外推压使用点面的典型描述。",
+        "limits": "不是看到外展肘便能确认受力，也不是肩部安全或训练处方依据。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-HANDMATCH",
+      "title": "Hand Match",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/hand-match/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；双手同点与为后续换手留空间。",
+      "limitations": "不采用最常见休息方式或不同身高必须匹配更多次等泛化说法。",
+      "evidence": [{
+        "id": "E-MOM-HANDMATCH-01",
+        "locator": "Hand Match 标题下前两段，定义与小点面留空间说明",
+        "supports": "两手在同一手点会合，可服务换手；小点面教学讨论旧手留空间和新手接管后再出手。",
+        "limits": "不证明双手平均分担负荷，不规定每次都要匹配或必须使用这一交接形式。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-BUMP",
+      "title": "Bumping",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/bumping/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；同手连续移动与中间点用途。",
+      "limitations": "与项目 BUMP 候选代码的附加稳定条件不同；本页不定义停顿秒数或自动识别阈值。",
+      "evidence": [{
+        "id": "E-MOM-BUMP-01",
+        "locator": "Bumping 标题下首段；Coaching tips 的固定脚位与可调整脚位两项",
+        "supports": "一手留在同一点，另一手连续移动；中间点可供移脚或改变身体位置后再去目标。",
+        "limits": "不能推出中间点必须没有稳定、所有连动都不停顿，或增加中间点一定更好。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-CROSS",
+      "title": "Crossing Hands & Feet",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/crossing-hands-feet/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "仅采用交叉手定义及 over/under 路径区分；交叉脚留待其他批次。",
+      "limitations": "不将教材中的最优路线断言或 Rose move 别名评价移植到所有任务。",
+      "evidence": [{
+        "id": "E-MOM-CROSS-01",
+        "locator": "首段第一句；Crossing Hands (over & under) 标题下第一段",
+        "supports": "自由手跨过中线并从留手上方或下方经过；路径选择与手脚点方向及动作顺序有关。",
+        "limits": "单帧两手交叠不能证明发生了交叉移动；未量化重心、可达距离或通道优劣。"
+      }]
+    },
+    {
+      "id": "SRC-MOM-PINCH",
+      "title": "Pinch",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/pinch/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学；拇指与其他手指对向夹持的定义及点型与用法区别。",
+      "limitations": "不采纳手指训练量、最优抓握方式或个人力量判断。",
+      "evidence": [{
+        "id": "E-MOM-PINCH-01",
+        "locator": "Pinch 标题下首段，定义及侧拉/使用顶部的变式说明",
+        "supports": "捏握使用相对两面、拇指与其他手指对向接触；同一类点也可能用侧面或顶部。",
+        "limits": "不能由岩点外形推断已使用拇指，不能由可见接触测出夹持力。"
+      }]
+    },
+    {
+      "id": "SRC-SEIFERT-2015-EXPLORATION",
+      "title": "Environmental Design Shapes Perceptual-motor Exploration, Learning, and Transfer in Climbing",
+      "author": "Ludovic Seifert; Jérémie Boulanger; Dominic Orth; Keith Davids",
+      "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2015.01819/full",
+      "source_type": "research",
+      "published": "2015-11-25；Frontiers in Psychology 6:1819；DOI 10.3389/fpsyg.2015.01819",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "9 名男性中等水平攀岩者；室内垂直墙顶绳任务，通过改变岩点方向比较学习。B002 采用方法中的事件区分；B004 补读练习及迁移结果，不改写原证据卡。",
+      "limitations": "并非动态抱石落点试验或 AI 识别验证；未把摸点次数与技术好坏、恐惧或能力不足作单次因果对应。",
+      "evidence": [{
+        "id": "E-SEIFERT-TOUCH-2015-01",
+        "locator": "Methods > Participants、Protocol；Data collection and analysis 中视频计数段与以是否作为支撑区分 exploratory/performatory 的定义段",
+        "supports": "研究分别记录触碰与实际抓持/作为支撑使用手点的事件，而非把所有摸到点都合并成有效使用。",
+        "limits": "研究区分依据不是仅接触时长；本项目的接触保留及后续任务三段记录是原创观察框架，不声称经过该试验验证。"
+      }, {
+        "id": "E-SEIFERT-LEARNING-2015-01",
+        "locator": "Methods > Protocol、Data collection and analysis；Results > Effect of practice（Table 2）及 Transfer（Table 3）",
+        "supports": "四轮练习中探索次数和攀爬耗时下降，但几何熵没有整体练习主效应；新路线相对第四轮熟悉路线出现更多探索，几何熵差异未显著。次数、耗时和髋路径指标并非同一测量。",
+        "limits": "小样本顶绳任务；不显著不证明相等。几何熵不是直接能耗或真实重心测量，不能建立多摸一次的惩罚分，也不证明所有探索都有效。"
+      }]
+    },
+    {
+      "id": "SRC-DECH-KITTEL-2026",
+      "title": "Biomechanical Principles and Techniques—A Systematization for Sport Climbing",
+      "author": "Silas Dech; René Kittel",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13027491/",
+      "source_type": "research",
+      "published": "2026-02-28；J Funct Morphol Kinesiol 11(1):103；DOI 10.3390/jfmk11010103",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "作者提出的攀岩技术系统化框架；本批采用 3.2.1 的身体朝向分类与限制。",
+      "limitations": "概念整理而非新干预实验；Data Availability 明确无新数据。未把分类转为单目角度阈值、最佳动作或训练效果。",
+      "evidence": [{"id": "E-DECH-ORIENTATION-2026-01", "locator": "3.2.1 Categorization of Climbing Techniques：头肩自由度、骨盆平面与墙面的关系及多墙面修订段；Data Availability Statement", "supports": "作者以骨盆相对墙面关系区分正面与旋转技术，说明头肩朝向不能简单替代，转角等多墙面情境需另作定义。", "limits": "不是所有教材统一术语；未验证本库分类准确率，也不证明髋部投影等于真实重心。"}]
+    },
+    {
+      "id": "SRC-REI-TECHNIQUES",
+      "title": "Climbing Techniques and Moves",
+      "author": "REI Expert Advice；Contributing Expert: Jay Parks",
+      "url": "https://www.rei.com/learn/expert-advice/climbing-techniques.html",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "机构通用攀岩教学；仅采用 Back Step、Drop Knee 与 Flagging 定义段。",
+      "limitations": "不是抱石技术有效性实验；未逐帧核对嵌入视频，不采纳全部效率、姿态和力学泛化。",
+      "evidence": [
+        {"id": "E-REI-BACKSTEP-DROP-01", "locator": "Climbing Moves > Back Step 与 Drop Knee 的首段", "supports": "外侧鞋边与侧身描述 Back step；Drop knee 进一步描述膝内转、朝下的配置。", "limits": "不把髋高脚点当必要条件，不要求膝转到最大，也不由外侧踩点单独确认 Drop knee。"},
+        {"id": "E-REI-FLAG-01", "locator": "Climbing Moves > Flagging 的定义段", "supports": "旗式用肢体位置调节作为平衡手段，教学目标包括减少身体向外摆离。", "limits": "不证明任何旗式必然止摆或比双脚留点更好。"}
+      ]
+    },
+    {
+      "id": "SRC-MOM-TURN",
+      "title": "Turning In & Turning Out",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/turning-in-turning-out/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构青少年教学的 open/closed hip 用语。",
+      "limitations": "与其余 Momentum 页面属同一体系；不将 Turning in、Backstep、侧身、Drop knee 无条件合为同义词。",
+      "evidence": [{"id": "E-MOM-TURN-01", "locator": "Turning In & Turning Out 标题下前三段的术语定义", "supports": "该体系用膝和髋相对中线的朝向解释 turning in/out 与 open/closed。", "limits": "这些教学口令不是三维测量，不规定肩髋同步、腰先甩或最优角度。"}]
+    },
+    {
+      "id": "SRC-MOM-OUTSIDEFLAG",
+      "title": "Flagging – Outside",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/flagging-outside/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "该教材的 Outside flag，含旗式脚未踩指定点但可贴墙的情况。",
+      "limitations": "不采用固定左右手脚口令或强制定线练习；图示未用于时序或效果验证。",
+      "evidence": [{"id": "E-MOM-OUTSIDEFLAG-01", "locator": "Flagging – Outside 标题下首段", "supports": "一腿向中线外伸出、另一脚使用脚点；伸出脚可接触墙面而非踩指定脚点。", "limits": "自由腿不等于完全无接触或零受力；不能从腿伸直便确定平衡贡献。"}]
+    },
+    {
+      "id": "SRC-MOM-BACKFLAG",
+      "title": "Back Flagging",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/back-flagging/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "Back flag 的自由腿路径定义。",
+      "limitations": "不采纳让学习者先尝试预期失败的 Coaching tips，也不将换脚统一贬为多余。",
+      "evidence": [{"id": "E-MOM-BACKFLAG-01", "locator": "Back Flagging 首段，包括 French Flag 别名及 free leg crosses ... behind 定义", "supports": "后旗式的自由腿经支撑腿后方越过中线，右腿可伸向左侧，反之亦然。", "limits": "腿的前后关系需要足够视角；单帧两腿投影交叉不能确认。"}]
+    },
+    {
+      "id": "SRC-MOM-DROPKNEE",
+      "title": "Drop Knee",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/drop-knee/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "采用 Drop knee 与闭髋/内转关系的术语描述，不采用练习处方。",
+      "limitations": "原文含转至最大、固定手脚对应与医学/预防说法；本库不采纳这些主张，未以其评估个人关节状态。",
+      "evidence": [{"id": "E-MOM-DROPKNEE-01", "locator": "Drop Knee 首段第二句及膝内转下沉的描述", "supports": "该体系将 Drop knee 作为较明显的 closed hip/turning in 配置来解释。", "limits": "不要求膝低于脚、不设角度阈值、不推断柔韧性或损伤。"}]
+    },
+    {
+      "id": "SRC-GRIFFITH-POGO-2016",
+      "title": "How To Pogo for Climbing",
+      "author": "Connor Griffith，Friction Labs 作者教学专栏",
+      "url": "https://shop.frictionlabs.com/blogs/climb-your-impossible/connors-world-the-secret-to-pogoing",
+      "source_type": "coaching",
+      "published": "2016-09-12",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "作者讲述的一种 Pogo/Moon Kick 教学配置：右手去目标、左脚起动、右腿摆动。",
+      "limitations": "仅核对文字；嵌入示范未作连续画面核验。排除尺寸、最佳幅度、普遍适用及与 Dyno 强度/轨迹的泛化比较。",
+      "evidence": [{"id": "E-GRIFFITH-POGO-01", "locator": "Pogo? Or Moon Kick?! 定义；How to pogo like Carlo Traversi 中 basic steps 的右腿、双臂、左脚与右手配合描述", "supports": "作者把摆动自由腿与手臂配合、支撑脚蹬离及目标接触组织为一种 Pogo 方案；本页将 Moon Kick 作别名。", "limits": "不是腿独自发力的测量；不能把一个左右配置或摆幅当成所有 Pogo 的固定时序。"}]
+    },
+    {
+      "id": "SRC-GRESHAM-INDOOR-2020",
+      "title": "Top 10 Technique Tips for Indoor Climbing",
+      "author": "Neil Gresham，Climber Magazine 署名原文",
+      "url": "https://www.climber.co.uk/indoor/indoor-climbing/top-1-technique-tips-for-indoor-climbing/",
+      "source_type": "coaching",
+      "published": "2020-03-10",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原作者室内攀岩教学；本批仅采用第 3 节旗式路径比较和第 5 节离点后回脚的讨论。",
+      "limitations": "不是干预验证；不采用全力绷背、必须避免放脚、高低点决定唯一旗式或由摆动推断核心弱等强结论。",
+      "evidence": [
+        {"id": "E-GRESHAM-FLAG-01", "locator": "3. Flagging 两段，尤其 trailing leg behind 与 inside active leg 的区分", "supports": "作者将换脚与不同自由腿路径列作候选，区分从支撑腿后方与内侧经过的旗式方案。", "limits": "不照搬高脚点配后旗、低脚点配内侧旗的确定性选择，也不保证哪种更省力。"},
+        {"id": "E-GRESHAM-RECATCH-01", "locator": "5. Cutting loose，脚离点、摆动与 reverse side of the swing 回脚句", "supports": "作者将离点后的摆动和重新放回脚点作为相连过程讨论，包括借回摆重新接近脚点。", "limits": "不证明每次脱脚都要放脚或用同一制摆姿态；不提供个体诊断、力值或已验证的回脚时刻。"}
+      ]
+    },
+    {
+      "id": "SRC-MOM-ROUTEREADING",
+      "title": "Route Reading",
+      "author": "Momentum Youth Programs",
+      "url": "https://youthprograms.momentumclimbing.com/route-reading/",
+      "source_type": "coaching",
+      "published": "正文未显示发布日期；不采用页脚版权年份",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "原机构教学中的读线任务与候选顺序。",
+      "limitations": "教学清单不是效果试验；未核验页面图片或演示，不能据此保证方案可行。",
+      "evidence": [{"id": "E-MOM-ROUTEREADING-01", "locator": "Route Reading 标题下定义段及五项清单", "supports": "读线是在动作执行前预想顺序，可在墙下或攀爬过程中进行；清单包括手脚点、潜在难段、休息位置及替代顺序。", "limits": "预想的点和路径不等于实际可用、已执行或唯一正确方案。"}]
+    },
+    {
+      "id": "SRC-LIMONTA-2020-FAMILIARITY",
+      "title": "On-Sight and Red-Point Climbing: Changes in Performance and Route-Finding Ability in Male Advanced Climbers",
+      "author": "Eloisa Limonta; Maurizio Fanchini; Susanna Rampichini; Emiliano Cé; Stefano Longo; Giuseppe Coratella; Fabio Esposito",
+      "url": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2020.00902/full",
+      "source_type": "research",
+      "published": "2020-05-28；Frontiers in Psychology 11:902；DOI 10.3389/fpsyg.2020.00902",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "18 名男性进阶攀岩者参加，最终分析 16 名；室内先锋，同一参与者先 onsight、隔一周再 redpoint。读取方法及 Results/Table 1，不作为抱石训练验证。",
+      "limitations": "两名在路线前两段范围内坠落者按方案排除；不是排除所有坠落。第二次正式攀爬前含实际练习机会，不能归因于仅看线。不同人、先锋/抱石及难度条件不可直接通用；未采纳心理、生理或安全处方。",
+      "evidence": [
+        {"id": "E-LIMONTA-PRACTICE-2020-01", "locator": "Materials and Methods > Subjects、Experimental Protocol、Experimental Procedures（第二次 session 的 60 min / maximum of four attempts 段）", "supports": "两次测试相隔一周；第二次正式测试前有 60 分钟、最多四次攀爬和研究路线的机会。熟悉条件包含实际攀爬经历，不是单独的视觉预览操作。", "limits": "机会的上限不等于每人实际完成四次；此协议不能证明任一读线练习独立有效。"},
+        {"id": "E-LIMONTA-TIMING-2020-01", "locator": "Materials and Methods > Data Analysis and Statistic 首两段；Results 的 Table 1（单位 s）", "supports": "研究在发生坠落时比较两个模式共有路段的耗时；分别定义执行、探索及两类停止时段，由两位观察者看录像并对照读线测试。Table 1 的动作指标单位为秒而非次数。", "limits": "研究功能性停顿分类不能直接映射成单目自动标签；本库不采用其好/坏停顿判断作为阈值。表中分项不能未经核对就作为互斥片段相加还原总时长。"}
+      ]
+    },
+    {
+      "id": "SRC-MEDERNACH-MEMMERT-2021",
+      "title": "Effects of decision-making on indoor bouldering performances: A multi-experimental study approach",
+      "author": "Jerry Prosper Medernach; Daniel Memmert",
+      "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0250701",
+      "source_type": "research",
+      "published": "2021-05-13；PLOS ONE 16(5):e0250701；DOI 10.1371/journal.pone.0250701",
+      "accessed": "2026-09-25",
+      "access_status": "section_read",
+      "scope": "77 名男性抱石者参与三项任务，按能力分组；读取参与者、程序、视频指标、Experiment 3 讨论及总体局限。三个实验使用同一样本，不计为三个独立样本验证。",
+      "limitations": "女性参与者被排除、组别人数不均、任务相对偏易及多重比较均有限制。非随机训练干预，不以组间差异推断一个人的失败原因；不照搬其论文发表时的比赛规则。",
+      "evidence": [
+        {"id": "E-MEDERNACH-MEASURES-2021-01", "locator": "Materials and methods > Movement and decision-making analyses；General discussion 的 limitations 段", "supports": "视频分析分别记录预览耗时、相对专家方案的动作偏离、动作失误、抓点耗时、到顶耗时、到顶及尝试数；研究也承认未专门检验参与者为何选择某种方案。", "limits": "外部动作指标不是内在认知的直接观测；这些指标不组成已验证的单一技术总分，不能反推恐惧或疲劳。"},
+        {"id": "E-MEDERNACH-ALTERNATIVE-2021-01", "locator": "Experiment 3 > Discussion 末段、Conclusion；General discussion 关于 general best solution 与参与者选择理由的段落", "supports": "第三项多解任务中，作者质疑专家方案能否成为适合所有人的唯一最佳路线；相对该方案的偏离数不足以独立说明谁决策更好。", "limits": "不证明所有替代方案都可行、等效或安全；不能自动指定一个身材对应的唯一 beta。"}
+      ]
+    }
+  ]
+}

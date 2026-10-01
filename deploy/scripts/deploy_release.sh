@@ -6,6 +6,13 @@ SOURCE_ROOT="/root/ai_climbing_code"
 RELEASE_ROOT="/opt/ai-climbing/releases"
 CURRENT_LINK="/opt/ai-climbing/current"
 RELEASE_TAG="${1:-}"
+CLIMBING_MODEL_CHECKPOINT="/var/lib/ai-climbing/models/climbing/verified-model_final.pth"
+CLIMBING_MODEL_SHA256="995960a74819e21bd66d7be56ae6e1c8124ec0a06fece4fae13812887d86ebea"
+DETECTRON2_WHEEL_CACHE="/var/cache/ai-climbing/detectron2"
+DETECTRON2_WHEEL="${DETECTRON2_WHEEL_CACHE}/detectron2-0.6-cp312-cp312-linux_x86_64.whl"
+DETECTRON2_WHEEL_SHA256="${DETECTRON2_WHEEL}.sha256"
+DETECTRON2_LEGACY_WHEEL="${DETECTRON2_WHEEL_CACHE}/detectron2-py312-torch2.8-cpu.whl"
+DETECTRON2_LEGACY_WHEEL_SHA256="${DETECTRON2_LEGACY_WHEEL}.sha256"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Release deployment must run as root." >&2
@@ -34,17 +41,28 @@ grep -q '^APP_ENV=production$' /etc/ai-climbing/backend.env
 grep -q '^LOCAL_ONLY=true$' /etc/ai-climbing/backend.env
 grep -q '^DISABLE_SUPABASE=true$' /etc/ai-climbing/backend.env
 grep -q '^ENABLE_SIMULATION=false$' /etc/ai-climbing/backend.env
+grep -q '^ENABLE_CLIMB_REPLAY=true$' /etc/ai-climbing/backend.env
 grep -q '^PILOT_AUTH_ENABLED=true$' /etc/ai-climbing/backend.env
 grep -q '^PILOT_COOKIE_SECURE=true$' /etc/ai-climbing/backend.env
 [[ -r /etc/ai-climbing/pilot-users.json ]] || {
   echo "/etc/ai-climbing/pilot-users.json is missing or unreadable."
   exit 1
 }
+[[ -r "${CLIMBING_MODEL_CHECKPOINT}" ]] || {
+  echo "Climbing model checkpoint is missing: ${CLIMBING_MODEL_CHECKPOINT}" >&2
+  exit 1
+}
+printf '%s  %s\n' "${CLIMBING_MODEL_SHA256}" "${CLIMBING_MODEL_CHECKPOINT}" |
+  sha256sum --check --status || {
+    echo "Climbing model checkpoint hash verification failed." >&2
+    exit 1
+  }
 
 temporary_root="$(mktemp -d /tmp/ai_climbing_code_v4.XXXXXX)"
 building_release="${RELEASE_ROOT}/.${RELEASE_TAG}.building"
 final_release="${RELEASE_ROOT}/${RELEASE_TAG}"
 smoke_pid=""
+detectron2_wheel_build=""
 
 cleanup() {
   if [[ -n "${smoke_pid}" ]]; then
@@ -54,6 +72,9 @@ cleanup() {
   rm -rf -- "${temporary_root}"
   if [[ -d "${building_release}" ]]; then
     rm -rf -- "${building_release}"
+  fi
+  if [[ -n "${detectron2_wheel_build}" && -d "${detectron2_wheel_build}" ]]; then
+    rm -rf -- "${detectron2_wheel_build}"
   fi
 }
 trap cleanup EXIT
@@ -93,7 +114,50 @@ rsync -a \
 rsync -a "${SOURCE_ROOT}/frontend/dist/" "${building_release}/frontend/dist/"
 
 python3.12 -m venv "${building_release}/backend/.venv"
-"${building_release}/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "${building_release}/backend/requirements-production.lock"
+mkdir -p "${DETECTRON2_WHEEL_CACHE}"
+requirements_without_detectron2="${temporary_root}/requirements-production.without-detectron2.lock"
+grep -vE '/detectron2-[^/]+\.tar\.gz$' \
+  "${building_release}/backend/requirements-production.lock" \
+  > "${requirements_without_detectron2}"
+"${building_release}/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "${requirements_without_detectron2}"
+if [[ ! -f "${DETECTRON2_WHEEL}" && -f "${DETECTRON2_LEGACY_WHEEL}" &&
+  -f "${DETECTRON2_LEGACY_WHEEL_SHA256}" ]] &&
+  sha256sum --check --status "${DETECTRON2_LEGACY_WHEEL_SHA256}"; then
+  install -m 0644 "${DETECTRON2_LEGACY_WHEEL}" "${DETECTRON2_WHEEL}"
+  printf '%s  %s\n' "$(sha256sum "${DETECTRON2_WHEEL}" | awk '{print $1}')" "${DETECTRON2_WHEEL}" > "${DETECTRON2_WHEEL_SHA256}"
+fi
+if [[ -f "${DETECTRON2_WHEEL}" && -f "${DETECTRON2_WHEEL_SHA256}" ]] &&
+  sha256sum --check --status "${DETECTRON2_WHEEL_SHA256}"; then
+  echo "Using cached detectron2 wheel: ${DETECTRON2_WHEEL}"
+else
+  rm -f -- "${DETECTRON2_WHEEL}" "${DETECTRON2_WHEEL_SHA256}"
+  detectron2_wheel_build="$(mktemp -d /tmp/ai-climbing-detectron2-wheel.XXXXXX)"
+  "${building_release}/backend/.venv/bin/python" -m pip wheel \
+    --disable-pip-version-check \
+    --no-deps \
+    --no-build-isolation \
+    --wheel-dir "${detectron2_wheel_build}" \
+    "${building_release}/backend/vendor/detectron2-a2f4a877.tar.gz"
+  detectron2_wheel_candidate="$(find "${detectron2_wheel_build}" -maxdepth 1 -type f -name 'detectron2-*.whl' -print -quit)"
+  [[ -n "${detectron2_wheel_candidate}" && -f "${detectron2_wheel_candidate}" ]] || {
+    echo "detectron2 wheel build produced no wheel." >&2
+    exit 1
+  }
+  [[ "$(basename "${detectron2_wheel_candidate}")" == "$(basename "${DETECTRON2_WHEEL}")" ]] || {
+    echo "detectron2 wheel filename does not match the pinned production runtime." >&2
+    exit 1
+  }
+  install -m 0644 "${detectron2_wheel_candidate}" "${DETECTRON2_WHEEL}"
+  printf '%s  %s\n' "$(sha256sum "${DETECTRON2_WHEEL}" | awk '{print $1}')" "${DETECTRON2_WHEEL}" > "${DETECTRON2_WHEEL_SHA256}"
+  rm -rf -- "${detectron2_wheel_build}"
+  detectron2_wheel_build=""
+fi
+"${building_release}/backend/.venv/bin/python" -m pip install \
+  --disable-pip-version-check \
+  --no-deps \
+  "${DETECTRON2_WHEEL}"
+"${building_release}/backend/.venv/bin/python" -c \
+  'import torch, torchvision, detectron2; print(torch.__version__, torchvision.__version__, detectron2.__version__)'
 mkdir -p "${temporary_root}/test-data"
 rsync -a "${temporary_root}/ai_climbing_code_v4/backend/data/" "${temporary_root}/test-data/"
 ln -s "${temporary_root}/test-data" "${building_release}/backend/data"
@@ -106,25 +170,9 @@ find "${building_release}/frontend/dist" -type f -exec chmod 0644 {} +
 
 cd "${building_release}/backend"
 LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false \
-  "${building_release}/backend/.venv/bin/python" -m unittest \
-  test_ai_lab_experiments \
-  test_hold_image_processing \
-  test_local_only_mode \
-  test_photo_route_benchmark \
-  test_photo_route_drafts \
-  test_photo_route_processing \
-  test_photo_wall_processing \
-  test_pilot_access \
-  test_member_accounts \
-  test_release_hardening \
-  test_release_readiness \
-  test_standard_board \
-  test_standard_board_activity \
-  test_standard_board_difficulty \
-  test_standard_board_local_first \
-  test_standard_board_tags
+  "${building_release}/backend/.venv/bin/python" scripts/run_release_tests.py
 
-APP_ENV=production LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false RELEASE_SHA="${release_sha}" \
+APP_ENV=production LOCAL_ONLY=true DISABLE_SUPABASE=true ENABLE_SIMULATION=false ENABLE_CLIMB_REPLAY=true RELEASE_SHA="${release_sha}" \
   "${building_release}/backend/.venv/bin/python" -m uvicorn main:app --host 127.0.0.1 --port 8001 --workers 1 \
   >"${temporary_root}/smoke.log" 2>&1 &
 smoke_pid=$!

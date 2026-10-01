@@ -9,11 +9,14 @@
     "preview": "vite preview",
     "test": "node --test test/*.test.mjs",
     "test:e2e": "playwright test",
+    "test:coaching": "node --test browser-tests/replay-coaching.test.mjs",
+    "test:template": "node --test browser-tests/replay-template.test.mjs",
+    "test:release-browser": "node --test browser-tests/replay-actions.test.mjs browser-tests/replay-coaching.test.mjs browser-tests/replay-template.test.mjs browser-tests/photo-workflow.test.mjs",
     "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
-    "axios": "^1.19.0",
+    "axios": "1.20.0",
     "element-plus": "^2.14.0",
     "vue": "^3.5.30"
   },

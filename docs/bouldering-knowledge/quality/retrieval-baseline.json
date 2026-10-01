@@ -1,0 +1,684 @@
+{
+  "suite_id": "B005-DEV-01",
+  "scope": "development_retrieval_only",
+  "independent": false,
+  "answer_quality_measured": false,
+  "real_video_used": false,
+  "suite_sha256": "8f80cf3ef16c0af0ed7630b0f3dc4e160dccb5bd35ec3e44b839fcf92d71320f",
+  "knowledge_sha256": "670ea674a4343d6d341e8c9ecc2c008891d6863d490977a74482d20774155b84",
+  "retriever_sha256": "812d64e7e694579228c72dd45031f65d9c6965464916ab079726c0b68d0aec82",
+  "metrics": {
+    "cases": 40,
+    "positive_cases": 30,
+    "all_required_in_top3": 30,
+    "negative_cases": 10,
+    "empty_for_negative": 6,
+    "positive_returned_candidates": 82,
+    "outside_accepted_candidates": 32,
+    "video_disabled_cases": 40
+  },
+  "results": [
+    {
+      "id": "Q01",
+      "query": "鞋尖落点怎么给下一只脚留空间",
+      "found": [
+        "KB-FOOT-001",
+        "KB-HAND-002",
+        "KB-FOOT-004"
+      ],
+      "required": [
+        "KB-FOOT-001"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q02",
+      "query": "Backstepping 的鞋边怎么分",
+      "found": [
+        "KB-FOOT-002"
+      ],
+      "required": [
+        "KB-FOOT-002"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q03",
+      "query": "Smearing 一定要把脚跟压低吗",
+      "found": [
+        "KB-FOOT-003",
+        "KB-BODY-002",
+        "KB-HAND-001"
+      ],
+      "required": [
+        "KB-FOOT-003"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-002",
+        "KB-HAND-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q04",
+      "query": "Foot swap 的交接没拍清怎么办",
+      "found": [
+        "KB-FOOT-004",
+        "KB-HAND-002",
+        "KB-HAND-006"
+      ],
+      "required": [
+        "KB-FOOT-004"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q05",
+      "query": "Rockover 看得到真正的重心吗",
+      "found": [
+        "KB-FOOT-005"
+      ],
+      "required": [
+        "KB-FOOT-005"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q06",
+      "query": "Highstep 踩到了以后还需要观察什么",
+      "found": [
+        "KB-FOOT-006",
+        "KB-FOOT-001",
+        "KB-FOOT-005"
+      ],
+      "required": [
+        "KB-FOOT-006"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q07",
+      "query": "Undercling 与 Gaston 的手点方向",
+      "found": [
+        "KB-HAND-001",
+        "KB-HAND-002",
+        "KB-HAND-003"
+      ],
+      "required": [
+        "KB-HAND-001"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-002",
+        "KB-HAND-003"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q08",
+      "query": "Hand match 中两手短暂共存算不算换手",
+      "found": [
+        "KB-HAND-002",
+        "KB-HAND-004"
+      ],
+      "required": [
+        "KB-HAND-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-004"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q09",
+      "query": "Bumping 中间停一下是不是不算",
+      "found": [
+        "KB-HAND-003",
+        "KB-BODY-001",
+        "KB-FOOT-003"
+      ],
+      "required": [
+        "KB-HAND-003"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001",
+        "KB-FOOT-003"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q10",
+      "query": "Cross-through 单帧能确认前后吗",
+      "found": [
+        "KB-HAND-004",
+        "KB-BODY-003",
+        "KB-HAND-001"
+      ],
+      "required": [
+        "KB-HAND-004"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-003",
+        "KB-HAND-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q11",
+      "query": "Pinching 拇指完全被遮住了",
+      "found": [
+        "KB-HAND-005",
+        "KB-HAND-006"
+      ],
+      "required": [
+        "KB-HAND-005"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-006"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q12",
+      "query": "First contact 之后就证明抓稳了吗",
+      "found": [
+        "KB-HAND-006",
+        "KB-BODY-001",
+        "KB-DYN-002"
+      ],
+      "required": [
+        "KB-HAND-006"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001",
+        "KB-DYN-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q13",
+      "query": "骨盆朝向和肩膀朝向可以混在一起吗",
+      "found": [
+        "KB-BODY-001",
+        "KB-BODY-004",
+        "KB-BODY-003"
+      ],
+      "required": [
+        "KB-BODY-001"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-004",
+        "KB-BODY-003"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q14",
+      "query": "Outside flag 的自由脚可以贴墙吗",
+      "found": [
+        "KB-BODY-002",
+        "KB-BODY-003",
+        "KB-DYN-001"
+      ],
+      "required": [
+        "KB-BODY-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-003",
+        "KB-DYN-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q15",
+      "query": "French flag 和 Inside flag 是否同一种",
+      "found": [
+        "KB-BODY-003",
+        "KB-BODY-001",
+        "KB-BODY-002"
+      ],
+      "required": [
+        "KB-BODY-003"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q16",
+      "query": "Dropknee 必须低到脚以下吗",
+      "found": [
+        "KB-BODY-004",
+        "KB-BODY-003"
+      ],
+      "required": [
+        "KB-BODY-004"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-003"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q17",
+      "query": "Moonkick 只看接后的腿摆动能确认吗",
+      "found": [
+        "KB-DYN-001",
+        "KB-DYN-002",
+        "KB-BODY-003"
+      ],
+      "required": [
+        "KB-DYN-001"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-003"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q18",
+      "query": "Cutting loose 回脚刚碰到点就滑开",
+      "found": [
+        "KB-DYN-002",
+        "KB-HAND-006",
+        "KB-BODY-004"
+      ],
+      "required": [
+        "KB-DYN-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-004"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q19",
+      "query": "读线和实际脚序不一样",
+      "found": [
+        "KB-TACTIC-001",
+        "KB-TACTIC-004",
+        "KB-HAND-005"
+      ],
+      "required": [
+        "KB-TACTIC-001"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-005"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q20",
+      "query": "重复摸点都是多余的吗",
+      "found": [
+        "KB-TACTIC-002",
+        "KB-HAND-006",
+        "KB-HAND-003"
+      ],
+      "required": [
+        "KB-TACTIC-002"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q21",
+      "query": "停在那里就是犹豫吗",
+      "found": [
+        "KB-TACTIC-003",
+        "KB-BODY-002",
+        "KB-FOOT-002"
+      ],
+      "required": [
+        "KB-TACTIC-003"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-002",
+        "KB-FOOT-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q22",
+      "query": "第二次爬得更快，能说读线训练有效吗",
+      "found": [
+        "KB-TACTIC-004",
+        "KB-TACTIC-001",
+        "KB-DYN-001"
+      ],
+      "required": [
+        "KB-TACTIC-004"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-DYN-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q23",
+      "query": "失败那次用时更短，算更好吗",
+      "found": [
+        "KB-TACTIC-005",
+        "KB-DYN-001",
+        "KB-TACTIC-006"
+      ],
+      "required": [
+        "KB-TACTIC-005"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-DYN-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q24",
+      "query": "相同位置掉落是不是同一个原因",
+      "found": [
+        "KB-TACTIC-006",
+        "KB-BODY-001",
+        "KB-TACTIC-002"
+      ],
+      "required": [
+        "KB-TACTIC-006"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001",
+        "KB-TACTIC-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q25",
+      "query": "换脚和并手的接管怎么记录",
+      "found": [
+        "KB-FOOT-004",
+        "KB-HAND-002",
+        "KB-BODY-001"
+      ],
+      "required": [
+        "KB-FOOT-004",
+        "KB-HAND-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q26",
+      "query": "Pogo 起动与回脚分别怎么分析",
+      "found": [
+        "KB-DYN-001",
+        "KB-DYN-002",
+        "KB-BODY-001"
+      ],
+      "required": [
+        "KB-DYN-001",
+        "KB-DYN-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-BODY-001"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q27",
+      "query": "同线路比较要记录试攀历史吗",
+      "found": [
+        "KB-TACTIC-004",
+        "KB-TACTIC-005",
+        "KB-TACTIC-001"
+      ],
+      "required": [
+        "KB-TACTIC-004",
+        "KB-TACTIC-005"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q28",
+      "query": "首次触达和重复摸点的次数是一回事吗",
+      "found": [
+        "KB-HAND-006",
+        "KB-TACTIC-002",
+        "KB-HAND-002"
+      ],
+      "required": [
+        "KB-HAND-006",
+        "KB-TACTIC-002"
+      ],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-002"
+      ],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q29",
+      "query": "后旗和内侧旗是否能替代换脚",
+      "found": [
+        "KB-BODY-003",
+        "KB-BODY-002",
+        "KB-FOOT-004"
+      ],
+      "required": [
+        "KB-BODY-003",
+        "KB-FOOT-004"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q30",
+      "query": "Bumping 与停顿标签有冲突吗",
+      "found": [
+        "KB-HAND-003",
+        "KB-TACTIC-003"
+      ],
+      "required": [
+        "KB-HAND-003",
+        "KB-TACTIC-003"
+      ],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q31",
+      "query": "每周悬挂训练几组",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q32",
+      "query": "half crimp",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q33",
+      "query": "Rose move",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q34",
+      "query": "数据库备份",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q35",
+      "query": "这种做法就是更好吗",
+      "found": [
+        "KB-DYN-001",
+        "KB-TACTIC-005",
+        "KB-BODY-002"
+      ],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [
+        "KB-DYN-001",
+        "KB-TACTIC-005",
+        "KB-BODY-002"
+      ],
+      "retrieval_ok": false,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q36",
+      "query": "实际情况一样吗",
+      "found": [
+        "KB-TACTIC-001",
+        "KB-HAND-005",
+        "KB-TACTIC-004"
+      ],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [
+        "KB-TACTIC-001",
+        "KB-HAND-005",
+        "KB-TACTIC-004"
+      ],
+      "retrieval_ok": false,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q37",
+      "query": "menopause",
+      "found": [
+        "KB-TACTIC-003"
+      ],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [
+        "KB-TACTIC-003"
+      ],
+      "retrieval_ok": false,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q38",
+      "query": "bumpkin",
+      "found": [
+        "KB-HAND-003"
+      ],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [
+        "KB-HAND-003"
+      ],
+      "retrieval_ok": false,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q39",
+      "query": "这是什么？",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    },
+    {
+      "id": "Q40",
+      "query": "What is this?",
+      "found": [],
+      "required": [],
+      "missing": [],
+      "outside_accepted": [],
+      "retrieval_ok": true,
+      "automatic_video_disabled": true
+    }
+  ],
+  "limitations": [
+    "同一编写者创建并用于调参的开发集，不是独立留出集。",
+    "期望集合不是所有合法关联的穷举；集合外命中仅作为本次噪声检查。",
+    "未调用回答模型；answer_check 是人工复核要求，不是已通过的答案评分。"
+  ]
+}

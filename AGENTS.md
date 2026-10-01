@@ -1,261 +1,37 @@
-# CLAUDE.md
-
-## 用户指定的本地开发基线（2026-09-05）
-
-当前版本 `local-latest-2026.09.05.3` 为用户指定的本地最新版。后续本地代码修改以本目录最新提交为基础，参见 `LOCAL_LATEST.md` 与 `LOCAL_VERSION.json`。不要把旧 audit 工作区、历史快照或生产版本当成本地开发基线。固定入口为 `http://127.0.0.1:4176/#/photo-routes`，本地持久数据及 API 密钥必须保留在 `.local/` 并保持 Git 忽略。
-
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
----
-
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
-
----
-
-# User Communication / Product Interpretation
-
-Treat the user as non-technical by default. User requests may be emotional, imprecise, incomplete, or expressed in everyday language rather than engineering terms.
-
-Before turning a request into implementation:
-- First interpret the product intent: what user-facing outcome, workflow, pain point, or business goal is probably being requested.
-- Translate vague language into concrete product requirements and state the interpretation briefly.
-- Avoid exposing unnecessary technical jargon. Explain technical constraints in plain language and connect them to user impact.
-- If the request can reasonably mean multiple things, list the likely interpretations and ask only the smallest blocking question.
-- If a safe, minimal assumption is enough to proceed, state that assumption and continue.
-- Keep communication calm and direct even when the user's wording is impatient or emotionally charged.
-- Do not blindly implement literal wording when it conflicts with the likely product goal; surface the mismatch and recommend the product-sensible path.
-
-Success means the agent behaves like a product-minded engineer: clarify the real need, reduce user decision burden, and convert non-technical requests into verifiable implementation steps.
-
-## 实施前产品澄清
-
-除低风险、孤立且可逆的小改动外，在实施前必须先完成以下步骤：
-
-1. 先用只读检查确认代码、数据结构、现有交互和兼容性，不能把可从项目中发现的事实反问给用户。
-2. 用通俗语言说明对用户目标的理解，以及准备交付的用户可见结果。
-3. 只提出会影响范围、历史数据处理、用户流程、关键取舍或验收标准的必要且实际问题；问题应附带推荐方案，避免要求用户做技术实现决策。
-4. 在关键问题得到确认后再修改代码或数据；若采用了安全默认值，必须明确说明该假设。
-
-目标是避免因需求理解偏差导致返工，同时不以无关问题阻塞正常实现。
-
----
-
-# Project-Specific Database / Supabase Rules
-
-本部分用于约束 AI Agent 在本项目中使用 Supabase / 数据库时的行为。
-
-项目名称：`ai_climbing_code`
-
-数据库工具命名空间：
-
-```text
-mcp__supabase__
-```
-
-## 1. Supabase 使用权限
-
-Agent 可以使用 `mcp__supabase__` 协助完成：
-
-1. 查看 Supabase 项目、组织、表结构、迁移记录、日志。
-2. 设计数据库表结构。
-3. 编写 SQL。
-4. 创建表、字段、索引、函数、触发器。
-5. 创建和修改 RLS 策略。
-6. 创建和管理 Storage bucket。
-7. 生成 migration。
-8. 执行安全 SQL。
-9. 为项目代码接入 Supabase。
-10. 查询少量测试数据用于验证功能。
-
-## 2. 高风险操作规则
-
-以下操作允许执行，但必须先获得用户明确确认：
-
-1. 删除表。
-2. 删除字段。
-3. 删除数据。
-4. 清空表。
-5. 删除函数。
-6. 删除触发器。
-7. 删除 RLS policy。
-8. 删除 Storage bucket。
-9. 修改 `auth.users`。
-10. 重置 schema。
-11. 重置数据库结构。
-12. 任何可能造成数据不可恢复丢失的操作。
-
-执行前必须使用以下格式确认：
-
-```text
-【高风险操作确认】
-目标对象：
-将执行的 SQL 或操作：
-影响范围：
-是否会造成数据丢失：
-是否可以回滚：
-建议备份方式：
-请用户回复“确认执行”后再继续。
-```
-
-只有当用户明确回复：
-
-```text
-确认执行
-```
-
-才可以继续。
-
-以下回复不算确认：
-
-```text
-可以吧
-继续
-你看着办
-ok
-go ahead
-```
-
-## 3. 绝对禁止
-
-1. 禁止删除 Supabase 项目。
-2. 禁止泄露、打印、提交任何 token、service_role key、数据库密码、`.env` 内容。
-3. 禁止把真实密钥写入代码。
-4. 禁止把 `.env`、`.venv`、`node_modules` 提交到 GitHub。
-5. 禁止无说明地执行破坏性 SQL。
-6. 禁止导出全表数据，除非用户明确要求。
-
-## 4. 数据库设计原则
-
-1. 默认优先使用 migration 管理数据库结构。
-2. 默认开启 RLS。
-3. 每张业务表都应考虑权限策略。
-4. 前端只能使用 publishable / anon key。
-5. 后端高权限操作必须通过服务端环境变量读取密钥。
-6. 不要在前端暴露 service_role key。
-7. 查询数据时默认只查询少量样例。
-8. 对批量写入、批量更新、批量删除必须先说明影响范围。
-
-## 5. 执行数据库任务的流程
-
-处理 Supabase / 数据库任务时，Agent 应按以下流程执行：
-
-1. 先只读检查当前 Supabase 项目。
-2. 确认目标项目。
-3. 检查已有表结构、RLS、迁移记录。
-4. 明确用户目标。
-5. 给出最小可行方案。
-6. 对非高风险操作，可以在说明后执行。
-7. 对高风险操作，必须等待用户回复“确认执行”。
-8. 执行后验证结果。
-9. 最后汇报执行内容。
-
-## 6. 汇报格式
-
-完成任务后，必须按以下格式汇报：
-
-```text
-完成情况：
-- 
-
-Supabase 操作：
-- 
-
-执行的 SQL / migration：
-- 
-
-修改的项目文件：
-- 
-
-是否涉及高风险操作：
-- 
-
-需要用户手动处理：
-- 
-```
-
-如果只是检查，没有修改任何内容，必须明确说明：
-
-```text
-只读检查完成，没有修改任何文件或数据库。
-```
-
----
-
-# Project-Specific Server Deployment Rule
-
-When giving server deployment commands for this project, use the user's preferred GitHub-to-server sync workflow by default. Do not assume `/root/ai_climbing_code` should be updated with `git pull`.
-
-Preferred sync workflow:
-
-```bash
-cd /tmp
-rm -rf ai_climbing_code_v4
-git clone git@github.com:Huoxixi/ai_climbing_code_v4.git
-
-rsync -av \
-  --exclude='backend/.env' \
-  --exclude='backend/.venv' \
-  --exclude='node_modules' \
-  --exclude='frontend/node_modules' \
-  /tmp/ai_climbing_code_v4/ /root/ai_climbing_code/
-```
-
-After this sync, run project-specific build, dependency install, Nginx reload, or backend restart commands from `/root/ai_climbing_code` as needed.
+# 项目协作约束
+
+- 本地开发基线为 `local-latest-2026.09.05.3`，以本目录最新提交为准；详情见 `LOCAL_LATEST.md`。
+- 本地入口为 `http://127.0.0.1:4176/#/photo-routes`，启动使用 `start-photo-local.ps1`。
+- `.local/` 保存本地数据、照片与密钥：不得删除、覆盖、读取输出、提交或上传。
+- 修改前先只读核实现状；只改与任务直接相关的内容，保留用户已有改动，并完成针对性验证。
+- 默认用非技术语言说明用户可见结果。只有会改变范围、历史数据、关键流程或验收标准的问题才需要先询问。
+
+## 当前照片线路方向
+
+生产默认链路只完成“专项实例分割模型原生掩膜 → 轮廓内分色 → 用户复核 → 保存个人照片线路卡片并进入线路库”。照片线路流程不再提供电子岩板、位置确认、孔位网格或点位校准。低内存 A/B/C 离线对照可以研究造型和真实线路成员候选，但通过质量、内存及目标环境门禁前不得接入生产接口或改写历史数据。不要把 MobileSAM、DeepSeek、孔位、动作、难度或墙面净化加入默认识别链路，也不要新增业务实体。详情见 `docs/抱石照片线路_当前状态与计划.md`。
+
+## 视频复盘基础框架（2026-09-30 用户最新确认）
+
+- 后续分析以用户确认的“岩点修订复盘”视频框架为基础：左侧真人和彩色骨架/岩点、右侧线路动作图、下方动作顺序全部保留。不得用纯真人画面或简化播放器替代这些内容。
+- 动作说明独立放在本地 AI 复盘页面，随原片动作时间显示；不得烧录到视频或增加字幕侧栏。沿用思源/Noto 黑体、白字和原页面风格。
+- 完整攀爬默认以 0.75 倍速播放和导出。页面播放使用原速基础视频加播放率，避免双重减速；统计和动作时间仍按原片计算。
+- 总结在完整视频结束后按此前设计出现一次：基础画面模糊、中央依次展示线路总岩点／去重使用点／使用率、其他数据和整体节奏，然后自动收为小圆盘。点击圆盘重新展开后保持显示，主动收起返回圆盘；同一记录重播或拖动不重复自动演示，切换记录重置。此为页面播放结束展示，本轮不修改导出文件。
+- 动作主展示仅保留肢体、简短动作名和原片时间；不显示骨架轨迹观察、坐标系、技术限制、密集回看按钮或重复长段描述。修正功能默认折叠，识别算法、证据保存及人工确认条件不改。未观测区间仍不能计为停留。
+- 结合配准后的肩肘腕／髋膝踝连续轨迹区分肢体主动运动与躯干共同运动；遮挡、采样缺口、链交换和突跳需标证据不足或冲突。二维骨架不能确认接触、抓握、踩实、受力或专业技巧。
+- 保留基础视频、原始分析和已有复盘功能；新导出独立保存，不覆盖旧文件。最新用户要求优先于此前常驻页面总结块与详细骨架说明的方案。
+
+## 数据与发布安全
+
+- 数据库改动优先使用 migration，并为业务表检查 RLS。前端只能使用 publishable/anon key；高权限密钥只能由服务端环境变量读取。
+- 批量写入或更新前先说明对象和影响范围。数据库删除、清空、重置，以及删除表、字段、函数、触发器、策略、存储桶或修改 `auth.users`，必须先列明目标、操作、影响、数据损失、回滚和备份方式，并仅在用户明确回复“确认执行”后执行。
+- 禁止删除 Supabase 项目；除非用户明确要求，不导出全表真实数据。
+- 不得输出或提交密钥、密码、token、`.env`、`.venv`、`node_modules` 或真实用户数据。
+- 生产部署需要用户明确提出；同步方式以 `README.md` 的发布章节为准，不要默认在服务器目录执行 `git pull`。
+
+## 生产服务器最短发布通道（每个 AI 窗口必读）
+
+- 生产服务器：阿里云上海 ECS `cn-shanghai` / `i-uf60c5wm6ax3behiqau4`。仅在用户明确要求部署时操作。
+- 登录入口：已登录的阿里云 ECS Workbench `https://ecs-workbench.aliyun.com/?from=ecs&instanceType=ecs&regionId=cn-shanghai&instanceId=i-uf60c5wm6ax3behiqau4&resourceGroupId=&language=zh-CN`。优先复用现有登录状态；禁止索取、显示或记录密码、AccessKey、Token、私钥或 `.env` 内容。
+- 唯一标准路径：本地测试通过并推送 -> 创建不可变 `pilot-v...` 标签 -> GitHub `release-gate` 全绿 -> 在服务器 root 终端执行 `/usr/local/lib/ai-climbing/deploy_release.sh <完整标签>`。脚本负责从 GitHub 取标签、复测、构建、发布前备份、原子切换和失败回退；不要另行 `git pull` 或手工覆盖线上文件。
+- 目录边界：`/root/ai_climbing_code` 仅用于同步和构建；`/opt/ai-climbing/releases` 保存不可变版本；`/opt/ai-climbing/current` 是实际运行版本；`/var/lib/ai-climbing/data` 是生产数据；`/etc/ai-climbing` 是受限配置。禁止直接修改 `current`，禁止删除或覆盖数据与配置。
+- 发布后核验：`readlink -f /opt/ai-climbing/current`；`cat /etc/ai-climbing/release.env`；`curl -fsS http://127.0.0.1:8000/api/health`；`systemctl is-active ai-climbing nginx`；最后访问 `https://www.panyandingxian.cn/`。完整细节见 `README.md` 的发布章节和 `docs/试运营上线运维手册.md`。

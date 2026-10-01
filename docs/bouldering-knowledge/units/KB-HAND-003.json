@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-HAND-003",
+  "version": 1,
+  "batch_id": "B002",
+  "title": "同手连动：Bumping 与原点调整",
+  "aliases": ["同手连动", "Bumping", "Bump", "Go again", "连续换点", "手部原点调整", "重新抓握", "Readjustment"],
+  "questions": ["连续出同一只手算多余动作吗？", "Bumping 和原点调整有什么区别？", "中间点停了一下还能叫 bump 吗？"],
+  "tags": ["中间手点", "手部换点", "点位身份", "连动"],
+  "action_codes": ["HAND_MOVE", "HAND_READJUST"],
+  "stage_tags": ["接触建立", "稳定/衔接"],
+  "related_units": ["KB-HAND-002", "KB-HAND-006", "KB-FOOT-001"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["同一只手连续移动，另一只手的留点情况可确认。", "可核对中间接触究竟换了岩点还是仍在原点。"],
+    "exclusions": ["若另一手活动未覆盖，只描述已见接触，不完整命名 Bumping。", "同一点上的再次抓握不能仅因手动了两次便当作连续换点。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Momentum 的 Bumping 指另一手留在同一点时，同一只手连续移动；中间点可以用于移脚或调整身体位置，然后再去目标。它不要求永远按左右手交替。", "basis": "source_summary", "evidence_ids": ["E-MOM-BUMP-01"]},
+    {"id": "C2", "statement": "本库以物理岩点身份区分换点与原点调整。现有词典 BUMP 候选另含“中间没有完整稳定”的附加条件，不能把这个尚待验证的条件冒充教学定义。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C3", "statement": "可比较中间点前后的脚位、身体位置和下一次出手，检验这一步是否改变了后续任务；不以接触次数直接评为低效。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["移动手、留手与全部候选中间点的连续片段。", "中间点接触期间的脚位，以及随后真正到达的目标。"],
+    "events": ["记同一手的点序 A→B→C；若实际仍是 B，另记 B 内调整或重新接触。", "并列记录另一手是否离点、中间是否移脚、何时再出同一手。"],
+    "unknowns": ["单个大体积点不同局部是否被识别成多个错误点号。", "未覆盖时段的调整、停顿及主观计划。"],
+    "cannot_infer": ["经过中间点不能单独证明够不到目标、力量不足或方案低效。", "在中间点停顿不自动推翻原教学中的 Bumping 定义。", "原点调整次数不直接等同于探索收益或技术水平。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先核对岩点编号，再看中间点是否伴随可见脚位或身体位置变化；条件不明时交付手点序列，不强行映射 BUMP。",
+    "conditions": ["同点与异点必须依赖已核对的物理身份。", "若比较两次尝试，说明是否同一目标、同一脚序及同一线路版本。"],
+    "compare": ["是 A→B→C 连续换点，还是 A→B→B 原点调整。", "中间点前后条件与下一步结果，不只比较动作总数。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "左手保留 L，右手从 A 到 B，移脚后右手再到 C。", "allowed": "符合该教学中的同手连动描述；移脚和停顿另列。", "disallowed": "在 B 有过停顿，所以绝不可能是 Bumping。"},
+    {"kind": "constructed", "scenario": "右手在同一大体积点 B 的表面重新放置，未换物理岩点。", "allowed": "若变化看清，可记同点调整；局部接触面变化另记。", "disallowed": "识别框跳了一下，所以确认换了两个点。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["BUMP 的项目候选条件与教材定义不等价，本单元暂不直接映射该代码；业务词典未改动。", "需要验证大体积点分割、短暂离点和停顿的区分；当前接触表不能完整表示所有同点内抓握调整。"]
+}

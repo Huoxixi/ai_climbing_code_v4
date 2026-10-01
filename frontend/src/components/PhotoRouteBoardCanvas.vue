@@ -1,7 +1,7 @@
 <template>
   <div class="photo-canvas-shell">
     <div class="photo-view-controls">
-      <span>6.2 × 4.1 m <span class="photo-muted">· 点距 20 cm</span></span>
+      <span>4.1 × 6.2 m <span class="photo-muted">· 点距 20 cm</span></span>
       <div>
         <button type="button" :aria-pressed="labels" @click="labels = !labels">孔位编号</button>
         <button type="button" aria-label="缩小岩板" :disabled="camera.zoom <= 1" @click="zoomAt(1 / 1.3)"><ZoomOut /></button>
@@ -10,14 +10,14 @@
         <button type="button" @click="resetCamera">看全板</button>
       </div>
     </div>
-    <div ref="viewport" class="photo-wall-viewport" :class="{ 'is-browsing': mode === 'browse' }"
-      aria-label="30列20行抱石线路电子岩板，可缩放和平移" @wheel.prevent="wheel"
+    <div ref="viewport" class="photo-wall-viewport" :class="{ 'is-browsing': mode === 'browse' }" :style="viewportStyle"
+      :aria-label="`${PHOTO_BOARD.columns}列${PHOTO_BOARD.rows}行抱石线路电子岩板，可缩放和平移`" @wheel.prevent="wheel"
       @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp"
       @lostpointercapture="pointerUp">
-      <svg class="photo-technical-wall" :style="wallStyle" :viewBox="`0 0 ${PHOTO_BOARD.board_width_mm} ${PHOTO_BOARD.board_height_mm}`" aria-label="30列20行中性灰技术岩板">
+      <svg class="photo-technical-wall" :style="wallStyle" :viewBox="`0 0 ${PHOTO_BOARD.board_width_mm} ${PHOTO_BOARD.board_height_mm}`" :aria-label="`${PHOTO_BOARD.columns}列${PHOTO_BOARD.rows}行中性灰技术岩板`">
         <g class="photo-panel-joints" aria-hidden="true">
-          <line v-for="x in [1240, 2480, 3720, 4960]" :key="x" :x1="x" :x2="x" y1="0" y2="4100" />
-          <line x1="0" x2="6200" y1="2050" y2="2050" />
+          <line v-for="part in 4" :key="`vertical-${part}`" :x1="PHOTO_BOARD.board_width_mm*part/5" :x2="PHOTO_BOARD.board_width_mm*part/5" y1="0" :y2="PHOTO_BOARD.board_height_mm" />
+          <line v-for="part in 2" :key="`horizontal-${part}`" x1="0" :x2="PHOTO_BOARD.board_width_mm" :y1="PHOTO_BOARD.board_height_mm*part/3" :y2="PHOTO_BOARD.board_height_mm*part/3" />
         </g>
         <g class="photo-reference-holes" aria-hidden="true">
           <circle v-for="hole in holes" :key="hole.id" :cx="hole.x" :cy="PHOTO_BOARD.board_height_mm-hole.y" r="9"><title>{{ hole.id }}</title></circle>
@@ -27,16 +27,39 @@
           <line :x1="snapPreview.fromX" :y1="PHOTO_BOARD.board_height_mm-snapPreview.fromY" :x2="snapPreview.x" :y2="PHOTO_BOARD.board_height_mm-snapPreview.y" />
         </g>
         <g v-if="labels" class="photo-axis-labels" aria-hidden="true">
-          <text v-for="i in 30" :key="`x${i}`" :x="200+(i-1)*200" y="4070" text-anchor="middle">{{ columnLabel(i-1) }}</text>
-          <text v-for="i in 20" :key="`y${i}`" x="60" :y="4100-(100+(i-1)*200)+15" text-anchor="middle">{{ i }}</text>
+          <text v-for="i in PHOTO_BOARD.columns" :key="`x${i}`" :x="PHOTO_BOARD.margin_left_mm+(i-1)*PHOTO_BOARD.hole_spacing_x_mm" :y="PHOTO_BOARD.board_height_mm-30" text-anchor="middle">{{ columnLabel(i-1) }}</text>
+          <text v-for="i in PHOTO_BOARD.rows" :key="`y${i}`" x="60" :y="PHOTO_BOARD.board_height_mm-(PHOTO_BOARD.margin_bottom_mm+(i-1)*PHOTO_BOARD.hole_spacing_y_mm)+15" text-anchor="middle">{{ i }}</text>
+        </g>
+        <g v-if="axisModel.axis" class="photo-reference-axis" aria-hidden="true">
+          <rect class="photo-axis-side photo-axis-side--left" x="0" y="0" :width="axisModel.axis.x-axisModel.axis.laneHalfWidth" :height="PHOTO_BOARD.board_height_mm" />
+          <rect class="photo-axis-side photo-axis-side--right" :x="axisModel.axis.x+axisModel.axis.laneHalfWidth" y="0" :width="PHOTO_BOARD.board_width_mm-axisModel.axis.x-axisModel.axis.laneHalfWidth" :height="PHOTO_BOARD.board_height_mm" />
+          <line class="photo-axis-lane" :x1="axisModel.axis.x" :y1="PHOTO_BOARD.margin_top_mm" :x2="axisModel.axis.x" :y2="PHOTO_BOARD.board_height_mm-PHOTO_BOARD.margin_bottom_mm" />
+          <circle v-for="row in PHOTO_BOARD.rows" :key="`axis-hole-${row}`" :cx="axisModel.axis.x" :cy="PHOTO_BOARD.board_height_mm-(PHOTO_BOARD.margin_bottom_mm+(row-1)*PHOTO_BOARD.hole_spacing_y_mm)" r="17" />
+          <g class="photo-axis-label" :transform="`translate(${axisModel.axis.x} 72)`">
+            <rect x="-132" y="-48" width="264" height="62" rx="12" />
+            <text x="0" y="-5" text-anchor="middle">中轴 {{ axisModel.axis.label }} 列</text>
+          </g>
+          <text class="photo-axis-side-label" :x="Math.max(180,(axisModel.axis.x-axisModel.axis.laneHalfWidth)/2)" y="164" text-anchor="middle">左侧独立校准</text>
+          <text class="photo-axis-side-label" :x="axisModel.axis.x+axisModel.axis.laneHalfWidth+(PHOTO_BOARD.board_width_mm-axisModel.axis.x-axisModel.axis.laneHalfWidth)/2" y="164" text-anchor="middle">右侧独立校准</text>
+        </g>
+        <g v-for="point in layoutPoints" :key="`guide-${point.id}`" class="photo-alignment-guide"
+          :class="{ 'is-visible': labels || selectedId === point.id, 'is-confirmed': point.anchored }" aria-hidden="true">
+          <line v-if="point.target && point.residual > 2" :x1="point.x" :y1="PHOTO_BOARD.board_height_mm-point.y" :x2="point.target.x" :y2="PHOTO_BOARD.board_height_mm-point.target.y" />
+          <circle v-if="point.target" :cx="point.target.x" :cy="PHOTO_BOARD.board_height_mm-point.target.y" r="24" />
         </g>
         <g v-for="object in sortedObjects" :key="object.id" :data-object-id="object.id"
-          :transform="`translate(${object.center_x_mm} ${PHOTO_BOARD.board_height_mm-object.center_y_mm}) rotate(${object.rotation_deg})`"
-          class="photo-wall-object" :class="{ 'is-selected': selectedId === object.id || groupSelected }"
+          :transform="objectTransform(object)"
+          class="photo-wall-object" :class="{ 'is-selected': selectedId === object.id || groupSelected, 'is-anchored': installationPoint(object).anchored, 'is-suggested': installationPoint(object).suggested }"
           role="button" tabindex="0" :aria-label="objectLabel(object)" :aria-pressed="selectedId === object.id"
           @keydown="objectKey($event, object.id)">
           <image :href="resolveAsset(object.cutout)" :x="-objectWidth(object)/2" :y="-objectHeight(object)/2"
             :width="objectWidth(object)" :height="objectHeight(object)" draggable="false" />
+          <g class="photo-install-pin" :class="{ 'is-visible': labels || selectedId === object.id || groupSelected, 'is-suggested': installationPoint(object).suggested }" aria-hidden="true">
+            <circle class="photo-install-pin-ring" r="27" />
+            <circle class="photo-install-pin-core" r="9" />
+            <line x1="-19" y1="0" x2="19" y2="0" />
+            <line x1="0" y1="-19" x2="0" y2="19" />
+          </g>
           <rect v-if="object.route_color" class="photo-route-outline" :style="{ stroke:object.route_color }"
             :x="-objectWidth(object)/2-12" :y="-objectHeight(object)/2-12" :width="objectWidth(object)+24" :height="objectHeight(object)+24"><title>{{ object.route_name }}</title></rect>
           <rect v-if="selectedId === object.id || groupSelected" class="photo-object-selection"
@@ -45,29 +68,47 @@
             <rect x="-18" y="-68" :width="object.roles.length * 84" height="72" rx="10" />
             <text x="-5" y="-15">{{ object.roles.map(role => role === 'start' ? '起' : '终').join(' ') }}</text>
           </g>
+          <g v-if="labels || selectedId === object.id" class="photo-hole-id" aria-hidden="true" :transform="`translate(${Math.min(objectWidth(object)/2 + 24, 210)} ${Math.min(objectHeight(object)/2 + 38, 150)})`">
+            <rect x="-9" y="-46" :width="installationLabel(object).length * 31 + 34" height="58" rx="12" />
+            <text x="8" y="-6">{{ installationLabel(object) }}</text>
+          </g>
         </g>
       </svg>
     </div>
-    <div class="photo-canvas-caption"><span>{{ mode === 'browse' ? '拖动画布 · 双指或滚轮缩放' : groupSelected ? '拖动任一对象可移动整条线路' : '点选并拖动对象 · 方向键微调' }}</span><span>{{ mode === 'edit' && snapping ? '释放后吸附到最近孔位' : '按比例适配 · 自由移动' }}</span></div>
+    <div class="photo-canvas-caption"><span>{{ mode === 'browse' ? '拖动画布 · 双指或滚轮缩放' : groupSelected ? '拖动任一对象可移动整条线路' : '拖动一个参考岩点 · 方向键微调' }}</span><span>{{ mode === 'edit' && snapping ? '相对关系锁定 · 用参考点整体校准' : '相对关系锁定 · 整体贴合孔阵' }}</span></div>
   </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
-import { PHOTO_BOARD, photoHoles, columnLabel, zoomCamera } from '../utils/photoBoard.js'
+import { PHOTO_BOARD, calibratedObjectSize, photoHoles, columnLabel, objectInstallationPoint, photoRouteAxisLayout, zoomCamera } from '../utils/photoBoard.js'
 import { photoAssetUrl } from '../services/photoRouteService'
 
-const props = defineProps({ objects: { type: Array, required: true }, selectedId: { type: String, default: '' }, groupSelected: Boolean, mode: { type: String, default: 'browse' }, editable: Boolean, snapping: Boolean, snapPreview: { type: Object, default: null }, assetUrl: { type: Function, default: photoAssetUrl } })
+const props = defineProps({ objects: { type: Array, required: true }, selectedId: { type: String, default: '' }, groupSelected: Boolean, mode: { type: String, default: 'browse' }, editable: Boolean, snapping: Boolean, snapPreview: { type: Object, default: null }, calibrationMatrix: { type: Array, default: null }, assetUrl: { type: Function, default: photoAssetUrl } })
 const emit = defineEmits(['select', 'begin', 'move', 'end', 'nudge'])
 const viewport = ref(null), labels = ref(false)
 const camera = reactive({ zoom: 1, x: 0, y: 0 }), size = reactive({ width: 1, height: 1 })
 const holes = photoHoles()
 const sortedObjects = computed(() => [...props.objects].sort((a, b) => a.z_index - b.z_index))
+const axisModel = computed(() => photoRouteAxisLayout(props.objects, props.calibrationMatrix))
+const layoutPoints = computed(() => axisModel.value.points)
+const layoutById = computed(() => new Map(layoutPoints.value.map(point => [point.id, point])))
 const baseWidth = computed(() => Math.min(size.width, size.height * PHOTO_BOARD.board_width_mm / PHOTO_BOARD.board_height_mm))
+const viewportStyle = computed(() => ({ aspectRatio: `${PHOTO_BOARD.board_width_mm} / ${PHOTO_BOARD.board_height_mm}` }))
 const wallStyle = computed(() => ({ width: `${baseWidth.value}px`, height: `${baseWidth.value * PHOTO_BOARD.board_height_mm / PHOTO_BOARD.board_width_mm}px`, transform: `translate(-50%, -50%) translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }))
-const objectWidth = (o) => o.source_bbox_px[2] * o.scale_mm_per_px
-const objectHeight = (o) => o.source_bbox_px[3] * o.scale_mm_per_px
+const calibratedSize = (object) => calibratedObjectSize(object, props.calibrationMatrix)
+const objectWidth = (object) => calibratedSize(object)?.width || object.source_bbox_px[2] * object.scale_mm_per_px
+const objectHeight = (object) => calibratedSize(object)?.height || object.source_bbox_px[3] * object.scale_mm_per_px
+const installationPoint = (object) => layoutById.value.get(object.id) || objectInstallationPoint(object)
+const objectTransform = (object) => {
+  const point = installationPoint(object)
+  return `translate(${point.x} ${PHOTO_BOARD.board_height_mm-point.y}) rotate(${object.rotation_deg})`
+}
+const installationLabel = (object) => {
+  const point = installationPoint(object)
+  return point.label ? `${point.label}${point.anchored ? '' : '?'}` : '待确认'
+}
 const resolveAsset = (asset) => props.assetUrl(asset)
 const objectLabel = (o) => `对象 ${o.id.replace('object-', '')}${o.kind === 'volume' ? '，造型' : '，岩点'}${o.contour_status === 'needs_correction' ? '，轮廓待修正' : ''}`
 let observer, drag = null, pinch = null
@@ -126,6 +167,7 @@ defineExpose({ resetCamera })
 
 <style scoped>
 .photo-canvas-shell {
+  --photo-axis-color: #2563eb;
   min-width: 0;
   background: var(--ui-surface-subtle);
 }
@@ -198,7 +240,6 @@ defineExpose({ resetCamera })
   position: relative;
   width: 100%;
   height: auto;
-  aspect-ratio: 6200 / 4100;
   max-height: calc(100dvh - 260px);
   background: var(--ui-ground);
   overflow: hidden;
@@ -259,6 +300,50 @@ defineExpose({ resetCamera })
   pointer-events: none;
 }
 
+.photo-reference-axis {
+  pointer-events: none;
+}
+
+.photo-axis-side {
+  opacity: .045;
+}
+
+.photo-axis-side--left {
+  fill: var(--ui-warning);
+}
+
+.photo-axis-side--right {
+  fill: var(--photo-axis-color);
+}
+
+.photo-axis-lane {
+  stroke: var(--photo-axis-color);
+  stroke-width: 10;
+  stroke-dasharray: 34 22;
+}
+
+.photo-reference-axis > circle {
+  fill: var(--ui-board-face);
+  stroke: var(--photo-axis-color);
+  stroke-width: 8;
+}
+
+.photo-axis-label rect {
+  fill: var(--photo-axis-color);
+}
+
+.photo-axis-label text {
+  fill: var(--ui-brand-ink);
+  font-size: 38px;
+  font-weight: 700;
+}
+
+.photo-axis-side-label {
+  fill: var(--ui-ink-muted);
+  font-size: 34px;
+  font-weight: 700;
+}
+
 .photo-wall-object {
   cursor: pointer;
   outline: none;
@@ -266,6 +351,85 @@ defineExpose({ resetCamera })
 
 .photo-wall-object image {
   pointer-events: all;
+}
+
+.photo-install-pin {
+  opacity: .42;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+}
+
+.photo-alignment-guide {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+}
+
+.photo-alignment-guide.is-visible {
+  opacity: 1;
+}
+
+.photo-alignment-guide line {
+  stroke: var(--ui-warning);
+  stroke-width: 5;
+  stroke-dasharray: 18 12;
+}
+
+.photo-alignment-guide circle {
+  fill: none;
+  stroke: var(--ui-warning);
+  stroke-width: 6;
+  stroke-dasharray: 12 8;
+}
+
+.photo-alignment-guide.is-confirmed line,
+.photo-alignment-guide.is-confirmed circle {
+  stroke: var(--ui-success);
+  stroke-dasharray: none;
+}
+
+.photo-install-pin.is-visible,
+.photo-wall-object.is-selected .photo-install-pin {
+  opacity: 1;
+}
+
+.photo-install-pin-ring {
+  fill: rgba(255, 255, 255, .86);
+  stroke: var(--ui-board-hole);
+  stroke-width: 7;
+}
+
+.photo-install-pin.is-suggested .photo-install-pin-ring {
+  stroke: var(--ui-warning);
+  stroke-dasharray: 12 8;
+}
+
+.photo-install-pin-core {
+  fill: var(--ui-brand);
+  stroke: var(--ui-board-face);
+  stroke-width: 4;
+}
+
+.photo-install-pin line {
+  stroke: var(--ui-board-hole);
+  stroke-width: 3;
+}
+
+.photo-hole-id {
+  pointer-events: none;
+}
+
+.photo-hole-id rect {
+  fill: rgba(255, 255, 255, .94);
+  stroke: var(--ui-board-grid);
+  stroke-width: 3;
+}
+
+.photo-hole-id text {
+  fill: var(--ui-ink);
+  font-size: 38px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .photo-object-selection {
@@ -306,7 +470,6 @@ defineExpose({ resetCamera })
   .photo-wall-viewport {
     height: auto;
     max-height: none;
-    aspect-ratio: 6200 / 4100;
   }
 
   .photo-view-controls {

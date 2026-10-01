@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-HAND-004",
+  "version": 1,
+  "batch_id": "B002",
+  "title": "交叉手：经过哪条通道，接后如何继续",
+  "aliases": ["交叉手", "Cross-through", "Cross through", "Crossing hands", "Crossover", "Cross under", "Cross over"],
+  "questions": ["交叉手从上面过还是下面过？", "两手在画面里交叉，就发生交叉手了吗？", "交叉接到点后为什么下一手出不来？"],
+  "tags": ["上穿", "下穿", "留手", "出手通道"],
+  "action_codes": ["CROSS"],
+  "stage_tags": ["准备", "移动", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-HAND-001", "KB-HAND-002", "KB-HAND-006"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["可辨认移动手、留手和目标，且覆盖手的经过路径。", "比较交叉到点与后续解开交叉、换脚或再次出手。"],
+    "exclusions": ["单帧投影交叠不能确认经过了哪条路径。", "不把所有下穿都命名为 Rose move，也不按别名替代连续示范核对。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "该教学把交叉手描述为自由手越过中线、从留手上方或下方经过，并区分 over 与 under；手脚点的方向及动作顺序是选择路径时的背景。", "basis": "source_summary", "evidence_ids": ["E-MOM-CROSS-01"]},
+    {"id": "C2", "statement": "本库将出手路径、目标接触和接后下一步分别记录。二维画面中的手臂交叠只是一项可见状态，不足以倒推出移动顺序。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C3", "statement": "可以比较候选路径是否在目标接触之后仍留下下一手或脚的通道；这是一项复盘假设，不预设上穿或下穿普遍更优。", "basis": "teaching_hypothesis", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["起始手位、移动路径和留手，从出手前到目标接触后的连续片段。", "躯干朝向及脚部接触；若前后遮挡导致深度不清，需补不同视角。"],
+    "events": ["记录哪只手移动、另一手是否保留，以及从其上方或下方经过是否确实可见。", "分别记录接触目标、手臂关系改变、移脚和下一次出手。"],
+    "unknowns": ["遮挡时手臂的前后深度顺序。", "未开始的下一步是否可执行，或转体是否受限。"],
+    "cannot_infer": ["不能从一帧交叠或两点位置推断完整交叉手。", "到点后停顿不能独自证明出手路径错误。", "不能由路径名称推算真实重心距离或建议强行扭肩。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先沿连续片段还原移动手与留手的关系，再标出接后要做的任务；若经过路径被挡住，保留上穿/下穿候选，不选择唯一方案。",
+    "conditions": ["保留原手点、脚点及目标；替换其中任一项须作为不同条件。", "本单元用于已有资料比较，不要求为补证据去重复不受控动作。"],
+    "compare": ["手经过留手上方还是下方，以及到目标时的手位。", "接后哪只手/脚实际继续，是否仍有可见通道。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "连续画面中右手留 A，左手从其下方通过并触 B，之后右手离 A 去 C。", "allowed": "可描述左手下穿的交叉候选及接后的右手出手。", "disallowed": "所有这种下穿都是 Rose move，且必然最省力。"},
+    {"kind": "constructed", "scenario": "只有一张双手交叠的照片，出手前后均缺失。", "allowed": "照片显示投影交叠，交叉路径和接触顺序未知。", "disallowed": "确认左手从上方穿过，且下一步被右臂挡住。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["CROSS 在现有词典中是需人工确认的姿态候选，不等于当前基础动作生成函数已识别。", "教材“中线及留手上/下方”与词典“中线或支撑肢体”的范围需在标注协议中明确；本轮不改业务规则。", "Rose move 等变式须另核原作者完整示范，未并入本条同义词。"]
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-BODY-004",
+  "version": 1,
+  "batch_id": "B003",
+  "title": "Drop knee：脚部接触、膝与骨盆的组合",
+  "aliases": ["Drop knee", "Dropknee", "埃及式", "Egyptian", "落膝", "下沉膝"],
+  "questions": ["外侧踩点就一定是 Drop knee 吗？", "Drop knee 的膝盖必须低于脚吗？", "能从单张膝盖内转照片确认埃及式吗？"],
+  "tags": ["膝部朝向", "闭髋配置", "双脚关系", "接后衔接"],
+  "action_codes": [],
+  "stage_tags": ["准备", "移动", "接触建立", "稳定/衔接"],
+  "related_units": ["KB-FOOT-002", "KB-BODY-001", "KB-BODY-003"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["解释 Drop knee 的配置特征，或可同时核对脚、膝和骨盆。", "比较进入姿态及出手后的继续动作，不只比较静态膝角。"],
+    "exclusions": ["单个膝盖朝里不能代替脚点与骨盆证据。", "不用于个人关节负荷、活动范围、安全性或伤病判断。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "REI 的 Back step 定义包含外侧鞋边和侧身；Drop knee 的说明进一步加入膝向内转、朝下的配置。外侧接触本身没有包含这些全部特征。", "basis": "source_summary", "evidence_ids": ["E-REI-BACKSTEP-DROP-01"]},
+    {"id": "C2", "statement": "Momentum 把 Drop knee 解释为更明显的 closed hip/turning in 配置；本库只采用其术语关系，不采用“尽可能转到底”作为动作要求。", "basis": "source_summary", "evidence_ids": ["E-MOM-DROPKNEE-01"]},
+    {"id": "C3", "statement": "本库以脚点、可见膝朝向和骨盆变化的组合提出候选，不设膝必须低于脚、固定角度或固定左右手脚对应；Drop knee 与 Backstep 分开存储。", "basis": "product_rule", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["双脚与点面、双膝和骨盆，覆盖进入配置到出手后的连续过程。", "注明局部墙面和机位；足部遮挡时不补造鞋边。"],
+    "events": ["记录哪些接触保留、脚是否转动或重新落点，以及膝和骨盆的可见变化。", "分别记到手点、退出该配置与下一只脚移动的顺序。"],
+    "unknowns": ["不可见的鞋边、脚在点上的转动及个体活动限制。", "实际关节负荷和身体各接触点的用力。"],
+    "cannot_infer": ["膝下沉更多不等于动作更好，也不能确定负荷更低。", "外侧踩点或骨盆侧向任一单项都不足以确认 Drop knee。", "不能从未做 Drop knee 推断柔韧性差，或要求强扭固定脚上的膝。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先核对脚、膝与骨盆是否共同满足可描述的配置，再比较接后如何继续；缺接触细节时保留外侧踩点或转体的基础描述即可。",
+    "conditions": ["原脚点、手点和下一目标明确，且不把教学示例的姿态深度照搬给个人。", "若本人报告不适，本条只保留信息整理，不提供继续加深动作的练习指令。"],
+    "compare": ["进入配置前后的脚接触与身体朝向。", "出手后的退转、脚位变化和后续任务是否可见完成。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "连续画面看清双脚留点、右膝内转向下且骨盆转侧，随后右手触目标。", "allowed": "可标记 Drop knee 候选，并记录接触和出手顺序，仍需人工核对。", "disallowed": "膝还不够低，继续往下压就是更标准的动作。"},
+    {"kind": "constructed", "scenario": "鞋外侧接触可见，但膝与骨盆被墙角遮住。", "allowed": "记录外侧踩点；是否 Drop knee 未知。", "disallowed": "外侧踩点已经证明埃及式，并能判定关节安全。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["需核对不同教材及原作者连续示范；本条非完整动作教学或专业安全评估。", "埃及式为现有词典别名，未新增业务检测代码、角度或运动能力阈值。"]
+}

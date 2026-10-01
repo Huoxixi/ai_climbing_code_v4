@@ -140,6 +140,14 @@ test('总览不再展示固定客户推荐，标准线路库入口仍然保留',
   assert.match(appSource, /standard-board/)
 })
 
+test('标准线路库在移动端使用收起筛选并优先展示线路', async () => {
+  const standardBoardSource = await readFile(new URL('../src/components/StandardBoardPage.vue', import.meta.url), 'utf8')
+  assert.match(standardBoardSource, /mobile-filter-toggle/)
+  assert.match(standardBoardSource, /is-mobile-open/)
+  assert.match(standardBoardSource, /filterSummary/)
+  assert.match(standardBoardSource, /aria-label="刷新线路"/)
+})
+
 test('试运行构建通过环境开关隐藏仿真入口', async () => {
   const appSource = await readAppSurface()
   const shellSource = await readFile(new URL('../src/components/AppShell.vue', import.meta.url), 'utf8')

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "KB-TACTIC-003",
+  "version": 1,
+  "batch_id": "B004",
+  "title": "停顿：无新接触不等于犹豫或休息",
+  "aliases": ["动作间停顿", "停顿", "无新接触", "Pause", "Non-movement time", "Immobility"],
+  "questions": ["停在那里就是犹豫吗？", "没有换点的几秒都算休息吗？", "停顿变少能直接说明更熟练吗？"],
+  "tags": ["停顿解释", "可见事件与认知", "本人报告", "功能未知"],
+  "action_codes": ["PAUSE"],
+  "stage_tags": ["动作间状态", "移动", "复盘"],
+  "related_units": ["KB-TACTIC-001", "KB-TACTIC-002", "KB-TACTIC-005", "KB-HAND-006"],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": ["讨论动作间没有新接触或可见位移较小的一段时间，能交代用的是哪种定义。", "需要把可见停留与本人所说的找点、休息或不确定分开。"],
+    "exclusions": ["只见冻结画面、视频剪切或遮挡时，不能确认真实停顿。", "不用于心理诊断、疲劳判断或按停顿长短要求立即起动。"]
+  },
+  "claims": [
+    {"id": "C1", "statement": "Limonta 等把动作与停止时段分别编码，停止又按功能分类，由两位观察者看录像并对照读线测试；这比只检验有没有新接触包含更多信息。", "basis": "source_summary", "evidence_ids": ["E-LIMONTA-TIMING-2020-01"]},
+    {"id": "C2", "statement": "本项目词典 PAUSE 指达到项目阈值的无新接触区间，是动作间状态；它不表示全身静止，也不等于论文的休息、无效停顿或自动识别到犹豫。", "basis": "product_rule", "evidence_ids": []},
+    {"id": "C3", "statement": "复盘先保留时间区间和可见动作；本人说在休息或找点时另记报告。没有其他证据时，停顿的功能与原因留空。", "basis": "product_rule", "evidence_ids": []}
+  ],
+  "observation": {
+    "required_views": ["覆盖这段前后的连续录像、实际播放速度、可见手脚与身体范围。", "系统标签的定义和阈值版本；如果没有阈值来源，不宣称标签已验证。"],
+    "events": ["注明最后一个与下一个可见接触事件，保留遮挡和时间边界的不确定区间。", "即使没有换点，也分别记录可见身体调整、原点再抓或手部移动。", "本人描述与画面证据分栏，动作阶段与停顿功能分栏。"],
+    "unknowns": ["视野外是否仍在调整，以及是否有遗漏接触。", "是否恢复了体力、是否在读线，以及本人当时的主观状态。"],
+    "cannot_infer": ["没有新岩点接触不等于身体静止，也不等于没有发生有用动作。", "停得久不能诊断恐惧、体能差或读线差；没有停顿不保证动作合适。"]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "把“停顿”改写成可核对的区间描述，补看前后事件和已有本人记录；功能不清时不评好坏，也不提出强行加速的口令。",
+    "conditions": ["两段视频的定义、速度和事件覆盖可比时才比较停顿时长。", "计时阈值是测量约定，不是训练节奏或安全标准。"],
+    "compare": ["没有新接触期间是否出现其他可见动作，接下来完成了什么。", "本人报告是否存在、何时取得、是否与画面相互独立。"]
+  },
+  "examples": [
+    {"kind": "constructed", "scenario": "连续片段中手脚点未变，骨盆缓慢转向，用户说当时在找右手目标。", "allowed": "无新接触、可见身体转向；找点属于本人报告。", "disallowed": "全身静止三秒，证实犹豫。"},
+    {"kind": "constructed", "scenario": "剪辑从出手前直接切到触点，系统没有生成停顿。", "allowed": "原始区间缺失，不能判断是否停顿。", "disallowed": "没有停顿标签，所以这次更流畅。"}
+  ],
+  "review": {"content": "ai_source_checked", "professional": "pending", "video_validation": "not_started", "automatic_use": false},
+  "gaps": ["PAUSE 仅核对到词典定义；本批未验收业务阈值、自动标签或认知分类。", "英文 non-movement/immobility 只作检索入口，不同论文定义须分别展开，不能一律映射 PAUSE。", "功能性停顿判断仍需专业复核、授权录像及一致性验证。"]
+}

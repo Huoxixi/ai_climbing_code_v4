@@ -1,20 +1,28 @@
 <template>
   <AppShell
     :active="activePage"
+    :workspace="workspace"
     @update:active="changePage"
     :title="pageTitle"
-    :board-label="activePage === 'photo-routes' ? '30×20 抱石线路岩板' : studio.currentBoardSpec.label"
-    :hold-count="activePage === 'photo-routes' ? photoStatus.count : studio.placedHolds.length"
-    :dirty="activePage === 'photo-routes' ? photoStatus.dirty : studio.unsavedChanges"
-    :save-label="activePage === 'photo-routes' ? photoStatus.state : ''"
+    :board-label="isPhotoPage ? '个人抱石记录' : studio.currentBoardSpec.label"
+    :hold-count="isPhotoPage ? photoStatus.count : studio.placedHolds.length"
+    :dirty="isPhotoPage ? photoStatus.dirty : studio.unsavedChanges"
+    :save-label="isPhotoPage ? photoStatus.state : ''"
+    :context-label="boulderContextLabel"
+    :show-sync="workspace === 'setter' || isPhotoPage"
+    :needs-edit-access="workspace === 'setter'"
     :simulation-enabled="simulationEnabled"
+    @close-settings="closeSettings"
+    @change-workspace="requestWorkspaceChange"
   >
-    <div v-if="photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status))" class="photo-task-notice" role="status">
+    <div v-if="workspace === 'boulder' && (photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status)))" class="photo-task-notice" role="status">
       <span>{{ photoWork.state.uploading ? '照片正在上传，可以继续使用其他功能' : photoWork.state.session.status === 'ready' ? (photoWork.state.session.viewed ? '当前线路进度已保存' : '线路已提取，进度已保存') : photoWork.state.session.stage }}</span>
       <button type="button" @click="returnPhotoWork">{{ photoWork.state.session?.status === 'ready' ? '返回查看' : '查看当前线路' }}</button>
       <span v-if="photoWork.state.connectionLost">暂时断开，正在重新连接</span>
     </div>
     <SettingsPage v-if="activePage === 'settings'" />
+    <AccountPage v-else-if="activePage === 'account'" />
+    <ClimbReplayPage v-else-if="activePage === 'climb-replay'" />
     <DashboardPage
       v-else-if="activePage === 'dashboard'"
       v-model:selected-template-id="selectedDashboardTemplateId"
@@ -30,8 +38,11 @@
     />
 
     <PhotoRouteWorkflowPage
-      v-else-if="activePage === 'photo-routes'"
+      v-else-if="isPhotoPage"
+      :key="activePage"
+      :entry="activePage === 'my-records' ? 'records' : 'capture'"
       ref="photoPage"
+      @navigate="changePage"
     />
 
     <StudioPage
@@ -159,9 +170,11 @@
 </template>
 
 <script setup>
-import { computed, inject, provide, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, provide, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AppShell from './components/AppShell.vue'
+import AccountPage from './components/AccountPage.vue'
+import ClimbReplayPage from './components/ClimbReplayPage.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
 import StudioPage from './components/StudioPage.vue'
@@ -176,30 +189,59 @@ import { useBoardPersistence } from './composables/useBoardPersistence'
 import { useHoldLibrary } from './composables/useHoldLibrary'
 import { useRouteGeneration } from './composables/useRouteGeneration'
 import { useStudioEditor } from './composables/useStudioEditor'
+import { appPageFromHash } from './utils/photoWorkflowRoute.js'
 import { DEFAULT_FONT_GRADE, FONT_GRADES, UNGRADED, calibrationLabel, confidenceLabel } from './constants/gradeSystem'
 import { ROUTE_TAG_GROUPS, boardSystemTags, boardTags, matchesTags, tagLabel } from './constants/routeTags'
 import standardBoardService from './services/standardBoardService'
 
-const activePage = ref(['photo-routes','settings'].includes(location.hash.slice(2)) ? location.hash.slice(2) : 'dashboard')
+const props = defineProps({ workspace: { type: String, required: true } })
+const emit = defineEmits(['change-workspace'])
+const appPages = ['dashboard','studio','photo-routes','my-records','climb-replay','account','library','boards','standard-board','simulation','ai-lab','settings']
+const workspacePages = {
+  boulder: ['photo-routes', 'my-records', 'climb-replay', 'account', 'settings'],
+  setter: ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab', 'settings'],
+}
+const workspaceHome = props.workspace === 'boulder' ? 'photo-routes' : 'dashboard'
+const requestedPage = appPageFromHash(location.hash, appPages, workspaceHome)
+const activePage = ref(workspacePages[props.workspace].includes(requestedPage) ? requestedPage : workspaceHome)
+const settingsReturnPage = ref(activePage.value === 'settings' ? workspaceHome : activePage.value)
 const photoAccess = inject('pilotAccess')
 const photoWork = createPhotoWorkflow(photoAccess.session.username || 'local')
 provide('photoWorkflow', photoWork)
 async function returnPhotoWork() {
   await changePage('photo-routes')
+  await nextTick()
   if(activePage.value==='photo-routes') {
     await photoPage.value?.returnCurrent()
     if(photoWork.state.session?.status==='ready') await photoWork.change('viewed').catch(()=>{})
   }
 }
-function photoHashChanged() { if (['photo-routes','settings'].includes(location.hash.slice(2))) changePage(location.hash.slice(2)) }
-onMounted(() => { photoWork.init(); window.addEventListener('hashchange', photoHashChanged) })
-onBeforeUnmount(() => { photoWork.close(); window.removeEventListener('hashchange', photoHashChanged) })
+function appHashChanged() {
+  const requested = appPageFromHash(location.hash, appPages, workspaceHome)
+  const nextPage = workspacePages[props.workspace].includes(requested) ? requested : workspaceHome
+  if (requested !== nextPage) history.replaceState(null, '', `#/${nextPage}`)
+  changePage(nextPage, { fromHistory:true, replace:true })
+}
+onMounted(() => {
+  photoWork.init()
+  if (appPageFromHash(location.hash, appPages, workspaceHome) !== activePage.value) history.replaceState(null, '', `#/${activePage.value}`)
+  window.addEventListener('hashchange', appHashChanged)
+})
+onBeforeUnmount(() => { photoWork.close(); window.removeEventListener('hashchange', appHashChanged) })
 const simulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION === 'true'
 const library = reactive(useHoldLibrary())
 const boards = reactive(useBoardPersistence())
 const studio = reactive(useStudioEditor())
 const photoPage = ref(null)
+const isPhotoPage = computed(() => ['photo-routes', 'my-records'].includes(activePage.value))
 const photoStatus = computed(() => ({count:photoWork.state.session?.route?.members.length || 0,dirty:!!photoWork.state.pendingChange,state:photoWork.state.saving?'保存中…':photoWork.state.session?.stage || '已同步'}))
+const boulderContextLabel = computed(() => {
+  if (props.workspace !== 'boulder') return ''
+  if (isPhotoPage.value) return `个人抱石记录 · ${photoStatus.value.count} 岩点`
+  if (activePage.value === 'climb-replay') return '视频姿态与岩点接触分析'
+  if (activePage.value === 'account') return '默认私密 · 当前账号'
+  return ''
+})
 const routeGen = reactive(useRouteGeneration())
 const selectedDashboardTemplateId = ref(studio.activeBoardPresetId)
 const aiExperiment = reactive({
@@ -294,7 +336,10 @@ const pageTitle = computed(() => ({
   settings: '设置',
   dashboard: '总览',
   studio: '定线工作台',
-  'photo-routes': '抱石线路',
+  'photo-routes': '拍照定线',
+  'my-records': '我的记录',
+  'climb-replay': 'AI 复盘',
+  account: '我的账号',
   library: '岩点库',
   boards: '岩板资产',
   'standard-board': '标准板库',
@@ -441,10 +486,19 @@ watch(activePage, () => {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }))
 })
 
-async function changePage(nextPage) {
+async function changePage(nextPage, { fromHistory=false, replace=false } = {}) {
+  if (props.workspace === 'boulder' && nextPage === 'photo-routes' && activePage.value === 'photo-routes') {
+    await photoPage.value?.openCurrent()
+    return
+  }
+  if (props.workspace === 'boulder' && nextPage === 'my-records' && activePage.value === 'my-records') {
+    await photoPage.value?.openLibrary()
+    return
+  }
+  if (!workspacePages[props.workspace].includes(nextPage)) nextPage = workspaceHome
   if (nextPage === 'simulation' && !simulationEnabled) return
   if (nextPage === activePage.value) return
-  if (activePage.value === 'photo-routes' && !(await photoPage.value?.beforeLeave())) return
+  if (isPhotoPage.value && !(await photoPage.value?.beforeLeave())) return
   if (activePage.value === 'studio' && studio.unsavedChanges) {
     try {
       await ElMessageBox.confirm('当前修改仍会保留在本次工作区，但尚未写入本地岩板库。是否切换页面？', '未保存的草稿', {
@@ -456,8 +510,25 @@ async function changePage(nextPage) {
       return
     }
   }
+  if (nextPage === 'settings' && activePage.value !== 'settings') settingsReturnPage.value = activePage.value
   activePage.value = nextPage
-  history.replaceState(null, '', nextPage === 'photo-routes' ? '#/photo-routes' : '#/' + nextPage)
+  if (!fromHistory) history[replace ? 'replaceState' : 'pushState'](null, '', '#/' + nextPage)
+}
+
+function closeSettings() {
+  changePage(settingsReturnPage.value || workspaceHome, { replace: true })
+}
+
+async function requestWorkspaceChange() {
+  if (isPhotoPage.value && !(await photoPage.value?.beforeLeave())) return
+  if (activePage.value === 'studio' && studio.unsavedChanges) {
+    try {
+      await ElMessageBox.confirm('当前定线草稿尚未保存。切换项目后，本次未保存修改将不会写入岩板库。', '切换项目？', {
+        confirmButtonText: '切换项目', cancelButtonText: '继续编辑', type: 'warning',
+      })
+    } catch { return }
+  }
+  emit('change-workspace')
 }
 
 function startBlankStudio() {

@@ -38,6 +38,7 @@
 }
 
 .brand-block {
+  width: fit-content;
   appearance: none;
   border: 0;
   background: transparent;
@@ -86,9 +87,10 @@
 .sync-state { display: inline-flex; align-items: center; gap: 7px; color: var(--success); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .sync-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .sync-state.dirty { color: var(--warning); }
+.sync-label-mobile { display: none; }
 .pilot-user-menu { padding-left: 10px; border-left: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
 .pilot-user-menu button { border: 0; background: transparent; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.mobile-context-row, .mobile-tabs, .mobile-asset-switch { display: none; }
+.mobile-context-row, .mobile-tabs, .mobile-asset-switch, .mobile-route-switch { display: none; }
 
 .page { width: min(1464px, 100%); margin: 0 auto; padding: 32px 36px 48px; }
 .page h2 { margin-bottom: 8px; font-size: clamp(25px, 2.5vw, 32px); }
@@ -240,7 +242,7 @@
   .mobile-context-row > div > span { display: block; max-width: 250px; overflow: hidden; color: var(--ink-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .shell-main { padding-top: 116px; padding-bottom: 72px; }
   .page { padding: 20px 16px 30px; }
-  .mobile-tabs { position: fixed; z-index: 100; right: 0; bottom: 0; left: 0; height: 72px; padding: 7px 9px max(7px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,255,255,.98); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .mobile-tabs { position: fixed; z-index: 100; right: 0; bottom: 0; left: 0; height: 72px; padding: 7px 9px max(7px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(255,255,255,.98); display: grid; grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr)); }
   .mobile-tabs button { position: relative; min-width: 0; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); display: grid; place-items: center; align-content: center; gap: 3px; font-size: 10px; font-weight: 700; }
   .mobile-tabs button svg { width: 20px; height: 20px; }
   .mobile-tabs button.active { color: var(--ink); background: var(--brand-soft); }
@@ -382,15 +384,21 @@
 
 @media (max-width: 860px) {
   .app-header-main { height: 56px; min-height: 56px; }
+  .brand-block { flex: none; }
+  .brand-block strong { white-space: nowrap; }
   .brand-block small, .desktop-nav, .header-actions .el-button, .header-actions .pilot-user-menu { display: none; }
   .header-actions .sync-state { display: inline-flex; }
+  .header-actions .sync-label-full { display: none; }
+  .header-actions .sync-label-mobile { display: inline; }
   .mobile-context-row { min-height: 48px; height: 48px; padding-block: 5px; }
   .mobile-context-row .sync-state { display: none; }
   .mobile-context-row h1 { font-size: 17px; }
   .shell-main { padding-top: 104px; padding-bottom: 64px; }
   .mobile-tabs { height: 64px; padding-block: 5px; }
   .mobile-tabs button { min-height: 52px; }
-  .mobile-asset-switch { width: auto; margin: 12px 16px 0; }
+  .mobile-asset-switch, .mobile-route-switch { width: auto; margin: 12px 16px 0; padding: 3px; border: 1px solid var(--ui-line); border-radius: 11px; background: var(--ui-surface); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mobile-route-switch button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; font-weight: 500; cursor: pointer; }
+  .mobile-route-switch button.active { background: var(--ui-brand-soft); font-weight: 600; }
   .dashboard-intro h2 { font-size: 22px; }
   .dashboard-intro > .el-button { min-width: 44px; }
   .current-board-stage { background: var(--ui-surface-raised); }
@@ -432,7 +440,7 @@
 .board-frame { border-width: 2px; border-radius: 3px; }
 .board-hole.is-readonly:hover::after { box-shadow: none; }
 @media (max-width: 760px) {
-  .mobile-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-columns: auto; overflow-x: hidden; }
+  .mobile-tabs { grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr)); grid-auto-columns: auto; overflow-x: hidden; }
   .mobile-tabs button { min-width: 0; font-size: 10px; }
   .mobile-asset-switch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .studio-canvas-wrap > .canvas-wrap { height: 560px; padding: 30px 20px 30px 30px; }

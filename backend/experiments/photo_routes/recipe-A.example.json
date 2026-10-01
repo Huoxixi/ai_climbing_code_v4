@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "scheme": "A",
+  "precision": "fp32",
+  "slicing": true,
+  "color_mode": "lab",
+  "score_threshold": 0.4,
+  "color_threshold": 0.7,
+  "route_threshold": 0.95,
+  "detector": {
+    "path": "models/rtmdet-ins-tiny-climbing.onnx",
+    "sha256": "REPLACE_WITH_VERIFIED_SHA256",
+    "architecture": "rtmdet-ins-tiny",
+    "class_mapping": {"0": "hold", "1": "volume"},
+    "resize": "stretch-640",
+    "color_order": "bgr",
+    "mean": [103.53, 116.28, 123.675],
+    "std": [57.375, 57.12, 58.395],
+    "mask_values": "probability",
+    "source": "REPLACE_WITH_TRAINING_PROVENANCE",
+    "license": "REPLACE_WITH_VERIFIED_CODE_AND_WEIGHT_TERMS",
+    "commercial_use_allowed": false
+  }
+}

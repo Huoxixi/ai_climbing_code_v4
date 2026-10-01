@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "id": "KB-FOOT-003",
+  "version": 1,
+  "batch_id": "B001",
+  "title": "踩墙与局部点面",
+  "aliases": [
+    "踩墙",
+    "摩擦踩",
+    "Smearing",
+    "体积点踩面"
+  ],
+  "questions": [
+    "没有明显脚点时脚踩在哪里？",
+    "踩墙是不是一定要沉脚跟？"
+  ],
+  "tags": [
+    "局部面",
+    "鞋底",
+    "脚跟",
+    "摩擦"
+  ],
+  "action_codes": [
+    "FOOT_SMEAR"
+  ],
+  "stage_tags": [
+    "接触建立",
+    "移动",
+    "稳定/衔接"
+  ],
+  "related_units": [
+    "KB-FOOT-001",
+    "KB-FOOT-005"
+  ],
+  "context": {
+    "activity": "indoor_bouldering",
+    "applies_if": [
+      "记录鞋底与墙面或体积点局部面的接触。",
+      "了解当前线路允许使用哪些墙面和体积点。"
+    ],
+    "exclusions": [
+      "未确认使用规则时不把邻近面当作可用脚点。",
+      "视频缺少局部面细节时不判断实际接触面积。"
+    ]
+  },
+  "claims": [
+    {
+      "id": "C1",
+      "statement": "Smearing 利用鞋底与墙面或体积点局部面的摩擦建立脚部支撑，常用于没有突出踏面的地方。Momentum 的教学强调接触面与身体位置的配合；这不同于只把鞋尖放到凸出脚点上。",
+      "basis": "source_summary",
+      "evidence_ids": [
+        "E-MOM-SMEAR-01"
+      ]
+    },
+    {
+      "id": "C2",
+      "statement": "本项目先记录接触对象和画面中的鞋位，再讨论它怎样与后续移动连接；不统一要求沉脚跟或贴髋。",
+      "basis": "product_rule",
+      "evidence_ids": []
+    }
+  ],
+  "observation": {
+    "required_views": [
+      "脚与局部墙面/体积点的关系。",
+      "接触前后身体和其他手脚的连续变化。"
+    ],
+    "events": [
+      "区分脚进入、表面上可见移动、离开与后续动作。",
+      "记录脚跟相对鞋尖的画面位置，但不换算压力或摩擦。"
+    ],
+    "unknowns": [
+      "被遮挡的鞋底接触面。",
+      "实际摩擦条件与接触是否承重。"
+    ],
+    "cannot_infer": [
+      "二维画面不能给出摩擦系数或接触压力。",
+      "单一脚跟高度不能证明踩墙好坏。"
+    ]
+  },
+  "next_step": {
+    "kind": "review_only",
+    "text": "先确认使用的局部面与规则，再比较接触建立后发生了什么；需要调整时把面、目标和其他支点作为条件一起核对。",
+    "conditions": [
+      "对实际尝试的建议须基于已确认局部面和任务；现场条件不明时停留在视频比较。"
+    ],
+    "compare": [
+      "进入面的位置和方式。",
+      "接触后是否能衔接下一步，变化是否发生在脚部接触之前或之后。"
+    ]
+  },
+  "examples": [
+    {
+      "kind": "constructed",
+      "scenario": "鞋底在体积点斜面上，身体移动后脚仍保留接触。",
+      "allowed": "可描述该接触及后续运动。",
+      "disallowed": "已经测出最佳摩擦角。"
+    },
+    {
+      "kind": "constructed",
+      "scenario": "脚在墙边但接触面出画。",
+      "allowed": "目前只能看见脚的位置，实际接触未知。",
+      "disallowed": "把脚跟压低就不会滑。"
+    }
+  ],
+  "review": {
+    "content": "ai_source_checked",
+    "professional": "pending",
+    "video_validation": "not_started",
+    "automatic_use": false
+  },
+  "gaps": [
+    "待补不同斜面、鞋型与机位的实例。",
+    "关于脚跟高度的教学建议需补充不同情境原始来源。"
+  ]
+}

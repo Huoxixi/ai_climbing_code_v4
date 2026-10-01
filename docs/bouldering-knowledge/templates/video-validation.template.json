@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "REPLACE-WITH-ACTUAL-VALIDATION-ID",
+  "kind": "video_validation",
+  "status": "not_started",
+  "claim_id": "",
+  "claim_version": 1,
+  "claim_sha256": "",
+  "scope": {"population": "adults", "activity": "indoor_bouldering", "camera": "fixed", "movement": "slow_continuous"},
+  "revoked": false,
+  "revoked_at": null,
+  "independent": false,
+  "completed_at": "",
+  "protocol_file": "validations/artifacts/REPLACE-protocol.json",
+  "evaluation_file": "validations/artifacts/REPLACE-evaluation.json",
+  "protocol_sha256": "",
+  "evaluation_sha256": "",
+  "record_notice": "模板不是效果证据。程序重算逐尝试指标，不信任人工填入的 passed 或平均值。"
+}
