@@ -68,6 +68,7 @@ class DeliverySafetyTests(unittest.TestCase):
         patches.enter_context(patch.object(retire,'SOURCE',source))
         patches.enter_context(patch.object(retire,'RECEIPTS',self.root/'receipts'))
         patches.enter_context(patch.object(retire,'OPS',ops))
+        patches.enter_context(patch.object(retire,'LOCK',self.root/'deployment.lock'))
         patches.enter_context(patch.object(retire.os,'geteuid',return_value=0,create=True))
         response=patches.enter_context(patch.object(retire.urllib.request,'urlopen'))
         response.return_value.__enter__.return_value=io.BytesIO(b'{"status":"success"}')
@@ -80,7 +81,10 @@ class DeliverySafetyTests(unittest.TestCase):
     def test_retirement_does_not_delete_any_code_when_verified_backup_fails(self):
         patches,current,old,source,commands=self.retirement_fixture()
         with patches,contextlib.redirect_stdout(io.StringIO()):
-            commands.side_effect=RuntimeError('backup failed')
+            def failed_backup(args,**kwargs):
+                if args[0].endswith('backup_data.sh'):raise RuntimeError('backup failed')
+                return type('Result',(),{'returncode':1})()
+            commands.side_effect=failed_backup
             with self.assertRaises(RuntimeError):retire.main('prepare')
         self.assertTrue(current.is_dir());self.assertTrue(old.is_dir());self.assertTrue((source/'.git').is_dir())
 

@@ -21,6 +21,7 @@ OPS=Path('/var/lib/ai-climbing/ops')
 OLD_TAGS=('pilot-v2026.09.22-rc26','pilot-v2026.09.23-rc28','pilot-v2026.10.01-rc29')
 OLD_SHA='fea6690e4bf4530166b1a66accbb3c3b3cfd0628'
 RECEIPTS=Path('/var/backups/ai-climbing/legacy-project-retirement')
+LOCK=Path('/run/ai-climbing-deploy/release.lock')
 
 def run(*args,**kwargs):
     return subprocess.check_output(args,text=True,**kwargs).strip()
@@ -70,7 +71,7 @@ def snapshot_build_source(receipt):
     (receipt/'source-program-files.json').write_text(json.dumps(selected),encoding='utf-8')
     return selected
 
-def main(phase):
+def run_retirement(phase):
     if os.geteuid()!=0:raise RuntimeError('Run in the production root terminal')
     current=CURRENT.resolve(strict=True)
     if current.parent!=RELEASES or not (current/'RELEASE_SHA').is_file():raise RuntimeError('Invalid current release')
@@ -87,6 +88,8 @@ def main(phase):
     receipt=RECEIPTS/(datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+phase)
     receipt.mkdir(mode=0o700)
     if phase=='prepare':
+        if subprocess.run(['pgrep','-f','[d]eploy_release.sh|[p]ip (install|wheel|download)|[n]pm (ci|install)'],stdout=subprocess.DEVNULL).returncode==0:
+            raise RuntimeError('A deployment or dependency installation is active; preserved')
         subprocess.run(['/usr/local/lib/ai-climbing/backup_data.sh','pre-deploy'],check=True)
         backup=(OPS/'last-backup.env').read_text()
         if 'RESULT=success\n' not in backup or 'REMOTE_VERIFIED=true\n' not in backup:
@@ -137,6 +140,17 @@ def main(phase):
     print('FREE_BYTES_AFTER='+str(shutil.disk_usage(RELEASES).free),flush=True)
     if phase=='prepare' and shutil.disk_usage(RELEASES).free<8*1024**3:
         raise RuntimeError('Still less than 8 GiB available. Current site retained; do not deploy yet.')
+
+def main(phase):
+    if os.geteuid()!=0:raise RuntimeError('Run in the production root terminal')
+    if os.name=='posix':
+        import fcntl
+        LOCK.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+        with LOCK.open('a') as handle:
+            fcntl.flock(handle,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            run_retirement(phase)
+    else:
+        run_retirement(phase)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()

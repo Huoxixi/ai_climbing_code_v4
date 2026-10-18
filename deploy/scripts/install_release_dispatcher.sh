@@ -4,6 +4,10 @@ set -Eeuo pipefail
 [[ ${EUID} -eq 0 ]] || { echo 'Root is required.' >&2; exit 1; }
 tag="${1:-}"
 [[ "$tag" =~ ^pilot-v[0-9A-Za-z._-]+$ ]] || exit 1
+install -d -m 0700 /run/ai-climbing-deploy
+exec 8>/run/ai-climbing-deploy/release.lock
+flock -n 8 || { echo 'Another deployment or maintenance operation is active.' >&2; exit 1; }
+if pgrep -f '[d]eploy_release.sh' >/dev/null; then echo 'An existing deployment is active.' >&2; exit 1; fi
 source_dir="$(git rev-parse --show-toplevel)"
 sha="$(git -C "$source_dir" rev-parse HEAD)"
 [[ "$sha" == "$(git -C "$source_dir" rev-parse "refs/tags/$tag^{commit}")" ]] || exit 1

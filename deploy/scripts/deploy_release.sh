@@ -5,7 +5,8 @@ set -Eeuo pipefail
 tag="${1:-}"
 [[ "$tag" =~ ^pilot-v[0-9A-Za-z._-]+$ ]] || { echo 'Expected an immutable pilot-v tag.' >&2; exit 1; }
 for command in git flock python3.12; do command -v "$command" >/dev/null; done
-exec 8>/run/lock/ai-climbing-deploy.lock
+install -d -m 0700 /run/ai-climbing-deploy
+exec 8>/run/ai-climbing-deploy/release.lock
 flock -n 8 || { echo 'Another deployment is running.' >&2; exit 1; }
 checkout="$(mktemp -d /tmp/ai-climbing-release.XXXXXX)"
 trap 'rm -rf -- "$checkout"' EXIT

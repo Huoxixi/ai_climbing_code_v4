@@ -29,7 +29,7 @@
     "element-plus": "^2.14.0",
     "mediabunny": "1.61.6",
     "onnxruntime-web": "1.30.0",
-    "vue": "^3.5.30"
+    "vue": "^3.5.44"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

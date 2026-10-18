@@ -124,7 +124,7 @@ jobs:
           test -x deploy/scripts/restore_data.sh
           test -x deploy/scripts/create_tunnel_user.sh
           test -x deploy/scripts/run_quick_tunnel.sh
-          bash -n deploy/scripts/*.sh
+          for script in deploy/scripts/*.sh; do bash -n "$script"; done
           sudo apt-get update
           sudo apt-get install --yes nginx openssh-server
           sudo groupadd --force ai-climbing-operators
