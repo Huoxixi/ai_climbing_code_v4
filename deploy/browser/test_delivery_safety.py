@@ -2,6 +2,7 @@
 import contextlib
 import importlib.util
 import io
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -19,6 +20,9 @@ spec.loader.exec_module(retire)
 model_spec=importlib.util.spec_from_file_location('model_installer',ROOT/'backend/scripts/install_replay_rtmw.py')
 model_installer=importlib.util.module_from_spec(model_spec)
 model_spec.loader.exec_module(model_installer)
+installer_spec=importlib.util.spec_from_file_location('installer_download',ROOT/'deploy/browser/download_installer.py')
+installer_download=importlib.util.module_from_spec(installer_spec)
+installer_spec.loader.exec_module(installer_download)
 
 class DeliverySafetyTests(unittest.TestCase):
     def setUp(self):
@@ -54,6 +58,45 @@ class DeliverySafetyTests(unittest.TestCase):
             self.file(old/'backend/data/private.json')
             with self.assertRaises(RuntimeError):retire.validate_release(old,current)
         self.assertTrue((old/'backend/data/private.json').is_file())
+
+    def test_installer_parallel_ranges_reassemble_and_verify_the_exact_public_file(self):
+        body=b'fixed public installer'*150
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        target=self.root/'installer.exe';calls=[]
+        def fetch(request,timeout):
+            first,last=map(int,request.get_header('Range').split('=')[1].split('-'))
+            calls.append((first,last))
+            response=io.BytesIO(body[first:last+1]);response.status=206
+            response.headers={'Content-Range':f'bytes {first}-{last}/{len(body)}'}
+            return response
+        with patch.object(installer_download,'CHUNK_BYTES',128),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch):
+            with contextlib.redirect_stdout(io.StringIO()):installer_download.download(profile,target)
+        self.assertEqual(target.read_bytes(),body)
+        self.assertEqual(sorted(calls),[(start,min(start+128,len(body))-1) for start in range(0,len(body),128)])
+        self.assertFalse(target.with_suffix('.partial').exists())
+
+    def test_installer_rejects_ignored_ranges_truncation_and_wrong_digest(self):
+        body=b'expected installer'
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        for kind in ['ignored','offset','truncated','digest']:
+            target=self.root/(kind+'.exe')
+            def fetch(request,timeout):
+                data=body[:-1] if kind=='truncated' else (b'x'*len(body) if kind=='digest' else body)
+                response=io.BytesIO(data);response.status=200 if kind=='ignored' else 206
+                response.headers={'Content-Range':f'bytes {1 if kind=="offset" else 0}-{len(body)-1}/{len(body)}'}
+                return response
+            with self.subTest(kind=kind),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch),patch.object(installer_download.time,'sleep'):
+                with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(RuntimeError):installer_download.download(profile,target)
+                self.assertFalse(target.exists());self.assertFalse(target.with_suffix('.partial').exists())
+
+    def test_installer_existing_valid_cache_is_reused_and_invalid_cache_is_preserved(self):
+        body=b'expected installer';target=self.file(self.root/'installer.exe',body)
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        with patch.object(installer_download.urllib.request,'urlopen') as fetch:
+            installer_download.download(profile,target);fetch.assert_not_called()
+            target.write_bytes(b'keep this failed cache for diagnosis')
+            with self.assertRaises(RuntimeError):installer_download.download(profile,target)
+            self.assertEqual(target.read_bytes(),b'keep this failed cache for diagnosis');fetch.assert_not_called()
 
     def test_fresh_model_install_accepts_verified_root_and_nested_archives(self):
         import hashlib
