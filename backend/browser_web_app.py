@@ -8,9 +8,10 @@ from fastapi.staticfiles import StaticFiles
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def create_app(*,static_root=None,installer=None):
+def create_app(*,static_root=None,installer=None,installer_filename=None):
     static_root=Path(static_root or os.getenv('CLIMB_BROWSER_STATIC_DIR') or ROOT/'frontend/dist-browser')
-    installer=Path(installer or os.getenv('CLIMB_BROWSER_INSTALLER') or ROOT.parents[1]/'public-releases/setup-build-20261010-17-readme/ClimbingAssistant-Setup-0.1.17-local.20261010.exe')
+    installer=Path(installer or os.getenv('CLIMB_BROWSER_INSTALLER') or ROOT.parents[1]/'public-releases/setup-build-20261018-c/ClimbingAssistant-Setup-0.1.18-local.20261018.exe')
+    installer_filename=installer_filename or installer.name
     app=FastAPI(title='攀岩助手 · 浏览器本机复盘',docs_url=None,redoc_url=None,openapi_url=None)
 
     @app.middleware('http')
@@ -28,7 +29,7 @@ def create_app(*,static_root=None,installer=None):
     def download():
         if not installer.is_file():
             raise HTTPException(404,'安装包暂不可用，请稍后重试。')
-        return FileResponse(installer,filename='ClimbingAssistant-Setup-0.1.17-local.20261010.exe',media_type='application/octet-stream',headers={'X-Content-Type-Options':'nosniff'})
+        return FileResponse(installer,filename=installer_filename,media_type='application/octet-stream',headers={'X-Content-Type-Options':'nosniff'})
 
     @app.get('/api/browser/health')
     def health():

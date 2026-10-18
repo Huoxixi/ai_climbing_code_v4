@@ -48,7 +48,8 @@ def prepare(destination):
         'from browser_web_app import create_app\n'
         'root = Path(__file__).resolve().parents[1]\n'
         'app = create_app(static_root=root/"frontend/dist", '
-        'installer=root/"frontend/dist/downloads/climbing-assistant-windows.exe")\n', encoding='utf-8')
+        'installer=root/"frontend/dist/downloads/climbing-assistant-windows.exe", '
+        f'installer_filename={package["file"]!r})\n', encoding='utf-8')
     shutil.copyfile(ROOT/'deploy/browser/profile.json',destination/'BROWSER_RELEASE.json')
     print('Browser-only release packaged; no legacy API, database or private media copied.')
 
