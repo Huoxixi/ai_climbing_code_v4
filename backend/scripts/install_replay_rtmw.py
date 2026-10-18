@@ -42,7 +42,7 @@ def install(cache):
         if sha(archive) != digest:
             raise RuntimeError('Download checksum mismatch: ' + archive_name)
         with zipfile.ZipFile(archive) as bundle:
-            candidates = [item for item in bundle.namelist() if item.endswith('/end2end.onnx')]
+            candidates = [item for item in bundle.namelist() if item.rsplit('/', 1)[-1] == 'end2end.onnx']
             if len(candidates) != 1:
                 raise RuntimeError('Unexpected model archive layout')
             with tempfile.NamedTemporaryFile(dir=directory, delete=False) as out:

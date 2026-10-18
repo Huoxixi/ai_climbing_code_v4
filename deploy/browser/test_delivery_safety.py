@@ -16,6 +16,9 @@ from desktop.archive_installed_app import archive
 spec=importlib.util.spec_from_file_location('retire',ROOT/'deploy/browser/retire_legacy_project.py')
 retire=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(retire)
+model_spec=importlib.util.spec_from_file_location('model_installer',ROOT/'backend/scripts/install_replay_rtmw.py')
+model_installer=importlib.util.module_from_spec(model_spec)
+model_spec.loader.exec_module(model_installer)
 
 class DeliverySafetyTests(unittest.TestCase):
     def setUp(self):
@@ -51,6 +54,26 @@ class DeliverySafetyTests(unittest.TestCase):
             self.file(old/'backend/data/private.json')
             with self.assertRaises(RuntimeError):retire.validate_release(old,current)
         self.assertTrue((old/'backend/data/private.json').is_file())
+
+    def test_fresh_model_install_accepts_verified_root_and_nested_archives(self):
+        import hashlib
+        models=self.root/'backend/model_assets/rtmw-l-384x288'
+        models.mkdir(parents=True)
+        cache=self.root/'downloads';cache.mkdir()
+        entries=[];assets=[]
+        for name,member in [('rtmw.onnx','end2end.onnx'),('detector.onnx','sdk/model/end2end.onnx')]:
+            content=('fixed public model '+name).encode()
+            entries.append({'file':name,'bytes':len(content),'sha256':hashlib.sha256(content).hexdigest()})
+            archive=cache/(name+'.zip')
+            with zipfile.ZipFile(archive,'w') as bundle:bundle.writestr(member,content)
+            assets.append((name,archive.name,'unused-cached-public-url',model_installer.sha(archive)))
+        (models/'manifest.json').write_text(json.dumps({'files':entries}),encoding='utf-8')
+        with patch.object(model_installer,'ROOT',self.root),patch.object(model_installer,'ASSETS',assets),contextlib.redirect_stdout(io.StringIO()):
+            model_installer.install(cache)
+            for item in entries:self.assertEqual(model_installer.sha(models/item['file']),item['sha256'])
+            (models/'rtmw.onnx').write_bytes(b'damaged-existing-model')
+            with self.assertRaises(RuntimeError):model_installer.install(cache)
+            self.assertEqual((models/'rtmw.onnx').read_bytes(),b'damaged-existing-model')
 
     def retirement_fixture(self):
         releases=self.root/'releases';current=releases/retire.OLD_TAGS[-1];old=releases/retire.OLD_TAGS[0]
