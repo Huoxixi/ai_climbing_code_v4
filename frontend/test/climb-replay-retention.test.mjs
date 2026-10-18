@@ -5,11 +5,11 @@ import test from 'node:test'
 const page = readFileSync(new URL('../src/components/ClimbReplayPage.vue', import.meta.url), 'utf8')
 const service = readFileSync(new URL('../src/services/climbReplayService.js', import.meta.url), 'utf8')
 
-test('上传默认选择自动清理并把保留方式提交给服务端', () => {
-  assert.match(page, /retentionMode = ref\('delete_after_processing'\)/)
-  assert.match(page, /成功后 24 小时内删除；失败或取消后保留 72 小时/)
-  assert.match(page, /私密保留原视频/)
-  assert.match(service, /retention_mode:retentionMode/)
+test('上传固定保留原片，旧自动清理选项与倒计时退出页面', () => {
+  assert.match(page, /retentionMode = ref\('keep_private_original'\)/)
+  assert.doesNotMatch(page, /分析后自动删除|计划于.*自动删除|成功后 24 小时内删除/)
+  assert.match(page, /原片与清晰播放副本保存在本机/)
+  assert.match(service, /retention_mode:'keep_private_original'/)
 })
 
 test('原视频删除与整次记录删除使用不同接口并说明影响', () => {

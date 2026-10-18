@@ -10,7 +10,7 @@
           <button v-for="item in desktopItems" :key="item.key" :class="{ active: active === item.key }" :aria-current="active === item.key ? 'page' : undefined" @click="$emit('update:active', item.key)">{{ item.label }}</button>
         </nav>
         <div class="header-actions">
-          <a class="workspace-back-link" href="#/projects" aria-label="返回项目选择" @click.prevent="$emit('change-workspace')"><ArrowLeft /><span class="desktop-switch-label">返回项目选择</span><span class="mobile-switch-label">项目</span></a>
+          <a v-if="!localWorkspaceOnly" class="workspace-back-link" href="#/projects" aria-label="返回项目选择" @click.prevent="$emit('change-workspace')"><ArrowLeft /><span class="desktop-switch-label">返回项目选择</span><span class="mobile-switch-label">项目</span></a>
           <span v-if="showSync" class="sync-state" :class="{ dirty }"><i /><span class="sync-label-full">{{ saveLabel || (dirty ? '未保存' : '已同步') }}</span><span class="sync-label-mobile">{{ dirty ? '未保存' : '已同步' }}</span></span>
           <el-button v-if="needsEditAccess && active !== 'settings' && !pilotAccess.lease.ownedByMe" size="small" type="primary" :loading="pilotAccess.lease.loading" @click="pilotAccess.acquireLease">开始编辑</el-button>
           <button v-if="active !== 'settings'" class="settings-trigger" type="button" aria-label="设置" title="设置" @click="$emit('update:active', 'settings')"><Setting /></button>
@@ -41,7 +41,7 @@
 
 <script setup>
 import { computed, inject } from 'vue'
-import { ArrowLeft, Camera, Collection, DataBoard, Grid, Histogram, Platform, Setting, User, VideoCamera } from '@element-plus/icons-vue'
+import { ArrowLeft, Camera, Collection, DataBoard, Grid, Histogram, Platform, Setting, VideoCamera } from '@element-plus/icons-vue'
 
 const props = defineProps({
   active: { type: String, required: true }, title: { type: String, required: true }, boardLabel: { type: String, default: '未选择岩板' },
@@ -53,6 +53,7 @@ const props = defineProps({
 })
 defineEmits(['update:active', 'close-settings', 'change-workspace'])
 const pilotAccess = inject('pilotAccess')
+const localWorkspaceOnly = inject('localWorkspaceOnly',false)
 const workspaceTitle = computed(() => props.workspace === 'boulder' ? '抱石项目' : '定线项目')
 const workspaceHome = computed(() => props.workspace === 'boulder' ? 'photo-routes' : 'dashboard')
 const setterDesktopItems = [
@@ -64,7 +65,6 @@ const boulderItems = computed(() => [
   { key: 'photo-routes', label: '拍照定线', short: '拍照定线', icon: Camera },
   { key: 'my-records', label: '我的记录', short: '我的记录', icon: Collection },
   { key: 'climb-replay', label: 'AI 复盘', short: 'AI 复盘', icon: VideoCamera },
-  { key: 'account', label: '我的账号', short: '我的账号', icon: User },
 ])
 const desktopItems = computed(() => (props.workspace === 'boulder'
   ? boulderItems.value

@@ -18,15 +18,25 @@ foreach ($portNumber in $servicePorts) {
 }
 if (-not (Test-Path -LiteralPath $pythonRuntime)) { throw 'Bundled Python runtime is unavailable.' }
 $climbingModelRoot = Join-Path $workspaceDirectory 'photo-route-experiments/indoor-climbing-20260906'
-$pythonPaths = @('boulder-python','boulder-model-python','boulder-app-python','photo-route-bench-python') | ForEach-Object { Join-Path $workspaceDirectory ".tools/$_" }
+$pythonPaths = @('replay-rtmw-python','boulder-python','boulder-model-python','boulder-app-python','photo-route-bench-python') | ForEach-Object { Join-Path $workspaceDirectory ".tools/$_" }
 $climbReplayCaseSpecs = @(
     @{ id='case-1'; label='本地案例 1'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/a5dd8a80ca37708687f488b49bb82d84.mp4') },
     @{ id='case-2'; label='本地案例 2'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/32fd4ed4a82458794181be60eb5b3792.mp4'); comparison_path=(Join-Path $projectDirectory '.local/diagnostics/distilled-chinese-timeline-case2-20260921-01.webm'); comparison_route_color='蓝色'; comparison_action_count=17 },
     @{ id='case-3'; label='本地案例 3'; description='十几秒攀爬素材，仅用于本机流程验收'; path=(Join-Path $workspaceDirectory '素材/ebe6e698a861512b2587f661edd1b7a1.mp4') }
 )
 $climbReplayTestVideos = @($climbReplayCaseSpecs | Where-Object { Test-Path -LiteralPath $_.path })
+$currentMaterialDirectory = Join-Path $workspaceDirectory '素材/视频复盘首批10段_20261005/浏览器兼容版'
+if (Test-Path -LiteralPath $currentMaterialDirectory) {
+    $currentMaterialFiles = @(Get-ChildItem -LiteralPath $currentMaterialDirectory -File -Filter '*.mp4' | Sort-Object Name)
+    if ($currentMaterialFiles.Count -eq 10) {
+        $climbReplayTestVideos = @($currentMaterialFiles | ForEach-Object {
+            @{ id=('material-' + $_.BaseName.Substring(0,2)); label=('素材 ' + $_.BaseName.Substring(0,2)); description='当前重剪版，岩点精修验收素材'; path=$_.FullName }
+        })
+    }
+}
 $env:CLIMB_REPLAY_TEST_VIDEOS = ConvertTo-Json -InputObject $climbReplayTestVideos -Compress
 $env:CLIMB_REPLAY_VISUAL_ENABLED = '1'
+$env:CLIMB_REPLAY_KEEP_HIGH_RESOLUTION = '1'
 Remove-Item Env:CLIMB_REPLAY_TEST_VIDEO_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:CLIMB_REPLAY_TEST_VIDEO_SOURCE_URL -ErrorAction SilentlyContinue
 $env:PYTHONPATH = ($pythonPaths + @((Join-Path $climbingModelRoot 'detectron-deps'),(Join-Path $climbingModelRoot 'detectron2-source'))) -join ';'
@@ -47,15 +57,15 @@ $backendProcess = Start-Process -FilePath $pythonRuntime -ArgumentList '-m uvico
 Wait-PhotoService $backendProcess 'http://127.0.0.1:8004/api/health'
 $backendSchema = Invoke-RestMethod -Uri 'http://127.0.0.1:8004/openapi.json' -TimeoutSec 5
 if ($backendSchema.paths.PSObject.Properties['/api/climb-replay/jobs'] -and
-    -not $backendSchema.paths.PSObject.Properties['/api/climb-replay/coaching-policy']) {
-    throw 'Local backend has not loaded the personalized replay routes. Check that this project is the active checkout.'
+    -not $backendSchema.paths.PSObject.Properties['/api/climb-replay/jobs/{job_id}/actions/export']) {
+    throw 'Local backend has not loaded the local replay export routes. Check that this project is the active checkout.'
 }
 if ($BackendOnly) {
     @{backend=$backendProcess.Id} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runLogDirectory 'processes.json')
     Write-Output 'Local backend updated: http://127.0.0.1:8004; existing frontend remains on http://127.0.0.1:4176/'
     return
 }
-$frontendProcess = Start-Process -FilePath $nodeRuntime -ArgumentList 'node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4176 --strictPort' -WorkingDirectory (Join-Path $projectDirectory 'frontend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runLogDirectory 'frontend.out.log') -RedirectStandardError (Join-Path $runLogDirectory 'frontend.err.log') -PassThru
+$frontendProcess = Start-Process -FilePath $nodeRuntime -ArgumentList 'node_modules/vite/bin/vite.js --mode boulder-local --host 127.0.0.1 --port 4176 --strictPort' -WorkingDirectory (Join-Path $projectDirectory 'frontend') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runLogDirectory 'frontend.out.log') -RedirectStandardError (Join-Path $runLogDirectory 'frontend.err.log') -PassThru
 @{backend=$backendProcess.Id;frontend=$frontendProcess.Id} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runLogDirectory 'processes.json')
 Wait-PhotoService $frontendProcess 'http://127.0.0.1:4176/'
 Write-Output 'Local preview: http://127.0.0.1:4176/#/photo-routes'

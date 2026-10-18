@@ -41,8 +41,19 @@ import App from './App.vue'
 import PilotLogin from './components/PilotLogin.vue'
 import WorkspaceChooser from './components/WorkspaceChooser.vue'
 import apiClient from './services/apiClient'
+import { isLocalWorkspace, localWorkspaceHash } from './utils/localWorkspace.js'
 
 const workspaceStorageKey = 'climbing-active-workspace'
+const localWorkspaceOnly = isLocalWorkspace(window)
+provide('localWorkspaceOnly',localWorkspaceOnly)
+if(localWorkspaceOnly){
+  const hash=localWorkspaceHash(location.hash)
+  if(hash!==location.hash)history.replaceState(null,'',hash)
+  sessionStorage.setItem(workspaceStorageKey,'boulder')
+}else if(location.hash==='#/account'){
+  sessionStorage.setItem(workspaceStorageKey,'boulder')
+  history.replaceState(null,'','#/settings')
+}
 const workspaceChooserHash = '#/projects'
 const boulderPageKeys = ['photo-routes', 'my-records', 'climb-replay', 'account']
 const setterPageKeys = ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab']
@@ -161,6 +172,7 @@ async function logout() {
 }
 
 function selectWorkspace(workspace) {
+  if(localWorkspaceOnly && workspace!=='boulder')return
   if (!['boulder', 'setter'].includes(workspace)) return
   activeWorkspace.value = workspace
   sessionStorage.setItem(workspaceStorageKey, workspace)
@@ -169,17 +181,31 @@ function selectWorkspace(workspace) {
 }
 
 function openWorkspaceChooser() {
+  if(localWorkspaceOnly)return
   activeWorkspace.value = ''
   if (location.hash !== workspaceChooserHash) history.pushState(null, '', workspaceChooserHash)
 }
 
 function resetWorkspace() {
+  if(localWorkspaceOnly){
+    activeWorkspace.value='boulder'
+    sessionStorage.setItem(workspaceStorageKey,'boulder')
+    history.replaceState(null,'','#/photo-routes')
+    return
+  }
   activeWorkspace.value = ''
   sessionStorage.removeItem(workspaceStorageKey)
   history.replaceState(null, '', workspaceChooserHash)
 }
 
 function handleRootHashChange() {
+  if(localWorkspaceOnly){
+    const hash=localWorkspaceHash(location.hash)
+    if(hash!==location.hash)history.replaceState(null,'',hash)
+    activeWorkspace.value='boulder'
+    sessionStorage.setItem(workspaceStorageKey,'boulder')
+    return
+  }
   if (location.hash === workspaceChooserHash) {
     activeWorkspace.value = ''
     return

@@ -17,6 +17,7 @@ const record = { id: 'fixture-route', board_version_id: board.id, version: 1, na
   members: [{ object_id: 'fixture-hold', roles: [], tags: [], note: '' }], media: [] }
 for (const width of [1280,390]) test(`current photo library and contour detail at ${width}px`, async () => {
   const page = await browser.newPage({ viewport: { width, height: 900 } })
+  page.setDefaultTimeout(5000)
   const errors = [], writes = [], unknown = []
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/api/**', async route => {
@@ -46,7 +47,7 @@ for (const width of [1280,390]) test(`current photo library and contour detail a
     await card.locator('polygon').waitFor()
     assert.equal(await card.locator('polygon').count(), 1)
     await card.click()
-    await page.getByRole('heading', { name: '线路信息', exact: true }).waitFor()
+    await page.getByRole('button', { name: '线路信息', exact: true }).waitFor()
     await page.locator('.is-route-contour').waitFor()
     assert.equal(await page.locator('.is-route-contour').count(), 1)
     assert.equal(await page.getByLabel('线路名称', { exact: true }).inputValue(), record.name)

@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, defineAsyncComponent } from 'vue'
 import {
   ElAlert,
   ElButton,
@@ -26,11 +26,14 @@ import {
   ElUpload,
 } from 'element-plus'
 import 'element-plus/dist/index.css'
-import './style.css'
-import './styles/tokens.css'
-import './styles/base.css'
-import './styles/redesign.css'
-import RootApp from './RootApp.vue'
+if (import.meta.env.VITE_LOCAL_BOULDER_ONLY === 'true') {
+  await import('./styles/local-app.css')
+} else {
+  await import('./styles/full-app.css')
+}
+import LocalRoot from './LocalRoot.vue'
+import { isLocalWorkspace } from './utils/localWorkspace.js'
+const RootApp = import.meta.env.VITE_LOCAL_BOULDER_ONLY === 'true' ? LocalRoot : (isLocalWorkspace(window) ? LocalRoot : defineAsyncComponent(() => import('./RootApp.vue')))
 
 const app = createApp(RootApp)
 const elementComponents = [

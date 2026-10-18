@@ -428,7 +428,10 @@ def _render(source, plan, output, metrics_path, *, composition_factory=None, val
         composition.video.close()
         raise ValueError("Source has no valid frame timeline")
     actual = composition.video.count / composition.video.fps
-    if abs(actual - plan["source_duration_seconds"]) > max(.1, 2 / composition.video.fps):
+    # Base replays may append legacy statistics after the original action interval.
+    # Verify the full input media separately; action plans still bound every output frame.
+    media_duration = plan.get("source_media_duration_seconds", plan["source_duration_seconds"])
+    if abs(actual - media_duration) > max(.1, 2 / composition.video.fps):
         composition.video.close()
         raise ValueError("Source duration no longer matches evidence")
     width, height = composition.size

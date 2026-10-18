@@ -21,6 +21,9 @@ class WorkflowTests(unittest.TestCase):
     def tearDown(self):self.flow.close();self.tmp.cleanup()
     def palette(self):
         value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        # Construct a historical v2 task to keep its recovery contract covered.
+        with self.store.transaction() as db:
+            db.execute("UPDATE photo_work_sessions SET flow_version=2,status='processing' WHERE id=?",(value['id'],))
         with patch('core.photo_route_workflow.analyze_board_photo',side_effect=lambda path,root,**kw:analyze_board_photo(path,root,coarse_only=True)):
             self.flow.process(value['id'])
         return self.flow.get(value['id'],'owner')
@@ -130,6 +133,50 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(error.exception.status_code,409)
         self.assertIn('专项模型',error.exception.detail)
 
+    def test_drawn_hold_commits_membership_once_without_inference_or_calibration(self):
+        value=self.ready(); count=len(value['board']['objects'])
+        with self.store.transaction() as db:
+            db.execute('UPDATE board_versions SET calibration_json=NULL WHERE id=?',(value['board_id'],))
+        change=Change(version=value['version'],board_version=value['board']['version'],
+            contour=[[100,100],[140,100],[140,140],[100,140]],request_id='drawn-hold-once')
+        with patch('core.photo_route_workflow.segment_point',side_effect=AssertionError('no legacy inference')):
+            result=self.flow.update(value['id'],'owner',change,'add-contour')
+            repeated=self.flow.update(value['id'],'owner',change,'add-contour')
+        self.assertEqual(result['version'],repeated['version'])
+        self.assertEqual(result['status'],'ready')
+        self.assertEqual(len(result['board']['objects']),count+1)
+        oid=result['route']['members'][-1]['object_id']
+        obj=next(obj for obj in result['board']['objects'] if obj['id']==oid)
+        self.assertEqual(obj['color_group'],value['color'])
+        self.assertEqual(obj['review_status'],'needs_review')
+        self.assertTrue(self.store.asset_path(obj['mask']['filename']).exists())
+        restored=self.flow.current('owner')
+        self.assertEqual(restored['route']['members'][-1]['object_id'],oid)
+
+    def test_drawn_hold_rejects_wrong_owner_stale_board_and_invalid_boundary(self):
+        value=self.ready()
+        base=dict(version=value['version'],board_version=value['board']['version'],contour=[[100,100],[140,100],[140,140]])
+        for owner,payload in [('other',base),('owner',{**base,'board_version':base['board_version']+1}),
+                ('owner',{**base,'contour':[[1,1],[2,2],[3,3]]}),('owner',{**base,'contour':[[-1,1],[20,1],[20,20]]})]:
+            with self.assertRaises(HTTPException):self.flow.update(value['id'],owner,Change(**payload),'add-contour')
+        unchanged=self.flow.get(value['id'],'owner')
+        self.assertEqual(unchanged['version'],value['version'])
+        self.assertEqual(len(unchanged['board']['objects']),len(value['board']['objects']))
+
+    def test_drawn_hold_rolls_back_if_membership_commit_is_interrupted(self):
+        value=self.ready()
+        change=Change(version=value['version'],board_version=value['board']['version'],
+            contour=[[100,100],[140,100],[140,140]],request_id='interrupted-drawn-hold')
+        with self.store.transaction() as db:
+            db.execute("CREATE TRIGGER interrupt_contour BEFORE UPDATE ON photo_work_sessions BEGIN SELECT RAISE(ABORT,'simulated interruption'); END")
+        with self.assertRaises(Exception):self.flow.update(value['id'],'owner',change,'add-contour')
+        unchanged=self.flow.get(value['id'],'owner')
+        self.assertEqual(len(unchanged['board']['objects']),len(value['board']['objects']))
+        self.assertEqual(len(unchanged['route']['members']),len(value['route']['members']))
+        with self.store.transaction() as db:db.execute('DROP TRIGGER interrupt_contour')
+        result=self.flow.update(value['id'],'owner',change,'add-contour')
+        self.assertEqual(len(result['board']['objects']),len(value['board']['objects'])+1)
+
     def test_restart_after_local_result_does_not_run_segmentation_again(self):
         value=self.ready()
         value=self.flow.update(value['id'],'owner',Change(version=value['version']),'retry')
@@ -227,12 +274,75 @@ class WorkflowTests(unittest.TestCase):
 
     def test_new_upload_requires_full_model_analysis(self):
         value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        self.flow.select(value['id'],'owner',Change(version=value['version'],color='黄色'))
         with patch('core.photo_route_workflow.analyze_board_photo',side_effect=ValueError('model unavailable')) as analyze:
             with self.assertRaises(ValueError):self.flow.process(value['id'])
         self.assertTrue(analyze.call_args.kwargs['require_climbing_model'])
         self.assertNotIn('require_mobilesam',analyze.call_args.kwargs)
         self.assertFalse(analyze.call_args.kwargs['coarse_only'])
         self.assertEqual(analyze.call_args.kwargs['color_version'],'interior-v4')
+
+    def test_new_upload_waits_for_color_without_queuing_or_running_inference(self):
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=AssertionError('must wait for color')):
+            value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+            self.flow.process(value['id'])
+            recovered=PhotoWorkflow(self.store,start=False)
+            recovered.process(value['id'])
+        self.assertEqual(value['flow_version'],3)
+        self.assertEqual(value['status'],'awaiting_color')
+        self.assertEqual(value['board']['objects'],[])
+        self.assertIsNone(value['route'])
+        self.assertTrue(self.flow.queue.empty())
+        self.assertEqual(recovered.current('owner')['status'],'awaiting_color')
+        recovered.close()
+
+    def test_color_selection_queues_once_then_builds_only_selected_color_route(self):
+        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        payload=Change(version=value['version'],board_version=value['board']['version'],color='黄色',request_id='start-recognition-once')
+        selected=self.flow.select(value['id'],'owner',payload)
+        repeated=self.flow.select(value['id'],'owner',payload)
+        self.assertEqual(selected['status'],'processing')
+        self.assertEqual(selected['version'],repeated['version'])
+        self.assertIsNone(selected['route'])
+        self.assertEqual(self.flow.queue.qsize(),1)
+        def constructed(path,root,**kwargs):
+            result=analyze_board_photo(path,root,coarse_only=True)
+            other=dict(result['objects'][0],id='other-color',color_group='蓝色')
+            result['objects'].append(other)
+            return result
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=constructed) as analyze,patch('core.photo_route_workflow.review_objects',side_effect=AssertionError('no visual review')):
+            self.flow.process(value['id']); self.flow.process(value['id'])
+        self.assertEqual(analyze.call_count,1)
+        self.assertEqual(analyze.call_args.kwargs['color_group'],'黄色')
+        result=self.flow.get(value['id'],'owner')
+        self.assertEqual(result['status'],'ready')
+        selected_ids={obj['id'] for obj in result['board']['objects'] if obj['color_group']=='黄色'}
+        self.assertEqual({m['object_id'] for m in result['route']['members']},selected_ids)
+        self.assertTrue(any(obj['color_group']=='蓝色' for obj in result['board']['objects']))
+        self.assertEqual(self.flow.select(value['id'],'owner',payload)['route_id'],result['route_id'])
+        with self.store.connect() as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM routes').fetchone()[0],1)
+
+    def test_zero_detected_holds_still_enters_manual_repair(self):
+        value=self.flow.upload('owner',uuid.uuid4().hex,'sample.jpg',photo_bytes())
+        selected=self.flow.select(value['id'],'owner',Change(version=value['version'],color='红色'))
+        def empty(path,root,**kwargs):
+            result=analyze_board_photo(path,root,coarse_only=True);result['objects']=[];return result
+        with patch('core.photo_route_workflow.analyze_board_photo',side_effect=empty):self.flow.process(selected['id'])
+        ready=self.flow.get(value['id'],'owner')
+        self.assertEqual(ready['status'],'ready');self.assertEqual(ready['route']['members'],[])
+        repaired=self.flow.update(value['id'],'owner',Change(version=ready['version'],board_version=ready['board']['version'],contour=[[100,100],[140,100],[140,140]]),'add-contour')
+        self.assertEqual(len(repaired['route']['members']),1)
+        self.assertEqual(repaired['board']['objects'][0]['color_group'],'红色')
+
+    def test_unfinished_v2_draft_can_restart_from_color_without_overwriting_old_masks(self):
+        value=self.palette(); old_board=value['board']
+        selected=self.flow.select(value['id'],'owner',Change(version=value['version'],board_version=old_board['version'],color='蓝色',recognize=True,request_id='restart-from-color'))
+        self.assertEqual(selected['flow_version'],3)
+        self.assertEqual(selected['status'],'processing')
+        self.assertNotEqual(selected['board_id'],old_board['id'])
+        self.assertEqual(selected['board']['objects'],[])
+        self.assertEqual(self.store.get_board(old_board['id'],'owner')['objects'],old_board['objects'])
+        self.assertEqual(self.flow.queue.qsize(),1)
 
     def test_confirmation_rejects_changed_preview(self):
         value=self.palette()

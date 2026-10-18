@@ -62,7 +62,7 @@ class ReplayColorSampleTests(unittest.TestCase):
             self.assertNotIn('saved_route_reference',job)
             self.assertEqual(store.get(job['id'],private=True)['saved_route_reference']['asset_path'],'private-photo')
 
-    def test_video_sample_drives_hold_matching_instead_of_the_preset_label(self):
+    def test_palette_sample_matches_fixed_requested_colour(self):
         image=np.zeros((100,200,3),np.uint8)
         cyan=cv2.cvtColor(np.uint8([[[90,170,190]]]),cv2.COLOR_HSV2BGR)[0,0]
         red=cv2.cvtColor(np.uint8([[[2,180,190]]]),cv2.COLOR_HSV2BGR)[0,0]
@@ -72,7 +72,7 @@ class ReplayColorSampleTests(unittest.TestCase):
         sample_rgb=cv2.cvtColor(np.uint8([[cyan]]),cv2.COLOR_BGR2RGB)[0,0].tolist()
         with patch('core.climb_replay._climbing_model_masks_batch',return_value=([([cyan_mask,red_mask],[.9,.9])],'test-model')):
             holds,candidates,_,_,_=AliyunReplayAnalyzer._video_holds(
-                frames=[(0,image)],route_color='红色',
+                frames=[(0,image)],route_color='青色',
                 route_color_sample={'source':'palette','hex':'#20a6a6','rgb':sample_rgb,'time_seconds':1.0},
                 saved_route_reference=None,deadline=10**12,progress=lambda *_:None,cancelled=lambda:False,
             )

@@ -3,11 +3,12 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 
-export async function startFixtureServer(port, externalUrl) {
+export async function startFixtureServer(port, externalUrl, options={}) {
   if (externalUrl) return externalUrl
   const base = `http://127.0.0.1:${port}`
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort',...(options.args||[])], {
     cwd: fileURLToPath(new URL('../../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    env:{...process.env,...options.env},
   })
   let output = '', failure
   const capture = chunk => { output = (output + chunk.toString()).slice(-8000) }

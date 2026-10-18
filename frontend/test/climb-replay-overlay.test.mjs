@@ -54,7 +54,7 @@ test('保留手脚主标签并在旁边补充可靠的中文动作名称', () =>
 })
 
 test('原视频清理后回退到私密叠加视频且支持单独删除', () => {
-  assert.match(page, /当前播放：复盘视频/)
+  assert.match(page, /:aria-pressed="playbackKind==='overlay'"/)
   assert.match(page, /deleteOverlayVideo/)
   assert.match(page, /原视频、姿态数据和复盘指标仍会保留/)
   assert.match(service, /deleteOverlay/)

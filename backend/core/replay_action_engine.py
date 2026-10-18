@@ -245,8 +245,8 @@ def resolve_checked_events(proposed, checked, organized, frames):
 class ActionEngine:
     def __init__(self, provider=None):
         self.model = os.getenv("REPLAY_COACHING_MODEL", DEFAULT_MODEL)
-        key = os.getenv("REPLAY_COACHING_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or ""
-        self.provider = provider or (DashScopeProvider(key, os.getenv("REPLAY_COACHING_BASE_URL", DEFAULT_BASE_URL)) if key else None)
+        # Historical reader/tests only. The current entry uses owner-scoped vision settings.
+        self.provider = provider
 
     @property
     def configured(self):

@@ -37,26 +37,33 @@ def make_video(path: Path, *, frames=8, fps=4.0, width=96, height=64):
 
 
 class FakeAnalyzer:
+    def detect_holds(self, video, **kwargs):
+        return {"holds": [{"id": 1, "bbox": [.1, .1, .2, .2]}],
+                "hold_evidence": {"reference_frame": 0}, "hold_candidates": [],
+                "models": {"holds": "test-local"}, "route": {"color": kwargs["route_color"]}}
+
     def analysis_contract(self, video_info):
         return {"contract_version": 1, "pipeline_version": "test-pipeline",
                 "usage": {"planned_requests": 1, "actual_requests": 0}}
 
-    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry):
+    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry, confirmed_holds, overlay_target=None):
         progress("测试分析", 50)
         analysis = self.analysis_contract(video_info)
         analysis["usage"]["actual_requests"] = 1
         telemetry(analysis)
-        video.with_name(REPLAY_OVERLAY_FILENAME).write_bytes(b"test-overlay")
+        (overlay_target or video.with_name(REPLAY_OVERLAY_FILENAME)).write_bytes(b"test-overlay")
         return {"schema_version": 2, "route": {"color": route_color},
                 "video": {"frame_count": video_info.frame_count},
                 "pose_samples": [],
+                "holds": confirmed_holds["holds"], "hold_evidence": confirmed_holds["hold_evidence"],
+                "hold_review_version": confirmed_holds.get("hold_review_version", 0),
                 "attempt": {"sequence": [1, 2], "topped_out": True, "contacts": []},
                 "analysis": analysis,
                 "overlay": {"pose_rendering": "sampled_only_no_interpolation"}}
 
 
 class FailingAnalyzer(FakeAnalyzer):
-    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry):
+    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry, confirmed_holds, overlay_target=None):
         analysis = self.analysis_contract(video_info)
         analysis["usage"].update(actual_requests=1, failed_requests=1)
         telemetry(analysis)
@@ -64,8 +71,8 @@ class FailingAnalyzer(FakeAnalyzer):
 
 
 class OverlayThenFailAnalyzer(FakeAnalyzer):
-    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry):
-        video.with_name(REPLAY_OVERLAY_FILENAME).write_bytes(b"partial-overlay")
+    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry, confirmed_holds, overlay_target=None):
+        (overlay_target or video.with_name(REPLAY_OVERLAY_FILENAME)).write_bytes(b"partial-overlay")
         telemetry(self.analysis_contract(video_info))
         raise RuntimeError("叠加登记前失败")
 
@@ -74,12 +81,21 @@ class BlockingAnalyzer(FakeAnalyzer):
     def __init__(self):
         self.started = threading.Event()
 
-    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry):
+    def analyze(self, video, *, route_color, video_info, progress, cancelled, telemetry, confirmed_holds, overlay_target=None):
         self.started.set()
         deadline = time.time() + 2
         while time.time() < deadline and not cancelled():
             time.sleep(.01)
         raise ReplayCancelled()
+
+
+def authorize_test_analysis(store, job):
+    """Simulate local preparation and the two explicit confirmations for worker tests."""
+    draft = FakeAnalyzer().detect_holds(None, route_color=job["route_color"])
+    prepared = store.update(job["id"], status="awaiting_hold_review", hold_draft=draft)
+    store.confirm_all_holds(job["id"], job["owner"], store._public(prepared)["holds_revision"])
+    return store.start_paid_analysis(job["id"], job["owner"], {
+        "event": "granted", "version": REPLAY_CONSENT_VERSION})
 
 
 class ClimbReplayApiTests(unittest.TestCase):
@@ -127,10 +143,20 @@ class ClimbReplayApiTests(unittest.TestCase):
         self.manager.close()
         self.temp.cleanup()
 
-    def wait(self, job_id):
+    def wait(self, job_id, *, analyze=True):
         deadline = time.time() + 3
         while time.time() < deadline:
             job = self.client.get(f"/api/climb-replay/jobs/{job_id}").json()
+            if job["status"] == "awaiting_hold_review":
+                if not analyze:
+                    return job
+                # Existing lifecycle tests explicitly simulate both user actions.
+                confirmation = self.client.post(f"/api/climb-replay/jobs/{job_id}/holds/confirm-all",
+                                                json={"revision": job["holds_revision"]})
+                self.assertEqual(confirmation.status_code, 200, confirmation.text)
+                started = self.client.post(f"/api/climb-replay/jobs/{job_id}/analysis/start", json={
+                    "consent_version": REPLAY_CONSENT_VERSION, "consent_granted": True})
+                self.assertEqual(started.status_code, 202, started.text)
             if job["status"] in {"succeeded", "failed", "cancelled"}:
                 return job
             time.sleep(0.02)
@@ -167,6 +193,33 @@ class ClimbReplayApiTests(unittest.TestCase):
         )
         self.assertEqual(self.client.get("/api/climb-replay/test-videos/missing").status_code, 404)
 
+    def test_upload_and_global_confirmation_do_not_start_pose_requests(self):
+        with patch.object(self.manager.analyzer, "analyze", wraps=self.manager.analyzer.analyze) as paid:
+            with self.video.open("rb") as source:
+                uploaded = self.client.post("/api/climb-replay/jobs", data={
+                    "route_color": "绿色", "consent_version": REPLAY_CONSENT_VERSION,
+                    "consent_granted": "true"}, files={"video": ("sample.mp4", source, "video/mp4")})
+            job = self.wait(uploaded.json()["id"], analyze=False)
+            self.assertEqual(job["status"], "awaiting_hold_review")
+            self.assertEqual(job["analysis_runs"], [])
+            self.assertIsNone(job["media"]["source_video"]["delete_at"])
+            paid.assert_not_called()
+            start_path = f"/api/climb-replay/jobs/{job['id']}/analysis/start"
+            consent = {"consent_version": REPLAY_CONSENT_VERSION, "consent_granted": True}
+            self.assertEqual(self.client.post(start_path, json=consent).status_code, 409)
+            confirmed = self.client.post(f"/api/climb-replay/jobs/{job['id']}/holds/confirm-all",
+                                         json={"revision": job["holds_revision"]})
+            self.assertEqual(confirmed.status_code, 200)
+            time.sleep(.05)
+            paid.assert_not_called()
+            self.assertEqual(self.client.post(start_path, json={**consent, "consent_granted": False}).status_code, 422)
+            self.assertEqual(self.client.post(start_path, json=consent, headers={"x-user": "other"}).status_code, 404)
+            self.assertEqual(self.client.post(start_path, json=consent).status_code, 202)
+            completed = self.wait(job["id"])
+            self.assertEqual(completed["status"], "succeeded")
+            self.assertEqual(paid.call_count, 1)
+            self.assertEqual(paid.call_args.kwargs["confirmed_holds"]["holds"], job["hold_draft"]["holds"])
+
     def test_upload_runs_in_owner_scoped_single_worker(self):
         with self.video.open("rb") as source:
             response = self.client.post(
@@ -184,12 +237,15 @@ class ClimbReplayApiTests(unittest.TestCase):
         self.assertEqual(job["analysis_runs"][0]["analysis"]["usage"]["actual_requests"], 1)
         self.assertEqual(job["media"][REPLAY_OVERLAY_MEDIA_KIND]["status"], "available")
         self.assertEqual(job["consent_history"][0]["version"], REPLAY_CONSENT_VERSION)
-        self.assertEqual(job["consent_history"][0]["region"], "cn-shanghai")
+        self.assertEqual(job["consent_history"][0]["region"], "local")
         self.assertFalse(job["consent_history"][0]["full_video_sent"])
         self.assertEqual(
-            job["media"]["source_video"]["retention_mode"], REPLAY_RETENTION_DELETE,
+            job["media"]["source_video"]["retention_mode"], REPLAY_RETENTION_KEEP,
         )
-        self.assertIsNotNone(job["media"]["source_video"]["delete_at"])
+        self.assertIsNone(job["media"]["source_video"]["delete_at"])
+        original_url = f"/api/climb-replay/jobs/{job['id']}/media/original-video"
+        self.assertEqual(self.client.get(original_url).content, self.video.read_bytes())
+        self.assertEqual(self.client.get(original_url, headers={'x-user':'other'}).status_code,404)
         self.assertNotIn("input_path", job)
         self.assertEqual(self.client.get("/api/climb-replay/jobs").status_code, 200)
         self.assertEqual(self.client.get(
@@ -533,7 +589,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                 source, filename='portrait.mp4', content_type='video/mp4',
                 limits=VideoLimits(), output=output,
             )
-            self.assertEqual((info.width, info.height), (960, 1920))
+            self.assertEqual((info.width, info.height), (640, 1280))
             self.assertEqual(info.frame_count, 4)
 
     def test_phone_rotation_metadata_is_applied_before_resizing(self):
@@ -609,6 +665,9 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                  patch.object(analyzer, "_pose_frame", side_effect=pose_frame):
                 result = analyzer.analyze(
                     video, route_color="绿色", video_info=info,
+                    confirmed_holds={"holds": holds, "hold_candidates": [],
+                                     "hold_evidence": {"reference_frame": 0},
+                                     "models": {"holds": "hold-checkpoint-v1"}},
                     progress=lambda _stage, _value: None, cancelled=lambda: False,
                     telemetry=telemetry.append,
                 )
@@ -626,7 +685,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
             self.assertEqual(analysis["usage"]["request_image_bytes"], 4800)
             self.assertEqual(analysis["cost"]["estimated_amount"], 0.0064)
             self.assertEqual(analysis["timings_ms"].keys(), {
-                "total", "background", "hold_inference", "pose", "contact", "overlay", "report",
+                "total", "background", "hold_inference", "pose", "contact", "overlay", "report", "registration",
             })
             self.assertEqual(len(result['pose_samples']), 4)
             self.assertEqual(
@@ -663,10 +722,13 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                 contract['pose_rendering'],
                 'local_linear_between_measured_samples',
             )
-            self.assertEqual(contract['layout'], 'split_route_map_actions_v7')
-            self.assertEqual(contract['hold_map'], 'route_bounds_zoom_with_touch_markers')
+            self.assertEqual(contract['layout'], 'split_analysis_right_v11')
+            self.assertEqual(contract['video_rect'][2:], contract['route_map_rect'][2:])
+            self.assertEqual(contract['hold_map'], 'source_scale_current_limb_holds')
+            self.assertEqual(contract['touch_markers'], 'none')
+            self.assertEqual(contract['hold_highlighting'], 'current_contact_intervals_only')
             self.assertEqual(
-                contract['action_labels'], 'sequence_limb_and_chinese_supplement_v1',
+                contract['action_labels'], 'page_statistics_no_baked_sequence',
             )
             self.assertEqual(contract['hold_count'], 1)
             self.assertEqual(contract['action_count'], 1)
@@ -677,6 +739,58 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                 self.assertEqual(int(rendered.get(cv2.CAP_PROP_FRAME_COUNT)), 8)
             finally:
                 rendered.release()
+
+    def test_route_map_highlights_only_current_limbs_and_clears_departed_holds(self):
+        from core.climb_replay import REPLAY_LIMB_COLORS
+
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'source.mp4', Path(directory) / 'overlay.webm'
+            make_video(source, frames=6, width=400, height=300)
+            holds = [{'id': index + 1, 'bbox': box} for index, box in enumerate([
+                [.1, .1, .2, .2], [.6, .1, .2, .2],
+                [.1, .6, .2, .2], [.6, .6, .2, .2],
+            ])]
+            contacts = [
+                {'limb': 'left_hand', 'hold_id': 1, 'start_source_frame': 0, 'end_source_frame': 1},
+                {'limb': 'left_hand', 'hold_id': 2, 'start_source_frame': 3, 'end_source_frame': 4},
+                {'limb': 'right_foot', 'hold_id': 3, 'start_source_frame': 0, 'end_source_frame': 4},
+                {'limb': 'torso', 'hold_id': 4, 'start_source_frame': 0, 'end_source_frame': 4},
+            ]
+            result = {'holds': holds, 'pose_samples': [], 'attempt': {'contacts': contacts}}
+            contract = render_replay_overlay_video(source, target, result)
+            mx, my, mw, mh = contract['route_map_rect']
+            self.assertEqual((mw,mh), (400,300))
+            capture = cv2.VideoCapture(str(target))
+            try:
+                expected = [
+                    {1: 'left_hand', 3: 'right_foot'}, {1: 'left_hand', 3: 'right_foot'},
+                    {3: 'right_foot'}, {2: 'left_hand', 3: 'right_foot'},
+                    {2: 'left_hand', 3: 'right_foot'}, {},
+                ]
+                background = np.array([13, 16, 18])
+                for frame_index, active in enumerate(expected):
+                    ok, frame = capture.read()
+                    self.assertTrue(ok)
+                    empty_region = np.ones((mh, mw), dtype=np.uint8)
+                    empty_region[:80,:] = 0  # fixed title, outside hold centers
+                    empty_region[:,:8] = 0  # pane divider
+                    for hold in holds:
+                        bx, by, bw, bh = hold['bbox']
+                        x0, y0 = round(bx * mw), round(by * mh)
+                        x1, y1 = round((bx + bw) * mw), round((by + bh) * mh)
+                        empty_region[max(0, y0-5):y1+6, max(0, x0-5):x1+6] = 0
+                        x, y = mx + (x0 + x1)//2, my + (y0 + y1)//2
+                        pixel = frame[y-2:y+3, x-2:x+3].mean(axis=(0, 1))
+                        color = REPLAY_LIMB_COLORS[active[hold['id']]] if hold['id'] in active else background
+                        self.assertLess(np.max(np.abs(pixel - color)), 15,
+                                        f'frame {frame_index}, hold {hold["id"]}: departed/unknown holds stay empty')
+                    # No history badges or connecting lines may remain between contours.
+                    free_pixels = frame[my:my+mh, mx:mx+mw][empty_region.astype(bool)].astype(float)
+                    self.assertLess(np.max(np.abs(free_pixels - background)), 20,
+                                    f'frame {frame_index}: unexpected route-map history decoration')
+                self.assertFalse(capture.read()[0])
+            finally:
+                capture.release()
 
     def test_overlay_renderer_cancellation_leaves_no_partial_media(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -707,6 +821,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                              "version": REPLAY_CONSENT_VERSION},
                     retention_mode=REPLAY_RETENTION_DELETE,
                 )
+                job = authorize_test_analysis(store, job)
                 manager.enqueue(job["id"])
                 deadline = time.time() + 2
                 while time.time() < deadline:
@@ -739,6 +854,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                              "version": REPLAY_CONSENT_VERSION},
                     retention_mode=REPLAY_RETENTION_DELETE,
                 )
+                job = authorize_test_analysis(store, job)
                 manager.enqueue(job["id"])
                 deadline = time.time() + 2
                 while time.time() < deadline:
@@ -774,7 +890,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
             self.assertEqual(recovered["analysis_runs"][0]["state"], "failed")
             self.assertEqual(recovered["analysis_runs"][0]["error_code"], "service_restarted")
 
-    def test_due_cleanup_deletes_only_the_source_file(self):
+    def test_legacy_due_cleanup_preserves_source_and_overlay(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "store"
             source = Path(directory) / "sample.mp4"
@@ -795,9 +911,10 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
             media = private['media']
             media['source_video']['delete_at'] = '2000-01-01T00:00:00+00:00'
             store.update(job['id'], media=media)
-            self.assertEqual(store.cleanup_due_media(), [job['id']])
+            self.assertEqual(store.cleanup_due_media(), [])
             cleaned = store.get(job['id'])
-            self.assertEqual(cleaned['media']['source_video']['status'], 'deleted')
+            self.assertEqual(cleaned['media']['source_video']['status'], 'available')
+            self.assertTrue((store.jobs / job['id'] / 'input.mp4').is_file())
             self.assertEqual(cleaned['media'][REPLAY_OVERLAY_MEDIA_KIND]['status'], 'available')
             self.assertTrue(overlay_path.is_file())
             self.assertEqual(cleaned['result'], {'kept': True})
@@ -820,6 +937,7 @@ class ClimbReplayAnalysisTests(unittest.TestCase):
                              "version": REPLAY_CONSENT_VERSION},
                     retention_mode=REPLAY_RETENTION_KEEP,
                 )
+                job = authorize_test_analysis(store, job)
                 manager.enqueue(job['id'])
                 self.assertTrue(analyzer.started.wait(1))
                 receipt = store.request_delete(job['id'], 'owner')

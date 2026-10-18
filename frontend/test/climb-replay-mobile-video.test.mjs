@@ -11,7 +11,7 @@ test('手机常见视频格式可选择并在上传前得到一致校验', () =>
   assert.match(page, /\.m4v/)
   assert.match(page, /\.3gp/)
   assert.match(page, /\.mkv/)
-  assert.match(page, /MP4、MOV 等常见视频/)
+  assert.match(page, /MP4 \/ MOV · 最大 500 MB/)
   assert.match(page, /请选择 MP4、MOV、M4V、WebM、3GP 或 MKV 视频/)
   assert.match(service, /video\.type \|\| 'application\/octet-stream'/)
 })

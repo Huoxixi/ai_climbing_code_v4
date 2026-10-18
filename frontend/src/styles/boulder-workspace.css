@@ -1,0 +1,393 @@
+/* The boulder workspace owns these tokens. Setter pages retain their design. */
+:root .workspace-boulder.workspace-boulder,:root .boulder-login.boulder-login{
+  --ui-ground:#f7f7f7;--ui-surface:#fff;--ui-surface-subtle:#ededed;--ui-surface-raised:#fafafa;
+  --ui-ink:#202020;--ui-ink-muted:#606060;--ui-ink-faint:#666666;--ui-line:#e5e5e5;--ui-line-strong:#c8c8c8;
+  --ui-brand:#edcb52;--ui-brand-hover:#dfbb3d;--ui-brand-soft:#f3f3f3;--ui-brand-ink:#28230e;
+  --ground:var(--ui-ground);--surface:var(--ui-surface);--ink:var(--ui-ink);--ink-soft:var(--ui-ink-muted);--line:var(--ui-line);
+  --media-ground:#181a1b;--media-ink:#f2f2f2;--ui-radius-control:6px;
+  font-family:"MiSans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:14px;accent-color:var(--ui-brand)
+}
+:root .workspace-boulder.workspace-boulder *,:root .boulder-login.boulder-login *{box-sizing:border-box}
+:root .workspace-boulder.workspace-boulder ::selection,:root .boulder-login.boulder-login ::selection{background:var(--ui-brand);color:var(--ui-brand-ink)}
+:root .workspace-boulder.workspace-boulder :is(button,input,select,textarea),:root .boulder-login.boulder-login :is(button,input,select,textarea){font-family:inherit;font-size:14px;caret-color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder :is(button,[role=button]),:root .boulder-login.boulder-login button{min-height:44px;transition:background-color 160ms ease,border-color 160ms ease,color 160ms ease,transform 160ms ease;cursor:pointer}
+:root .workspace-boulder.workspace-boulder :is(button,[role=button]):active:not(:disabled),:root .boulder-login.boulder-login button:active:not(:disabled){transform:translateY(1px)}
+:root .workspace-boulder.workspace-boulder button:disabled,:root .boulder-login.boulder-login button:disabled{cursor:not-allowed;opacity:.5}
+:root .workspace-boulder.workspace-boulder :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible,:root .boulder-login.boulder-login :is(button,a,input):focus-visible{outline:2px solid #806000;outline-offset:3px}
+:root .workspace-boulder.workspace-boulder :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea){border-radius:8px;min-height:44px}
+:root .workspace-boulder.workspace-boulder textarea{resize:vertical}
+:root .workspace-boulder.workspace-boulder .brand-mark{transform:none;border-radius:9px;width:32px;height:32px;background:var(--ui-ink);color:var(--ui-brand)}
+:root .workspace-boulder.workspace-boulder .brand-block strong{font-size:16px;letter-spacing:0}:root .workspace-boulder.workspace-boulder .brand-block small{font-size:11px}
+:root .workspace-boulder.workspace-boulder .desktop-nav button{border-radius:8px;padding:0 16px;min-height:44px;font-size:14px}
+:root .workspace-boulder.workspace-boulder .desktop-nav button.active{background:var(--ui-brand-soft);color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .desktop-nav button.active:after{display:none}
+:root .workspace-boulder.workspace-boulder .photo-task-notice{min-height:44px;margin:0;padding:0 16px;background:var(--ui-surface);border-bottom:1px solid var(--ui-line);font-size:12px;display:flex;align-items:center;gap:12px}
+:root .workspace-boulder.workspace-boulder .photo-task-notice button{min-height:44px;padding:4px 10px;background:transparent;border:1px solid var(--ui-line);border-radius:6px;font-size:12px}
+:root .workspace-boulder.workspace-boulder .photo-work{background:transparent}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer{border:1px solid var(--ui-line);border-radius:12px;overflow:hidden;background:var(--media-ground);color:var(--media-ink)}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools{flex:none;padding:8px 12px;gap:8px;border-bottom:1px solid #435047;background:var(--media-ground);color:var(--media-ink)}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools button{border-color:#59665d;background:#303b34;color:var(--media-ink);border-radius:6px}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools button:hover:not(:disabled){background:#445248;color:#fff}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools span{margin-left:auto;color:#ccd5ce;font-size:12px}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__viewport{background:var(--media-ground);min-height:0}
+:root .workspace-boulder.workspace-boulder .work-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:4px;border-radius:8px;background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .work-tabs button{flex:1;min-width:0;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--ui-ink-muted);white-space:nowrap;font-size:13px}
+:root .workspace-boulder.workspace-boulder .work-tabs button[aria-pressed=true]{background:var(--ui-surface);color:var(--ui-ink);font-weight:600}
+:root .workspace-boulder.workspace-boulder .work-pagination{display:flex;align-items:center;justify-content:center;gap:16px;flex:none;padding-top:8px}
+:root .workspace-boulder.workspace-boulder .work-pagination output{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .work-pagination button{min-height:44px;padding:8px 14px;border:1px solid var(--ui-line);border-radius:8px;background:var(--ui-surface)}
+@media(min-width:900px){
+  :root .workspace-boulder.workspace-boulder.app-shell{height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  :root .workspace-boulder.workspace-boulder .app-header{position:relative;flex:none;background:var(--ui-surface)}
+  :root .workspace-boulder.workspace-boulder .app-header-main{min-height:56px;height:56px;max-width:none;padding:0 20px;gap:24px}
+  :root .workspace-boulder.workspace-boulder .shell-main{flex:1;min-height:0;padding:0;display:flex;flex-direction:column;overflow:hidden}
+  :root .workspace-boulder.workspace-boulder .mobile-context-row,:root .workspace-boulder.workspace-boulder .mobile-tabs{display:none}
+  :root .workspace-boulder.workspace-boulder .photo-work{height:100%;flex:1;min-height:0;padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  :root .workspace-boulder.workspace-boulder .photo-work__header,:root .workspace-boulder.workspace-boulder .photo-work__heading,:root .workspace-boulder.workspace-boulder .record-detail__top{flex:none;margin:0;min-height:44px;gap:12px}
+  :root .workspace-boulder.workspace-boulder .photo-work h1{font-size:20px;margin:0}:root .workspace-boulder.workspace-boulder .photo-work h2{font-size:16px}:root .workspace-boulder.workspace-boulder .photo-work h3{font-size:14px;letter-spacing:0}
+  :root .workspace-boulder.workspace-boulder .photo-work__header p{font-size:12px;margin:2px 0 0;color:var(--ui-ink-muted)}
+  :root .workspace-boulder.workspace-boulder .photo-work>h2{display:none}
+  :root .workspace-boulder.workspace-boulder .photo-work__layout{flex:1;min-height:0;height:auto;max-height:none;grid-template-columns:minmax(0,1fr) 288px;gap:16px}
+  :root .workspace-boulder.workspace-boulder .photo-work__tools.task-panel{padding:0;overflow:visible;gap:0;background:var(--ui-surface);scrollbar-gutter:auto}
+  :root .workspace-boulder.workspace-boulder .photo-work__tools label{gap:5px;font-size:13px}
+  :root .workspace-boulder.workspace-boulder .photo-work__tools p{font-size:13px;line-height:1.5}
+  :root .workspace-boulder.workspace-boulder .photo-work__tools .photo-work__colors{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  :root .workspace-boulder.workspace-boulder .photo-work__colors button{min-width:0;padding:6px;font-size:12px;gap:4px}
+  :root .workspace-boulder.workspace-boulder .photo-work__save-bar{position:static;background:transparent;border:0;padding:0;margin:0;grid-template-columns:1fr}
+  :root .workspace-boulder.workspace-boulder .photo-work__save-bar>span{white-space:normal;font-size:12px}
+  :root .workspace-boulder.workspace-boulder .photo-work__notice,:root .workspace-boulder.workspace-boulder .photo-work__error,:root .workspace-boulder.workspace-boulder .photo-work__offline{margin:0;padding:8px 12px;font-size:12px;flex:none;max-width:100%}
+  :root .workspace-boulder.workspace-boulder .photo-work__processing{flex:1;min-height:0;padding:24px}
+  :root .workspace-boulder.workspace-boulder .photo-work__pending{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:16px}:root .workspace-boulder.workspace-boulder .photo-work__pending>img{height:100%;min-height:0;background:var(--media-ground);border-radius:12px;object-fit:contain}:root .workspace-boulder.workspace-boulder .photo-work__pending-sheet{align-self:center;padding:16px}
+  :root .workspace-boulder.workspace-boulder .record-detail__top{display:flex;align-items:center}:root .workspace-boulder.workspace-boulder .record-detail__top>div{display:flex;align-items:center;gap:12px;min-width:0}:root .workspace-boulder.workspace-boulder .record-detail__top h2{max-width:40ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}:root .workspace-boulder.workspace-boulder .record-detail__top p{font-size:12px}
+  :root .workspace-boulder.workspace-boulder .record-list__controls{margin:0;flex:none}:root .workspace-boulder.workspace-boulder .photo-work__library-grid{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:16px}
+  :root .workspace-boulder.workspace-boulder .photo-work__library-card{height:100%;min-height:0;display:flex;flex-direction:column;text-align:left;overflow:hidden;padding:0;border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-surface)}
+  :root .workspace-boulder.workspace-boulder .photo-work__library-photo{flex:1;min-height:0;width:100%;aspect-ratio:auto;background:var(--media-ground);border-radius:0}:root .workspace-boulder.workspace-boulder .photo-work__library-photo img{height:100%;object-fit:contain}
+  :root .workspace-boulder.workspace-boulder .photo-work__library-meta{flex:none;width:100%;padding:14px 16px;gap:4px}:root .workspace-boulder.workspace-boulder .photo-work__library-meta strong{font-size:16px}:root .workspace-boulder.workspace-boulder .record-list__arrow{display:none}
+  :root .workspace-boulder.workspace-boulder .record-media{margin:0;min-height:0;display:flex;flex-direction:column;gap:12px;padding:0;border:0;background:transparent}:root .workspace-boulder.workspace-boulder .record-media__heading{flex:none}:root .workspace-boulder.workspace-boulder .record-media__heading h2{font-size:16px}:root .workspace-boulder.workspace-boulder .record-media__grid{min-height:0;flex:1;display:block;margin:0}:root .workspace-boulder.workspace-boulder .record-media__item{min-height:0;margin:0}:root .workspace-boulder.workspace-boulder .record-media__item :is(img,video){width:100%;max-height:240px;object-fit:contain;background:var(--media-ground)}
+}
+@media(max-width:899px){:root .workspace-boulder.workspace-boulder .task-panel{margin-top:12px}:root .workspace-boulder.workspace-boulder .photo-work__tools.task-panel{padding:0;max-height:none;overflow:visible;box-shadow:none;margin-inline:0}:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools span{display:none}}
+:root .workspace-boulder.workspace-boulder .replay-heading-actions{display:flex;align-items:center;gap:8px}
+:root .workspace-boulder.workspace-boulder .replay-heading-actions button,:root .workspace-boulder.workspace-boulder .review-command-bar button{min-height:44px;border:1px solid var(--ui-line);border-radius:8px;background:var(--ui-surface);padding:8px 12px;font:inherit}
+:root .workspace-boulder.workspace-boulder .replay-heading-actions button:hover,:root .workspace-boulder.workspace-boulder .review-command-bar button:hover{background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .review-command-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--ui-line);background:var(--ui-surface)}
+:root .workspace-boulder.workspace-boulder .review-command-bar strong{margin-right:auto;font-size:14px}:root .workspace-boulder.workspace-boulder .review-command-bar>span{color:var(--ui-ink-muted);font-size:12px}
+:root .workspace-boulder.workspace-boulder .setup-panel.task-panel{position:static;padding:0;gap:0;background:var(--ui-surface);border-radius:12px;box-shadow:none}
+:root .workspace-boulder.workspace-boulder .setup-panel fieldset{margin:0;min-width:0}:root .workspace-boulder.workspace-boulder .setup-panel>div{min-width:0}
+:root .workspace-boulder.workspace-boulder .replay-review-tools.task-panel{padding:0;margin:0;gap:0;min-width:0;background:var(--ui-surface);border:1px solid var(--ui-line)}
+:root .workspace-boulder.workspace-boulder .replay-review-tools .hold-repair-buttons{display:grid;grid-template-columns:1fr;gap:8px}
+:root .workspace-boulder.workspace-boulder .replay-review-tools button{padding:8px 10px;min-height:44px}:root .workspace-boulder.workspace-boulder .replay-review-tools p{font-size:13px;line-height:1.5;margin:0}
+:root .workspace-boulder.workspace-boulder .replay-review-tools h2{font-size:16px}:root .workspace-boulder.workspace-boulder .hold-repair-heading{display:grid;gap:12px}:root .workspace-boulder.workspace-boulder .hold-repair-heading span{font-size:12px;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .task-panel__footer :is(.primary-action,.secondary-button){width:100%;justify-content:center}:root .workspace-boulder.workspace-boulder .hold-set-review-title{margin:0;font-size:14px}
+:root .workspace-boulder.workspace-boulder .timeline-pages{display:flex;align-items:center;gap:8px;margin-left:auto}:root .workspace-boulder.workspace-boulder .timeline-pages output{font-size:12px;font-variant-numeric:tabular-nums}:root .workspace-boulder.workspace-boulder .timeline-pages button{font-size:12px;padding:6px 10px;min-height:44px}
+:root .workspace-boulder.workspace-boulder .settings-tabs{max-width:480px;margin-top:16px}:root .workspace-boulder.workspace-boulder .settings-tabs button{max-width:none}
+:root .workspace-boulder.workspace-boulder .settings-card{box-shadow:none;border:1px solid var(--ui-line);border-radius:12px}
+:root .workspace-boulder.workspace-boulder .settings-grid{grid-template-columns:minmax(0,1fr);max-width:800px}
+:root .workspace-boulder.workspace-boulder .settings-card :is(code,p){overflow-wrap:anywhere}
+:root .workspace-boulder.workspace-boulder .account-avatar{background:var(--ui-ink);color:var(--ui-brand)}
+:root .boulder-login.boulder-login .login-photo-fade{display:none}:root .boulder-login.boulder-login .login-photo{inset:0 auto 0 0;width:48%;height:100%}:root .boulder-login.boulder-login .login-photo img{object-position:center}
+:root .boulder-login.boulder-login .member-login{box-shadow:none;border:1px solid var(--ui-line);border-radius:12px;min-height:0;padding:24px 32px;width:100%;max-width:520px}
+:root .boulder-login.boulder-login .login-brand small{display:none}:root .boulder-login.boulder-login .login-heading h1{font-size:24px}:root .boulder-login.boulder-login .login-heading p{font-size:13px}:root .boulder-login.boulder-login .login-workspace-back{min-height:44px;margin-top:14px;padding:6px 12px}
+:root .boulder-login.boulder-login .member-login-form :is(.el-input__wrapper){min-height:44px}:root .boulder-login.boulder-login .member-login-form .el-form-item{margin-bottom:12px}:root .boulder-login.boulder-login .member-login-form .el-form-item__label{padding-bottom:4px}
+:root .boulder-login.boulder-login .pilot-login-submit{background:var(--ui-brand);color:var(--ui-brand-ink);border-color:var(--ui-brand);min-height:44px}:root .boulder-login.boulder-login .pilot-login-submit:hover{background:var(--ui-brand-hover)}
+:root .boulder-editor.boulder-editor.workspace-boulder{position:fixed;z-index:150;inset:56px 0 0;background:var(--ui-ground);padding:16px;overflow:auto}
+:root .boulder-editor.boulder-editor .hold-editor{padding:0;border:0;min-height:100%;display:flex;flex-direction:column;gap:12px}
+:root .boulder-editor.boulder-editor .editor-layout{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:16px;flex:1;min-height:0}
+:root .boulder-editor.boulder-editor .editor-media{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}:root .boulder-editor.boulder-editor .editor-inspector{min-height:0}
+:root .boulder-editor.boulder-editor .editor-tools,:root .boulder-editor.boulder-editor .editor-view-controls,:root .boulder-editor.boulder-editor .editor-refine-controls{display:flex;flex-wrap:wrap;gap:8px}
+:root .boulder-editor.boulder-editor .editor-tools button{flex:1 1 44%;min-height:44px}:root .boulder-editor.boulder-editor .editor-tools label,:root .boulder-editor.boulder-editor .editor-refine-controls label{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px}
+:root .boulder-editor.boulder-editor .editor-viewport{flex:1;min-height:180px;max-height:none;display:flex;align-items:safe center;justify-content:safe center;border-radius:12px}
+:root .boulder-editor.boulder-editor .editor-image{flex:none;min-width:0}:root .boulder-editor.boulder-editor .editor-overview{position:absolute;z-index:2;left:28px;bottom:36px;display:block;max-width:120px;color:#fff;background:#181a1b;padding:4px;border-radius:6px}:root .boulder-editor.boulder-editor .editor-overview img{max-width:100px;max-height:80px}:root .boulder-editor.boulder-editor .editor-overview span{font-size:11px}
+:root .boulder-editor.boulder-editor .editor-savebar{margin:0;padding:12px 0 0;min-height:60px}:root .boulder-editor.boulder-editor .editor-save-action{min-height:48px;background:var(--ui-brand);color:var(--ui-brand-ink);border:0;font-size:14px;font-weight:600}:root .boulder-editor.boulder-editor .editor-save-action:disabled{background:#ededed;color:#707070;opacity:1}
+@media(min-width:900px){
+ :root .workspace-boulder.workspace-boulder .replay-page{flex:1;min-height:0;height:100%;padding:16px;display:flex;flex-direction:column;gap:12px;max-width:none;margin:0;overflow:hidden}
+ :root .workspace-boulder.workspace-boulder .replay-heading{flex:none;min-height:44px;margin:0;align-items:center}:root .workspace-boulder.workspace-boulder .replay-heading h1{font-size:20px}:root .workspace-boulder.workspace-boulder .replay-heading p{font-size:12px;margin:2px 0 0}
+ :root .workspace-boulder.workspace-boulder .replay-desktop-notice{margin:0;padding:0;font-size:12px;flex:none}:root .workspace-boulder.workspace-boulder .prototype-badge{font-size:12px;background:transparent;border:0}
+ :root .workspace-boulder.workspace-boulder .replay-workspace,:root .workspace-boulder.workspace-boulder .replay-workspace.review-mode{flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 288px;gap:16px;align-items:stretch}
+ :root .workspace-boulder.workspace-boulder .video-column{min-height:0;display:flex;flex-direction:column;border:1px solid var(--ui-line);border-radius:12px;overflow:hidden;background:var(--media-ground)}
+ :root .workspace-boulder.workspace-boulder .video-drop{flex:1;min-height:0;padding:24px;background:var(--media-ground);border:0;border-radius:0}:root .workspace-boulder.workspace-boulder .video-drop strong{font-size:24px}:root .workspace-boulder.workspace-boulder .video-drop>span{max-width:48ch}
+ :root .workspace-boulder.workspace-boulder .playback-review{display:flex;flex:1;min-height:0;flex-direction:column}:root .workspace-boulder.workspace-boulder .video-stage{--replay-frame-max-height:min(72dvh,calc(100dvh - 180px));flex:1;height:auto;max-height:none;min-height:0;background:var(--media-ground);display:flex;align-items:center;justify-content:center}:root .workspace-boulder.workspace-boulder .video-canvas{height:100%;max-height:var(--replay-frame-max-height);min-width:0;max-width:100%;display:flex;align-items:center;justify-content:center}:root .workspace-boulder.workspace-boulder .video-canvas>video{height:100%;max-height:100%;width:100%;object-fit:contain}
+ :root .workspace-boulder.workspace-boulder .action-focus{min-height:0;padding:10px 16px;display:flex;gap:16px}:root .workspace-boulder.workspace-boulder .action-focus-head{display:none}:root .workspace-boulder.workspace-boulder .action-focus-name{display:flex;align-items:center;gap:12px}:root .workspace-boulder.workspace-boulder .action-focus-name p{font-size:14px}
+ :root .workspace-boulder.workspace-boulder .player-tools{flex:none;padding:8px 12px;margin:0;background:var(--ui-surface)}:root .workspace-boulder.workspace-boulder .player-options{gap:8px}:root .workspace-boulder.workspace-boulder .analysis-state{flex:none;padding:12px 16px;margin:0;background:var(--ui-surface)}
+ :root .workspace-boulder.workspace-boulder .replay-record-toolbar{flex:none;padding:8px 12px;margin:0;background:var(--ui-surface)}:root .workspace-boulder.workspace-boulder .replay-record-name{font-size:12px}:root .workspace-boulder.workspace-boulder .delete-record-button{min-height:44px}
+ :root .workspace-boulder.workspace-boulder .unified-replay{flex:1;min-height:0;display:flex;flex-direction:column;border:0;border-radius:0;overflow:hidden}
+ :root .workspace-boulder.workspace-boulder .unified-stage{--replay-frame-max-height:min(72dvh,calc(100dvh - 180px));flex:1;min-height:0;display:flex}:root .workspace-boulder.workspace-boulder .replay-cinema{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%}:root .workspace-boulder.workspace-boulder .replay-cinema .replay-frame{max-height:var(--replay-frame-max-height);width:min(100%,calc(var(--replay-frame-max-height) * var(--frame-ratio,1.125)));aspect-ratio:var(--frame-ratio,1.125)}:root .workspace-boulder.workspace-boulder .replay-cinema>video{height:100%;max-height:100%;width:100%;object-fit:contain}
+ :root .workspace-boulder.workspace-boulder .action-strip{flex:none;padding:6px 12px 0}:root .workspace-boulder.workspace-boulder .timeline-heading{margin-bottom:4px;min-height:44px}:root .workspace-boulder.workspace-boulder .timeline-heading>span{font-size:12px}:root .workspace-boulder.workspace-boulder .action-list{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;overflow:visible;padding:4px 0}:root .workspace-boulder.workspace-boulder .action-list button{min-width:0;min-height:48px;padding:6px;grid-template-columns:24px minmax(0,1fr)}:root .workspace-boulder.workspace-boulder .action-list .action-label{font-size:12px}:root .workspace-boulder.workspace-boulder .action-list .action-number{width:24px;height:24px;font-size:12px}
+ :root .workspace-boulder.workspace-boulder .replay-controls{flex:none;padding:6px 12px;gap:6px}:root .workspace-boulder.workspace-boulder .replay-controls>button{font-size:12px;padding:6px 10px;min-height:44px}:root .workspace-boulder.workspace-boulder .segment-controls{width:auto;margin:0}:root .workspace-boulder.workspace-boulder .segment-controls button{padding:6px 8px;font-size:12px}
+ :root .workspace-boulder.workspace-boulder .action-notes{flex:none;display:flex;align-items:center;gap:16px;padding:8px 16px;min-height:52px}:root .workspace-boulder.workspace-boulder .action-notes h2{font-size:12px;flex:none}:root .workspace-boulder.workspace-boulder .caption-event{margin:0;display:flex;align-items:center;gap:10px}:root .workspace-boulder.workspace-boulder .caption-event+.caption-event{border:0;padding:0}:root .workspace-boulder.workspace-boulder .caption-event .motion-name{font-size:14px;margin:0}:root .workspace-boulder.workspace-boulder .caption-event .limb-name{font-size:13px}:root .workspace-boulder.workspace-boulder .caption-event .source-clock{font-size:12px}:root .workspace-boulder.workspace-boulder .action-notes .no-current-action{margin:0}
+ :root .workspace-boulder.workspace-boulder .range-label,:root .workspace-boulder.workspace-boulder .organize-prompt,:root .workspace-boulder.workspace-boulder .task-state{padding:6px 12px;flex:none;font-size:12px}
+ :root .workspace-boulder.workspace-boulder .account-page,:root .workspace-boulder.workspace-boulder .settings-page{width:100%;max-width:none;min-height:0;flex:1;padding:24px 32px;height:100%;overflow:hidden}:root .workspace-boulder.workspace-boulder .account-heading h1,:root .workspace-boulder.workspace-boulder .settings-heading h1{font-size:20px}:root .workspace-boulder.workspace-boulder .account-heading p,:root .workspace-boulder.workspace-boulder .settings-heading p{font-size:13px}:root .workspace-boulder.workspace-boulder .account-layout{margin-top:24px;gap:32px;grid-template-columns:320px minmax(0,640px)}:root .workspace-boulder.workspace-boulder .account-details>section{padding:16px 0}:root .workspace-boulder.workspace-boulder .account-details h2{font-size:16px}:root .workspace-boulder.workspace-boulder .account-details p{font-size:13px;line-height:1.6}:root .workspace-boulder.workspace-boulder .account-profile{padding:20px}:root .workspace-boulder.workspace-boulder .account-details>section:first-child{padding-top:0}
+ :root .workspace-boulder.workspace-boulder .settings-heading{min-height:44px}:root .workspace-boulder.workspace-boulder .settings-grid{margin-top:16px}:root .workspace-boulder.workspace-boulder .settings-card{min-height:0;padding:20px;gap:12px}:root .workspace-boulder.workspace-boulder .settings-card h2{font-size:18px}:root .workspace-boulder.workspace-boulder .settings-card p{font-size:13px}:root .workspace-boulder.workspace-boulder .settings-danger{max-width:240px;margin-top:12px}:root .workspace-boulder.workspace-boulder .settings-message{padding:8px 12px}
+ :root .boulder-login.boulder-login.member-login-page{height:100dvh;min-height:0;padding:20px 4% 20px 52%;place-items:center;overflow:hidden}:root .boulder-login.boulder-login .member-login-form{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;margin-top:14px}:root .boulder-login.boulder-login .member-login-form>.el-form-item{grid-column:1/-1}:root .boulder-login.boulder-login .member-login-form>.el-form-item:has(input[autocomplete=nickname]),:root .boulder-login.boulder-login .member-login-form>.el-form-item:has(input[autocomplete=username]){grid-column:auto}:root .boulder-login.boulder-login .member-login-form>:is(button,div.login-secondary-actions,p){grid-column:1/-1}:root .boulder-login.boulder-login .login-secondary-actions{margin-top:4px}:root .boulder-login.boulder-login .member-note{margin-top:4px}
+ :root .boulder-editor.boulder-editor.workspace-boulder{overflow:hidden}:root .boulder-editor.boulder-editor .hold-editor{height:100%;min-height:0}:root .boulder-editor.boulder-editor .editor-heading,:root .boulder-editor.boulder-editor .editor-frame-controls{flex:none}:root .boulder-editor.boulder-editor .editor-frame-controls{min-height:44px}:root .boulder-editor.boulder-editor .editor-heading h3{font-size:18px}
+}
+
+/* A replay is a viewing surface, so portrait source video needs a real stage
+   instead of inheriting the small remainder left by the action controls. Keep
+   the timeline below the stage and let the page scroll when the viewport is
+   shorter than the complete review workspace. */
+@media(min-width:900px){
+ :root .workspace-boulder.workspace-boulder:has(.replay-page:not(.is-reviewing)) .shell-main{overflow:auto}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing){height:auto;min-height:100%;overflow:visible}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .replay-workspace{flex:none}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .video-column{overflow:visible}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .unified-replay{flex:none;min-height:0;overflow:visible}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .unified-stage{flex:none;height:auto;min-height:0;display:block}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .replay-cinema{flex:none;height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%}
+ :root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .replay-cinema>video{height:100%;max-height:100%;width:100%;object-fit:contain}
+}
+@media(max-width:899px){:root .boulder-editor.boulder-editor .editor-layout{display:flex;flex-direction:column}:root .boulder-editor.boulder-editor .editor-viewport{height:50dvh;flex:none}:root .boulder-login.boulder-login .login-photo{display:none}:root .boulder-login.boulder-login .member-login{padding:24px}:root .workspace-boulder.workspace-boulder .replay-heading-actions{flex-wrap:wrap;justify-content:flex-end}:root .workspace-boulder.workspace-boulder .review-command-bar>span{display:none}}
+@media(prefers-reduced-motion:reduce){:root .workspace-boulder.workspace-boulder *,:root .boulder-login.boulder-login *{transition:none!important;scroll-behavior:auto!important;animation-duration:.01ms!important}}
+
+@media(max-width:899px){:root .workspace-boulder.workspace-boulder .replay-heading{display:flex;align-items:center;flex-wrap:wrap;gap:12px}:root .workspace-boulder.workspace-boulder .replay-heading h1{font-size:20px}:root .workspace-boulder.workspace-boulder .photo-work{padding-bottom:calc(88px + env(safe-area-inset-bottom))}:root .workspace-boulder.workspace-boulder .photo-work__tools.task-panel{border-radius:12px}:root .workspace-boulder.workspace-boulder .replay-heading-actions{margin-left:auto}}
+
+:root .workspace-boulder.workspace-boulder .task-panel__pages button{background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:8px;color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .task-panel__pages button:hover:not(:disabled){background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .replay-review-tools .hold-repair-heading .secondary-button{background:var(--ui-surface);color:var(--ui-ink);border-color:var(--ui-line-strong)}
+:root .workspace-boulder.workspace-boulder .replay-review-tools .hold-repair-heading .secondary-button:hover:not(:disabled){background:var(--ui-surface-subtle)}
+
+:root .workspace-boulder.workspace-boulder :is(.photo-work__checkbox-row,.privacy-check){min-height:44px;align-items:center}
+
+:root .workspace-boulder.workspace-boulder :where(button:not([class])){border:1px solid var(--ui-line-strong);border-radius:8px;background:var(--ui-surface);color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder :where(button:not([class])):hover:not(:disabled){background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder :is(.photo-work__primary,.primary-action,.settings-primary,.editor-confirm button){background:var(--ui-brand);border-color:var(--ui-brand);color:var(--ui-brand-ink)}
+:root .workspace-boulder.workspace-boulder :is(.photo-work__primary,.primary-action,.settings-primary,.editor-confirm button):hover:not(:disabled){background:var(--ui-brand-hover);border-color:var(--ui-brand-hover)}
+:root .workspace-boulder.workspace-boulder :is(.delete-record-button,.delete-confirm-button){background:#b7403a;color:#fff;border-color:#b7403a}
+:root .workspace-boulder.workspace-boulder .account-session button,:root .workspace-boulder.workspace-boulder .settings-danger{color:#a9322d;border-color:#a9322d;background:var(--ui-surface)}
+@media(min-width:900px){
+:root .boulder-login.boulder-login .member-login-form>.el-form-item:has(input[autocomplete=username]){grid-column:1/-1}
+:root .boulder-login.boulder-login .member-login-form:has(input[autocomplete=nickname])>.el-form-item:has(input[autocomplete=username]),:root .boulder-login.boulder-login .member-login-form:has(input[autocomplete=nickname])>.el-form-item:has(input[autocomplete=new-password]){grid-column:auto}
+}
+
+:root .workspace-boulder.workspace-boulder .photo-review-viewer :focus-visible,:root .boulder-editor.boulder-editor .editor-viewport :focus-visible{outline-color:var(--ui-brand)}
+
+@media(min-width:900px){:root .workspace-boulder.workspace-boulder.app-shell,:root .workspace-boulder.workspace-boulder .shell-main,:root .workspace-boulder.workspace-boulder .photo-work{overflow:clip}}
+
+/* Minimal presentation: one title, one action hierarchy, media first. */
+:root .workspace-boulder.workspace-boulder .brand-mark,:root .workspace-boulder.workspace-boulder .brand-block small{display:none}
+:root .workspace-boulder.workspace-boulder .brand-block{gap:0;min-width:120px}
+:root .workspace-boulder.workspace-boulder .brand-block strong{font-size:14px;font-weight:600}
+:root .workspace-boulder.workspace-boulder .desktop-nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ui-ink-muted);font-weight:400}
+:root .workspace-boulder.workspace-boulder .desktop-nav button.active{border-bottom-color:var(--ui-ink);background:transparent;color:var(--ui-ink);font-weight:600}
+:root .workspace-boulder.workspace-boulder .workspace-back-link{border:0;background:transparent;padding:0 8px}
+:root .workspace-boulder.workspace-boulder .photo-work__header,:root .workspace-boulder.workspace-boulder .replay-heading{min-height:44px;padding:0;align-items:center}
+:root .workspace-boulder.workspace-boulder :is(.photo-work__header h1,.replay-heading h1,.settings-heading h1,.account-heading h1){font-size:18px;font-weight:600;line-height:1.4}
+:root .workspace-boulder.workspace-boulder .replay-heading-actions{gap:16px}
+:root .workspace-boulder.workspace-boulder .replay-heading-actions button{border:0;background:transparent;padding:0;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .task-panel,:root .workspace-boulder.workspace-boulder .setup-panel.task-panel,:root .workspace-boulder.workspace-boulder .replay-review-tools.task-panel{border:0;border-radius:8px;box-shadow:none;background:var(--ui-surface)}
+:root .workspace-boulder.workspace-boulder .task-panel__heading{border-bottom:0;padding:16px 20px 8px}
+:root .workspace-boulder.workspace-boulder .task-panel__viewport{padding:16px 20px}
+:root .workspace-boulder.workspace-boulder .task-panel__footer{padding:12px 20px 16px;border-top:1px solid var(--ui-line);gap:8px}
+:root .workspace-boulder.workspace-boulder .task-panel__pages{padding:4px 16px;border:0;gap:8px;justify-content:space-between}
+:root .workspace-boulder.workspace-boulder .task-panel__pages button{width:44px;padding:0;justify-content:center;border:0;background:transparent}
+:root .workspace-boulder.workspace-boulder .task-panel__pages button span{display:none}
+:root .workspace-boulder.workspace-boulder .work-tabs{gap:12px;background:transparent;padding:0;border:0;border-radius:0}
+:root .workspace-boulder.workspace-boulder .work-tabs button{padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ui-ink-muted);font-size:13px;font-weight:400;white-space:nowrap}
+:root .workspace-boulder.workspace-boulder .work-tabs button[aria-pressed=true]{border-bottom-color:var(--ui-ink);color:var(--ui-ink);background:transparent;font-weight:600;box-shadow:none}
+:root .workspace-boulder.workspace-boulder .video-drop{border:0;border-radius:8px;background:var(--media-ground);color:var(--media-ink);gap:12px;box-shadow:none}
+:root .workspace-boulder.workspace-boulder .video-drop>strong{font-size:22px;font-weight:500;color:var(--media-ink)}
+:root .workspace-boulder.workspace-boulder .video-drop>span{color:#c0c2c3;font-size:12px}
+:root .workspace-boulder.workspace-boulder .video-drop .upload-action{display:grid;place-items:center;min-height:44px;padding:0 24px;margin-top:12px;border:1px solid #5d6061;border-radius:6px;color:var(--media-ink);font-size:14px}
+:root .workspace-boulder.workspace-boulder .video-drop:hover .upload-action{background:#303334}
+:root .workspace-boulder.workspace-boulder .setup-empty{margin:0;color:var(--ui-ink-muted);font-size:13px;line-height:1.6}
+:root .workspace-boulder.workspace-boulder .setup-panel fieldset{border:0;padding:0}
+:root .workspace-boulder.workspace-boulder .setup-panel legend{padding:0;font-size:14px;font-weight:500;margin-bottom:8px}
+:root .workspace-boulder.workspace-boulder .setup-panel .color-sample-tools button{width:100%}
+:root .workspace-boulder.workspace-boulder .setup-panel .consent-shortcut{border:0;background:transparent;text-align:left;text-decoration:underline;text-underline-offset:4px;color:var(--ui-ink-muted);padding:0}
+:root .workspace-boulder.workspace-boulder :is(.primary-action,.photo-work__primary,.settings-primary):disabled{background:#ededed;color:#707070;border-color:#ededed;opacity:1}
+:root .workspace-boulder.workspace-boulder .context-help{padding:0;border:0;background:transparent;color:var(--ui-ink-muted);font-size:13px}
+:root .workspace-boulder.workspace-boulder .context-help summary{min-height:44px;display:flex;align-items:center;cursor:pointer;text-decoration:underline;text-underline-offset:4px}
+:root .workspace-boulder.workspace-boulder .review-command-bar{background:transparent;border:0;padding:0;gap:8px}
+:root .workspace-boulder.workspace-boulder .review-command-bar button{background:transparent;border:1px solid var(--ui-line);border-radius:6px}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer,:root .workspace-boulder.workspace-boulder .video-canvas,:root .workspace-boulder.workspace-boulder .unified-replay{border:0;border-radius:8px;box-shadow:none}
+:root .workspace-boulder.workspace-boulder .photo-work__library-card{box-shadow:none;border:0;border-radius:8px}
+:root .workspace-boulder.workspace-boulder .record-status{background:transparent;padding:0;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .settings-card,:root .workspace-boulder.workspace-boulder .account-profile{border:0;background:transparent;box-shadow:none;padding:0;border-radius:0}
+:root .workspace-boulder.workspace-boulder .settings-grid{margin-top:24px;max-width:640px}
+:root .workspace-boulder.workspace-boulder .settings-tabs{max-width:640px;flex:none}
+@media(min-width:900px){
+ :root .workspace-boulder.workspace-boulder .settings-page{display:flex;flex-direction:column}
+ :root .workspace-boulder.workspace-boulder .settings-heading{flex:none}
+ :root .workspace-boulder.workspace-boulder .settings-grid{flex:1;min-height:0;width:100%;overflow-y:auto;overflow-x:hidden;align-content:start;scrollbar-gutter:stable;padding:2px 8px 24px 2px;scroll-padding-block:16px;overscroll-behavior:contain}
+}
+:root .workspace-boulder.workspace-boulder .settings-heading>div>p,:root .workspace-boulder.workspace-boulder .account-heading>div>p{display:none}
+:root .workspace-boulder.workspace-boulder .settings-status,:root .workspace-boulder.workspace-boulder .account-private{background:transparent;padding:0}
+:root .workspace-boulder.workspace-boulder .settings-copy{font-size:13px}
+:root .workspace-boulder.workspace-boulder .account-avatar{background:#e8e8e8;color:var(--ui-ink);border-radius:6px}
+:root .workspace-boulder.workspace-boulder .account-compact>details{padding:8px 0;border-bottom:1px solid var(--ui-line)}
+:root .workspace-boulder.workspace-boulder .account-compact summary{min-height:44px;cursor:pointer;display:flex;align-items:center;font-weight:500}
+:root .workspace-boulder.workspace-boulder .account-compact p{margin:0 0 12px;color:var(--ui-ink-muted);font-size:13px;line-height:1.6}
+:root .workspace-boulder.workspace-boulder .account-compact .account-session{padding-top:24px}
+:root .workspace-boulder.workspace-boulder .account-compact .account-session button{margin:0}
+:root .workspace-boulder.workspace-boulder .photo-work__upload{background:transparent;border:0;box-shadow:none;border-radius:0}
+:root .workspace-boulder.workspace-boulder .photo-work__upload h2{font-size:24px;font-weight:500}
+:root .workspace-boulder.workspace-boulder .photo-work__upload .context-help{max-width:480px}
+/* The entry is a compact task group; the photo editor still owns the full viewport. */
+:root .workspace-boulder.workspace-boulder .photo-work--home{padding:24px 16px}
+:root .workspace-boulder.workspace-boulder .photo-work--home>.photo-work__header{width:100%;max-width:880px;margin:0 auto 16px}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content{width:100%;max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:24px;min-height:0}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__upload{flex:none;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:16px;min-height:0;padding:24px;text-align:left;background:var(--ui-surface);border:1px solid var(--ui-line);border-radius:8px}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__upload h2{font-size:24px;font-weight:500;line-height:1.4;letter-spacing:0}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__upload-copy p{max-width:52ch;margin:8px 0 0;color:var(--ui-ink-muted);font-size:14px;line-height:1.6}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__capture-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:12px;width:auto;max-width:100%}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__capture-actions button{flex:none;min-width:156px;width:auto}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .context-help{width:100%;max-width:52ch}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .context-help summary{min-height:32px}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .context-help p{margin:8px 0 0;font-size:13px;line-height:1.6}
+:root .workspace-boulder.workspace-boulder .photo-work__sample-section{display:flex;flex-direction:column;gap:12px}
+:root .workspace-boulder.workspace-boulder .photo-work__sample-section h2{font-size:16px;font-weight:600;line-height:1.5}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;width:100%;max-width:640px;margin:0}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples button{display:flex;flex-direction:column;gap:0;max-width:none;min-width:0;padding:0;overflow:hidden;border:1px solid var(--ui-line);border-radius:8px;background:var(--ui-surface);text-align:left}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples img{display:block;width:100%;height:180px;object-fit:contain;border-radius:0;background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples span{display:flex;align-items:center;min-height:44px;padding:8px 12px;font-size:14px}
+:root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples button:hover:not(:disabled){border-color:var(--ui-line-strong);background:var(--ui-surface-subtle)}
+@media(min-width:900px){
+ :root .workspace-boulder.workspace-boulder .photo-work--home{gap:0}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content{flex:1;overflow:auto;padding-bottom:8px;scrollbar-gutter:stable}
+}
+@media(max-width:599px){
+ :root .workspace-boulder.workspace-boulder .photo-work--home{padding:16px 12px}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__upload{padding:20px;gap:16px}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__capture-actions{width:100%;gap:8px}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__capture-actions button{flex:1;min-width:0}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples{gap:12px}
+ :root .workspace-boulder.workspace-boulder .photo-work__home-content .photo-work__samples img{height:160px}
+}
+:root .workspace-boulder.workspace-boulder .photo-work__color{border-color:transparent;background:transparent}
+:root .workspace-boulder.workspace-boulder .photo-work__color[aria-pressed=true]{border-color:var(--ui-line-strong);background:var(--ui-surface-subtle)}
+:root .boulder-login.boulder-login .member-login{border:0;background:transparent;border-radius:0;padding:24px 32px}
+:root .boulder-login.boulder-login .login-brand-mark,:root .boulder-login.boulder-login .login-brand small,:root .boulder-login.boulder-login .login-heading p{display:none}
+:root .boulder-login.boulder-login .login-brand strong{font-size:14px;font-weight:500;color:var(--ui-ink-muted)}
+:root .boulder-login.boulder-login .login-workspace-back{background:transparent;border:0;padding:0;margin-top:8px}
+:root .boulder-login.boulder-login .login-workspace-back small{display:none}
+:root .boulder-login.boulder-login .login-heading h1{font-size:26px;font-weight:500}
+@media(max-width:899px){
+ :root .workspace-boulder.workspace-boulder .mobile-context-row{display:none}
+ :root .workspace-boulder.workspace-boulder .app-header-main{min-height:56px}
+ :root .workspace-boulder.workspace-boulder .replay-page{padding:16px;gap:12px}
+ :root .workspace-boulder.workspace-boulder .replay-heading{display:flex;flex-wrap:wrap;gap:8px}
+ :root .workspace-boulder.workspace-boulder .replay-heading h1{display:block;font-size:18px}
+ :root .workspace-boulder.workspace-boulder .photo-work__header h1,:root .workspace-boulder.workspace-boulder .settings-heading h1,:root .workspace-boulder.workspace-boulder .account-heading h1{display:block;font-size:18px}
+ :root .workspace-boulder.workspace-boulder .mobile-tabs{background:var(--ui-surface);box-shadow:none;border-top:1px solid var(--ui-line)}
+ :root .workspace-boulder.workspace-boulder .mobile-tabs button{background:transparent;border-radius:0;color:var(--ui-ink-muted)}
+ :root .workspace-boulder.workspace-boulder .mobile-tabs button.active{background:transparent;color:var(--ui-ink)}
+ :root .workspace-boulder.workspace-boulder .mobile-tabs button.active svg{stroke-width:2}
+ :root .workspace-boulder.workspace-boulder .video-drop{min-height:280px}
+ :root .workspace-boulder.workspace-boulder .account-layout{gap:24px}
+ :root .boulder-login.boulder-login .member-login{padding:24px}
+}
+
+:root .workspace-boulder.workspace-boulder .replay-workspace.is-empty{grid-template-columns:minmax(0,1fr)}
+:root .workspace-boulder.workspace-boulder .replay-workspace.is-empty .setup-panel{display:none}
+:root .workspace-boulder.workspace-boulder .review-command-bar{background:var(--ui-surface);color:var(--ui-ink);padding:8px 12px}
+:root .workspace-boulder.workspace-boulder .replay-record-toolbar .delete-record-button{border:0;background:transparent;color:#a9322d;min-width:44px;padding:0 8px;font-weight:400}
+:root .workspace-boulder.workspace-boulder .photo-review-viewer__tools>span{display:none}
+:root .workspace-boulder.workspace-boulder .player-controls button{border:0;background:transparent;font-weight:400}
+:root .workspace-boulder.workspace-boulder .replay-review-tools .hold-repair-heading:empty{display:none}
+@media(max-width:899px){:root .workspace-boulder.workspace-boulder .replay-page{margin:0;width:100%;max-width:none}:root .workspace-boulder.workspace-boulder .replay-workspace.is-empty .video-drop{min-height:calc(100dvh - 196px)}}
+
+:root .workspace-boulder.workspace-boulder .account-compact summary{justify-content:space-between}
+:root .workspace-boulder.workspace-boulder .account-compact summary svg{width:16px;height:16px;color:var(--ui-ink-muted);transition:transform 160ms ease}
+:root .workspace-boulder.workspace-boulder .account-compact details[open] summary svg{transform:rotate(90deg)}
+:root .workspace-boulder.workspace-boulder .replay-review-tools>.task-panel__heading{display:none}
+@media(max-width:899px){:root .workspace-boulder.workspace-boulder .record-list__heading h2{display:block;font-size:18px}}
+
+:root .workspace-boulder.workspace-boulder .setup-panel .privacy-check{padding:0;border:0;background:transparent;display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start}
+:root .workspace-boulder.workspace-boulder .setup-panel .privacy-check span{font-size:13px;line-height:1.6}
+:root .workspace-boulder.workspace-boulder .setup-panel .privacy-check input{margin:3px 0 0;width:16px;height:16px}
+
+@media(max-width:899px){:root .workspace-boulder.workspace-boulder .shell-main{padding-top:56px}}
+
+/* A compact desktop window keeps the frame and review tools together. */
+@media(min-width:900px){
+ :root .workspace-boulder.workspace-boulder .desktop-nav{display:flex}
+ :root .workspace-boulder.workspace-boulder .player-tools .hold-preview-actions{margin:8px 0 0;padding:8px 0 0;border-top:1px solid var(--ui-line);background:transparent}
+ :root .workspace-boulder.workspace-boulder .player-tools .hold-preview-actions span{flex:1 1 240px;font-size:12px}
+ :root .workspace-boulder.workspace-boulder .player-tools .hold-review-hint{margin:8px 0 0;font-size:12px}
+}
+
+/* Hold review is performed on the image; no fixed inspector competes with it. */
+:root .workspace-boulder.workspace-boulder .replay-workspace.review-mode{grid-template-columns:minmax(0,1fr)}
+:root .workspace-boulder.workspace-boulder .replay-page.is-reviewing{height:100%;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+:root .workspace-boulder.workspace-boulder .is-reviewing>.replay-heading{position:absolute;width:1px;height:1px;min-height:0;overflow:hidden;clip-path:inset(50%)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .replay-heading-actions{display:none}
+:root .workspace-boulder.workspace-boulder .is-reviewing .replay-workspace{flex:1;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);align-items:stretch;width:100%;max-width:max(520px,calc(var(--review-frame-width,100vw) + 128px));align-self:center}
+:root .workspace-boulder.workspace-boulder .is-reviewing .video-column{position:relative;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:transparent;border:0;border-radius:0}
+:root .workspace-boulder.workspace-boulder .is-reviewing .video-stage{--review-tool-space:128;flex:1;height:auto;max-height:none;display:flex;align-items:center;justify-content:center;background:var(--ui-surface-subtle);border-radius:8px;min-height:0}
+:root .workspace-boulder.workspace-boulder .is-reviewing .playback-review{flex:1;min-height:0;display:flex;flex-direction:column;background:transparent}
+:root .workspace-boulder.workspace-boulder .video-canvas{position:relative;flex:none;max-width:100%;max-height:100%;background:var(--media-ground)}
+:root .workspace-boulder.workspace-boulder .video-canvas>video{display:block;width:100%;height:100%;object-fit:contain}
+:root .workspace-boulder.workspace-boulder .review-media-viewport>.video-canvas{max-width:none;max-height:none}
+:root .workspace-boulder.workspace-boulder .review-media-viewport.is-zoomed{touch-action:none}
+:root .workspace-boulder.workspace-boulder .review-pan-surface{width:100%;height:100%;min-height:0;padding:0;border:0;border-radius:0;background:transparent;transform:none}
+:root .workspace-boulder.workspace-boulder .review-view-tools button{border:0;background:transparent}
+:root .workspace-boulder.workspace-boulder .review-view-tools button[aria-pressed=true]{background:var(--ui-ink);color:var(--ui-surface)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .replay-record-toolbar{padding:0 0 4px;background:transparent}
+:root .workspace-boulder.workspace-boulder .is-reviewing .player-tools{position:static;display:block;flex:none;padding:0 0 8px;background:transparent;color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .layer-controls label{color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .playback-switch{background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .playback-switch button{color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .export-action{color:var(--ui-ink);border-color:var(--ui-line-strong);min-height:44px}
+:root .workspace-boulder.workspace-boulder .is-reviewing .player-options{gap:8px;align-items:center}
+:root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail{position:absolute;z-index:5;top:72px;left:calc(50% - var(--review-frame-width,280px)/2 - 64px);display:flex;flex-direction:column;gap:4px}
+:root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail button{width:48px;min-height:56px;padding:7px 4px;flex-direction:column;gap:4px;border:0;border-radius:6px;background:transparent;color:var(--ui-ink-muted);font-size:12px;font-weight:500}
+:root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail button:hover:not(:disabled){background:var(--ui-line);color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail button[aria-pressed=true],:root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail button[aria-pressed=true]:hover:not(:disabled){background:var(--ui-ink);color:var(--ui-surface)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-coordinate-entry{margin:0;padding:0;border:0;background:transparent;font-size:12px;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-coordinate-entry summary{min-height:32px;display:flex;align-items:center;justify-content:flex-end;cursor:pointer}
+:root .workspace-boulder.workspace-boulder .hold-contours{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+:root .workspace-boulder.workspace-boulder .hold-contours polygon{fill:rgba(237,203,82,.09);stroke:#edcb52;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:visiblePainted;cursor:pointer}
+:root .workspace-boulder.workspace-boulder .hold-contours polygon.selected{fill:rgba(237,203,82,.28);stroke:#fff;stroke-width:3}
+:root .workspace-boulder.workspace-boulder .hold-marker{position:absolute;z-index:3;transform:translate(-50%,-70%);width:44px;height:44px;padding:0;min-height:44px;display:grid;place-items:center;pointer-events:auto;background:transparent;border:0;color:var(--ui-brand-ink)}
+:root .workspace-boulder.workspace-boulder .hold-marker>span{display:grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:4px;background:#fff;color:var(--ui-ink);font-size:11px;font-weight:600}
+:root .workspace-boulder.workspace-boulder .hold-marker.missing-contour>span{background:#fff;border:1px dashed var(--ui-ink-muted);color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .hold-marker:active:not(:disabled){transform:translate(-50%,-70%)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-marker{z-index:5}
+:root .workspace-boulder.workspace-boulder .canvas-hold-actions{position:absolute;z-index:8;left:50%;bottom:60px;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:4px;width:max-content;max-width:calc(100% - 12px);padding:4px;border-radius:10px;background:var(--ui-surface);box-shadow:0 6px 24px rgba(0,0,0,.22);pointer-events:auto;color:var(--ui-ink)}
+:root .workspace-boulder.workspace-boulder .canvas-hold-actions button{min-height:44px;min-width:44px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--ui-ink);white-space:nowrap}
+:root .workspace-boulder.workspace-boulder .canvas-hold-actions button:hover:not(:disabled){background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .canvas-hold-actions button[aria-label='轮廓正确，确认补入']{background:var(--ui-brand);color:var(--ui-brand-ink)}
+:root .workspace-boulder.workspace-boulder .canvas-hold-actions button[aria-label='删除所选岩点']{color:#a9322d}
+:root .workspace-boulder.workspace-boulder .missing-contour-note{flex-basis:100%;font-size:12px;text-align:center}
+:root .workspace-boulder.workspace-boulder .hold-global-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:8px;flex:none;min-height:44px;padding-top:8px;border-top:1px solid var(--ui-line);background:var(--ui-ground)}
+:root .workspace-boulder.workspace-boulder .hold-global-actions button{margin:0;width:auto;min-height:44px;padding:8px 16px;white-space:normal}
+:root .workspace-boulder.workspace-boulder .hold-inline-feedback{grid-column:1/-1;min-width:0;font-size:12px;line-height:1.6;color:var(--ui-ink-muted);overflow-wrap:break-word}
+:root .workspace-boulder.workspace-boulder .hold-global-actions>.primary-action:only-of-type{grid-column:1/-1}
+:root .workspace-boulder.workspace-boulder .sampling-options{grid-column:1/-1;min-inline-size:0;margin:0;padding:8px 0;border:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:13px}
+:root .workspace-boulder.workspace-boulder .sampling-options legend{padding:0;font-size:12px;color:var(--ui-ink-muted)}
+:root .workspace-boulder.workspace-boulder .sampling-options label{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+:root .workspace-boulder.workspace-boulder .sampling-options select,:root .workspace-boulder.workspace-boulder .sampling-options input{box-sizing:border-box;min-width:0;max-width:100%;min-height:40px;padding:8px;border:1px solid var(--ui-line-strong);border-radius:6px;background:var(--ui-surface);color:var(--ui-ink);font:inherit}
+:root .workspace-boulder.workspace-boulder .sampling-options input{width:88px}
+:root .workspace-boulder.workspace-boulder .sampling-options details{min-width:0;max-width:100%}
+:root .workspace-boulder.workspace-boulder .sampling-options details[open]{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px}
+:root .workspace-boulder.workspace-boulder .sampling-options summary{min-height:40px;align-content:center;cursor:pointer}
+:root .workspace-boulder.workspace-boulder .sampling-options details[open] summary,:root .workspace-boulder.workspace-boulder .sampling-options details p{width:100%}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions{width:100%;max-width:max(520px,calc(var(--review-frame-width,100vw) + 128px));align-self:center;min-height:44px;max-height:40dvh;overflow:auto;padding:8px 0 0;border:0;gap:8px 12px}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions .primary-action{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:6px;background:var(--ui-brand);color:var(--ui-brand-ink);font-weight:600;line-height:1.4}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions .primary-action svg{width:18px;height:18px}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions .primary-action:hover:not(:disabled){background:var(--ui-brand-hover)}
+:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions .primary-action:disabled{background:#ededed;color:#707070;opacity:1}
+:root .workspace-boulder.workspace-boulder .review-file-popover button{border:0;border-radius:6px;background:transparent}
+:root .workspace-boulder.workspace-boulder .review-file-popover button:hover:not(:disabled){background:var(--ui-surface-subtle)}
+:root .workspace-boulder.workspace-boulder .review-file-popover .playback-switch button[aria-pressed=true]{background:var(--ui-surface)}
+@media(max-width:899px){
+ :root .workspace-boulder.workspace-boulder.app-shell:has(.replay-page.is-reviewing){height:100dvh;min-height:0;padding-bottom:0;display:flex;flex-direction:column;overflow:hidden}
+ :root .workspace-boulder.workspace-boulder:has(.replay-page.is-reviewing) .app-header{position:relative;flex:none}
+ :root .workspace-boulder.workspace-boulder:has(.replay-page.is-reviewing) .shell-main{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}
+ :root .workspace-boulder.workspace-boulder:has(.replay-page.is-reviewing) .mobile-tabs{position:relative;flex:none;bottom:auto;height:64px}
+ :root .workspace-boulder.workspace-boulder .is-reviewing .replay-workspace,:root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions{max-width:100%}
+ :root .workspace-boulder.workspace-boulder .is-reviewing .video-stage{--review-tool-space:0}
+ :root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail{position:static;flex-direction:row;gap:4px;justify-content:center;padding-top:4px}
+ :root .workspace-boulder.workspace-boulder .is-reviewing .review-toolrail button{width:auto;min-width:84px;min-height:44px;flex-direction:row;padding:8px 12px;font-size:13px;gap:6px}
+ :root .workspace-boulder.workspace-boulder .is-reviewing .hold-global-actions{position:static;padding:0}
+}
+
+/* Preserve preview height while task progress scrolls below it. */
+@media(min-width:900px){
+:root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .video-column:has(.video-stage){overflow-y:auto}
+:root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .playback-review{flex:none}
+:root .workspace-boulder.workspace-boulder .replay-page:not(.is-reviewing) .video-stage{flex:none;height:clamp(420px,calc(100dvh - 220px),820px);max-height:none}
+:root .workspace-boulder.workspace-boulder .replay-view{flex:none}
+:root .workspace-boulder.workspace-boulder .unified-stage{flex:none}
+:root .workspace-boulder.workspace-boulder .replay-cinema .replay-frame{width:calc(100% - 56px);max-width:calc(var(--frame-limit) * var(--frame-ratio));max-height:var(--frame-limit)}
+:root .workspace-boulder.workspace-boulder .unified-replay{overflow-y:auto}
+}

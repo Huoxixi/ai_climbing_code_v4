@@ -12,9 +12,10 @@ import math
 import numpy as np
 from .replay_action_naming import ACTIONS, checked_details, enrich_names
 from .replay_action_trajectory import registered_points, prepare_tracks, chain_pair_reasons, active_relative_delta
+from .replay_action_segmentation import displacement_bouts
 
 VERSION = "replay-actions-v1"
-ALGORITHM_VERSION = "source-torso-chain-local-naming-v6"
+ALGORITHM_VERSION = "observed-motion-settled-event-timeline-v11"
 LIMBS = {"left_hand": ("左手", (5, 7, 9)), "right_hand": ("右手", (6, 8, 10)),
          "left_foot": ("左脚", (11, 13, 15)), "right_foot": ("右脚", (12, 14, 16))}
 EDGES = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12),
@@ -77,55 +78,30 @@ def motion_intervals(result):
 
 
 def locate_groups(result):
-    """Locate motion bouts before naming; pad preparation and settling in source time."""
+    """Locate significant axis displacement, retaining preparation and settling."""
     duration = result["video"]["duration_seconds"]
     intervals = motion_intervals(result)
-    bouts = []
-    for row in intervals:
-        if row["kind"] != "moving":
-            continue
-        # Short still/obscured samples within a movement are not chapter breaks.
-        if bouts and row["start_seconds"] - bouts[-1]["end"] <= .65:
-            bouts[-1]["end"] = row["end_seconds"]
-            bouts[-1]["limbs"].update(row["candidate_limbs"])
-        else:
-            bouts.append({"start": row["start_seconds"], "end": row["end_seconds"],
-                          "limbs": set(row["candidate_limbs"])})
-    # Contact changes can locate a movement in a poorly tracked window; same-hold
-    # adjustments never make a separate group. They cannot supply display labels.
-    for seg in (result.get("attempt") or {}).get("segments", []):
-        start, end = seg.get("start_time_seconds"), seg.get("end_time_seconds")
-        if (not number(start) or not number(end) or not 0 <= start < end <= duration
-                or seg.get("source_hold_id") == seg.get("target_hold_id")):
-            continue
-        if not any(start < b["end"] and end > b["start"] for b in bouts):
-            bouts.append({"start": start, "end": end, "limbs": {seg.get("limb")} & LIMBS.keys()})
-    bouts.sort(key=lambda b: b["start"])
-    # A long uninterrupted body movement may contain several hand/foot groups.
-    # Use settled new-contact landmarks inside it, not first-observation times or
-    # sampling gaps. Close landings belong to the same coordinated group.
-    landings = sorted({s["end_time_seconds"] for s in (result.get("attempt") or {}).get("segments", [])
-        if number(s.get("end_time_seconds")) and s.get("source_hold_id") != s.get("target_hold_id")
-        and number(s.get("landing_stabilization_seconds")) and s["landing_stabilization_seconds"] >= .2})
-    split = []
-    for bout in bouts:
-        start = bout["start"]
-        for at in landings:
-            if bout["end"] - bout["start"] > 4 and at - start >= 1.8 and bout["end"] - at >= 1.2:
-                split.append(dict(bout, start=start, end=at))
-                start = at
-        split.append(dict(bout, start=start))
-    bouts = split
+    bouts = displacement_bouts(result)
+    from .replay_torso_trajectory import climbing_window
+    window = climbing_window(result)
+    if window['start_seconds'] is not None and window['end_seconds'] is not None:
+        bouts = [{**b, 'start':max(b['start'],window['start_seconds'])}
+                 for b in bouts if b['start'] <= window['end_seconds']]
+        bouts = [b for b in bouts if b['end']-b['start'] >= .25]
     groups = []
     for i, bout in enumerate(bouts):
-        start, end = max(0., bout["start"] - .3), min(duration, bout["end"] + .4)
-        if groups and start < groups[-1]["end_seconds"]:
-            boundary = (bout["start"] + bouts[i - 1]["end"]) / 2
-            groups[-1]["end_seconds"] = min(groups[-1]["end_seconds"], boundary)
-            start = boundary
+        start = max(window['start_seconds'] or 0., bout["start"] - .3)
+        end = min(duration, bout["end"])
+        if i:
+            start = max(start, (bout['start'] + bouts[i-1]['end']) / 2)
+        if i + 1 < len(bouts):
+            end = min(end, (bout['end'] + bouts[i+1]['start']) / 2)
         groups.append({"id": f"action-{i + 1:03d}", "start_seconds": start, "end_seconds": end,
                        "motion_start_seconds": bout["start"], "motion_end_seconds": bout["end"],
-                       "candidate_limbs": sorted(bout["limbs"]), "events": [], "description": "动作片段",
+                       "candidate_limbs": sorted(bout["limbs"]), "body_moving": bout.get('body', False),
+                       "ending_stable": bout.get('settled', False),
+                       "settle_confirmation_seconds": .8 if bout.get('settled') else None,
+                       "events": [], "description": "动作片段",
                        "evidence_status": "needs_local_review", "evidence": []})
     return groups, intervals
 
@@ -229,7 +205,12 @@ def organize(job, reviews=None):
         review = (reviews or {}).get(group["id"])
         if review:
             groups[index] = apply_local_review(group, review["proposed"], review["checked"], review["frames"], result.get("holds", []))
-    return enrich_names({"schema_version": VERSION, "algorithm_version": ALGORITHM_VERSION, "source_duration_seconds": duration, "time_basis": "source_video",
+    organized = enrich_names({"schema_version": VERSION, "algorithm_version": ALGORITHM_VERSION, "source_duration_seconds": duration, "time_basis": "source_video",
             "groups": groups, "automatic_groups": automatic, "local_reviews": deepcopy(reviews or {}),
-            "motion_intervals": intervals, "metrics": basic_metrics(result, intervals),
-            "video": result["video"], "pose_samples": result.get("pose_samples", []), "holds": result.get("holds", [])})
+            "segmentation_basis": "significant_axis_displacement", "motion_intervals": intervals, "metrics": basic_metrics(result, intervals),
+            "video": result["video"], "pose_samples": result.get("pose_samples", []), "holds": result.get("holds", []),
+            "attempt": deepcopy(result.get("attempt") or {})})
+    if result.get('skeleton_only') or job.get('skeleton_only'):
+        from .replay_skeleton_mode import without_hold_data
+        organized = without_hold_data(organized)
+    return organized

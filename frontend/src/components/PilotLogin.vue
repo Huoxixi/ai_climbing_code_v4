@@ -1,5 +1,5 @@
 <template>
-  <main class="pilot-login-page member-login-page">
+  <main class="pilot-login-page member-login-page" :class="{'boulder-login':workspace==='boulder'}">
     <div class="login-photo" aria-hidden="true"><img :src="loginBackdrop" alt="" /></div>
     <div class="login-photo-fade" aria-hidden="true" />
     <section class="member-login" aria-labelledby="login-title">
@@ -7,7 +7,7 @@
         <span class="login-brand-mark"><Grid /></span>
         <span><strong>攀岩助手</strong><small>CLIMB SETTER</small></span>
       </div>
-      <button class="login-workspace-back" type="button" :disabled="submitting" @click="emit('change-workspace')">
+      <button v-if="!localWorkspaceOnly" class="login-workspace-back" type="button" :disabled="submitting" @click="emit('change-workspace')">
         <ArrowLeft />
         <span><small>当前进入</small><strong>{{ workspaceLabel }}</strong></span>
         <em>更换项目</em>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, inject, reactive, ref, watch } from 'vue'
 import { ArrowLeft, Grid } from '@element-plus/icons-vue'
 import loginBackdrop from '../assets/login-climber-pexels-5916407.jpg'
 const props = defineProps({
@@ -49,6 +49,7 @@ const props = defineProps({
   workspace: { type: String, required: true },
 })
 const emit = defineEmits(['login', 'register', 'quick-login', 'clear-error', 'change-workspace'])
+const localWorkspaceOnly = inject('localWorkspaceOnly',false)
 const workspaceLabel = computed(() => props.workspace === 'boulder' ? '抱石项目' : '定线项目')
 const registering = ref(false)
 const confirmation = ref('')

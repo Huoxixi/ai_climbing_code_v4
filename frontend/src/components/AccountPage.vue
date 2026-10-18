@@ -18,7 +18,12 @@
         </dl>
       </section>
 
-      <div class="account-details">
+      <div v-if="workspace==='boulder'" class="account-compact">
+        <details><summary>数据与隐私<ArrowRight aria-hidden="true" /></summary><p>新建的照片、线路和备注不会自动公开。公开版本与私人原记录分开保存。</p></details>
+        <details><summary>本机草稿<ArrowRight aria-hidden="true" /></summary><p>尚未上传的照片只保存在当前设备。退出登录不会删除已保存记录；本机草稿不会自动出现在其他设备。</p></details>
+        <section class="account-session"><button type="button" :disabled="leaving" @click="leave">{{ leaving ? '正在退出…' : '退出当前账号' }}</button><p v-if="accountError" class="account-error" role="alert">{{ accountError }}</p></section>
+      </div>
+      <div v-else class="account-details">
         <section aria-labelledby="privacy-title">
           <div class="account-section-heading"><CircleCheck /><div><h2 id="privacy-title">记录默认私密</h2><p>新建的照片、线路和备注不会自动公开。</p></div></div>
           <p>未来发布到社区时，会先单独预览公开内容。公开版本与私人原记录分开保存。</p>
@@ -39,8 +44,9 @@
 
 <script setup>
 import { computed, inject, ref } from 'vue'
-import { Cellphone, CircleCheck, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowRight, Cellphone, CircleCheck, Lock, SwitchButton } from '@element-plus/icons-vue'
 
+defineProps({workspace:{type:String,default:'setter'}})
 const access = inject('pilotAccess')
 const leaving = ref(false)
 const accountError = ref('')

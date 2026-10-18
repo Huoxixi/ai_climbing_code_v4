@@ -285,7 +285,8 @@ def _climbing_model_masks(image: np.ndarray, deadline: float,
 
 def _climbing_model_masks_batch(images: list[np.ndarray], deadline: float,
                                 cancelled: Callable[[], bool], progress=lambda stage, value: None,
-                                pack_masks: bool = False):
+                                pack_masks: bool = False, reuse_model: bool = False,
+                                include_volumes: bool = False, native_metadata: list | None = None):
     """Run multiple video frames with one model load and the same production profile."""
     if not images:
         raise ValueError("没有可识别的画面")
@@ -326,11 +327,21 @@ def _climbing_model_masks_batch(images: list[np.ndarray], deadline: float,
         raise PhotoProcessingError("岩点专项模型配置与现有识别流程不兼容")
     cfg.freeze()
     progress("载入岩点专项模型", 25)
-    model = build_model(cfg)
-    weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    model.load_state_dict(weights["model"], strict=True)
-    del weights
-    model.eval()
+    def load_model():
+        model = build_model(cfg)
+        weights = torch.load(checkpoint, map_location="cpu", weights_only=True)
+        model.load_state_dict(weights["model"], strict=True)
+        del weights
+        model.eval()
+        return model
+    if reuse_model:
+        from core.replay_model_cache import cached_local_model
+        identity = (str(config_path.resolve()), config_path.stat().st_mtime_ns,
+                    str(checkpoint.resolve()), checkpoint.stat().st_mtime_ns, checkpoint.stat().st_size)
+        model, digest = cached_local_model(identity, load_model, checkpoint)
+    else:
+        model = load_model()
+        digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12]
     transform = ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
     outputs = []
     for index, image in enumerate(images):
@@ -344,7 +355,9 @@ def _climbing_model_masks_batch(images: list[np.ndarray], deadline: float,
         with torch.inference_mode():
             instances = model([{"image": tensor, "height": image.shape[0], "width": image.shape[1]}])[0]["instances"].to("cpu")
         classes = instances.pred_classes.numpy()
-        keep = classes == 0
+        keep = np.isin(classes, [0,1]) if include_volumes else classes == 0
+        if native_metadata is not None:
+            native_metadata.append({'classes':classes[keep].tolist()})
         if pack_masks:
             masks = [np.packbits(mask.astype(np.uint8), axis=1)
                      for mask in instances.pred_masks.numpy()[keep]]
@@ -353,7 +366,6 @@ def _climbing_model_masks_batch(images: list[np.ndarray], deadline: float,
         scores = [float(value) for value in instances.scores.numpy()[keep]]
         outputs.append((masks, scores))
         progress("识别岩点轮廓", 45 + round(45 * (index + 1) / len(images)))
-    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()[:12]
     return outputs, (
         f"indoor-maskrcnn-{digest}"
         f"+min{PRODUCTION_CLIMBING_MIN_SIZE}-cap{PRODUCTION_CLIMBING_CANDIDATE_CAP}"

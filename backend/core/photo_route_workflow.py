@@ -30,8 +30,11 @@ class Change(BaseModel):
     version: int = Field(ge=1)
     request_id: str | None = Field(default=None,min_length=1,max_length=80)
     color: str | None = Field(default=None, max_length=40)
+    recognize: bool = False
+    object_id: str | None = None
     member_ids: list[str] | None = Field(default=None,max_length=600)
     point: tuple[float,float] | None = None
+    contour: list[tuple[float,float]] | None = Field(default=None,min_length=3,max_length=600)
 
 
 class MemberNotes(BaseModel):
@@ -136,8 +139,8 @@ class PhotoWorkflow:
                     return previous
                 if db.execute("SELECT 1 FROM photo_work_sessions WHERE owner=? AND status NOT IN ('saved','abandoned')",(owner,)).fetchone(): raise HTTPException(409,'请先保存或放弃当前线路')
                 bid=self._board(db,owner,asset,{'accepted':True,'issues':[],'metrics':quality.metrics})
-                db.execute('INSERT INTO photo_work_sessions(id,owner,status,board_id,source_id,stage,created_at,updated_at,flow_version) VALUES(?,?,?,?,?,?,?,?,2)',
-                    (sid,owner,'processing',bid,bid,'等待全图识别',now(),now()))
+                db.execute('INSERT INTO photo_work_sessions(id,owner,status,board_id,source_id,stage,created_at,updated_at,flow_version) VALUES(?,?,?,?,?,?,?,?,4)',
+                    (sid,owner,'processing',bid,bid,'正在识别照片中的全部岩点',now(),now()))
         except sqlite3.IntegrityError:
             previous=self.current(owner)
             if previous and previous['id']==sid: return previous
@@ -149,15 +152,29 @@ class PhotoWorkflow:
         current=self.get(sid,owner)
         with self.store.transaction() as db:
             row=self._row(db,sid,owner)
-            fingerprint=self.store._json({'action':'color',**change.model_dump()})
+            payload=change.model_dump()
+            if change.object_id is None: payload.pop('object_id')
+            if not change.recognize: payload.pop('recognize')
+            fingerprint=self.store._json({'action':'color',**payload})
             if change.request_id:
                 receipt=db.execute('SELECT payload FROM photo_work_receipts WHERE session_id=? AND request_id=?',(sid,change.request_id)).fetchone()
                 if receipt:
                     if receipt[0]!=fingerprint: raise HTTPException(409,'请求编号已用于其他修改')
                     return current
-            if change.color not in current['colors']: raise HTTPException(422,'请选择照片中的一种颜色')
             if row['version']!=change.version or row['status']!='awaiting_color': raise HTTPException(409,'线路状态已变化，请刷新当前进度')
-            if row['flow_version']>=2:
+            if row['flow_version']>=3 or (row['flow_version']==2 and change.recognize):
+                if change.color not in COLOR_SWATCHES or change.color=='待确认': raise HTTPException(422,'请先取色或选择线路颜色')
+                board_version=db.execute('SELECT version FROM board_versions WHERE id=?',(row['board_id'],)).fetchone()[0]
+                if change.board_version is not None and change.board_version!=board_version: raise HTTPException(409,'照片已有变化，请刷新后再识别')
+                bid=row['board_id']
+                if row['flow_version']==2:
+                    # Upgrade an unfinished pre-recognized draft without overwriting its old masks.
+                    quality={key:value for key,value in current['board']['quality'].items() if key!='processing_config'}
+                    bid=self._board(db,owner,current['board']['original_asset'],quality,source=current['board'])
+                db.execute("UPDATE photo_work_sessions SET board_id=?,source_id=?,flow_version=3,color=?,status='processing',progress=0,stage='正在识别所选颜色线路',error=NULL,version=version+1,updated_at=? WHERE id=?",(bid,bid,change.color,now(),sid))
+                if change.request_id: db.execute('INSERT INTO photo_work_receipts VALUES(?,?,?)',(sid,change.request_id,fingerprint))
+            elif row['flow_version']>=2:
+                if change.color not in current['colors']: raise HTTPException(422,'请选择照片中的一种颜色')
                 if change.color=='待确认': raise HTTPException(422,'请先为待确认岩点指定颜色')
                 ids=[r[0] for r in db.execute('SELECT id FROM board_objects WHERE board_version_id=? AND color_group=? ORDER BY id',(row['board_id'],change.color))]
                 if not ids: raise HTTPException(422,'该颜色组没有岩点，请重新选择')
@@ -171,7 +188,9 @@ class PhotoWorkflow:
                 db.execute("UPDATE photo_work_sessions SET color=?,route_id=?,status='ready',progress=100,stage='线路已提取，进度已保存',ai_json=?,version=version+1,updated_at=? WHERE id=?",(change.color,rid,json.dumps({'status':'not_requested','rejected':[],'missing':[]}),now(),sid))
                 if change.request_id: db.execute('INSERT INTO photo_work_receipts VALUES(?,?,?)',(sid,change.request_id,fingerprint))
             else:
+                if change.color not in current['colors']: raise HTTPException(422,'请选择照片中的一种颜色')
                 return self._select_legacy(db,sid,owner,change,current,fingerprint)
+        if row['flow_version']>=3 or (row['flow_version']==2 and change.recognize): self.queue.put(sid)
         return self.get(sid,owner)
 
     def _select_legacy(self,db,sid,owner,change,current,fingerprint):
@@ -186,7 +205,10 @@ class PhotoWorkflow:
         current=self.get(sid,owner)
         with self.store.transaction() as db:
             row=self._row(db,sid,owner)
-            fingerprint=self.store._json({'action':action,**change.model_dump()})
+            payload=change.model_dump()
+            if change.object_id is None: payload.pop('object_id')
+            if not change.recognize: payload.pop('recognize')
+            fingerprint=self.store._json({'action':action,**payload})
             if change.request_id:
                 receipt=db.execute('SELECT payload FROM photo_work_receipts WHERE session_id=? AND request_id=?',(sid,change.request_id)).fetchone()
                 if receipt:
@@ -210,6 +232,12 @@ class PhotoWorkflow:
             elif action=='resume':
                 if row['status']!='failed' or not row['route_id']: raise HTTPException(409,'当前没有可恢复编辑的线路')
                 db.execute("UPDATE photo_work_sessions SET status='ready',point_json=NULL,error=NULL,stage='已返回编辑，线路进度已保留',progress=100,version=version+1,updated_at=? WHERE id=?",(now(),sid))
+            elif action=='recognize-all':
+                if row['status'] not in {'awaiting_color','failed'} or row['route_id']:
+                    raise HTTPException(409,'请先完成或放弃当前路线')
+                quality={key:value for key,value in current['board']['quality'].items() if key!='processing_config'}
+                bid=self._board(db,owner,current['board']['original_asset'],quality,source=current['board'])
+                db.execute("UPDATE photo_work_sessions SET board_id=?,source_id=?,flow_version=4,color=NULL,status='processing',progress=0,stage='正在识别照片中的全部岩点',error=NULL,version=version+1,updated_at=? WHERE id=?",(bid,bid,now(),sid))
             elif action=='reprocess':
                 if row['flow_version']>=2: raise HTTPException(409,'当前照片已经使用岩点专项模型识别')
                 if row['status'] not in {'awaiting_color','failed'} or row['route_id']:
@@ -221,6 +249,40 @@ class PhotoWorkflow:
             elif action=='retry':
                 if row['status'] not in {'failed','ready'}: raise HTTPException(409,'任务仍在进行')
                 db.execute("UPDATE photo_work_sessions SET status='processing',error=NULL,stage='准备重试',progress=0,version=version+1,updated_at=? WHERE id=?",(now(),sid))
+            elif action in {'add-contour','edit-contour'}:
+                if row['flow_version']<2 or row['status']!='ready': raise HTTPException(409,'请先确认线路颜色，再补充岩点')
+                board=current['board']
+                board_version=db.execute('SELECT version FROM board_versions WHERE id=?',(row['board_id'],)).fetchone()[0]
+                if change.board_version!=board_version: raise HTTPException(409,'岩点轮廓已有变化，请刷新后重试')
+                contour=change.contour
+                if not contour or any(not np.isfinite(x) or not np.isfinite(y) or not 0<=x<board['width'] or not 0<=y<board['height'] for x,y in contour):
+                    raise HTTPException(422,'请沿照片内的岩点边缘描出轮廓')
+                contour=[[int(round(x)),int(round(y))] for x,y in contour]
+                from core.replay_hold_editor import validate_polygon
+                validate_polygon([[x/board['width'],y/board['height']] for x,y in contour],board['width'],board['height'])
+                if len({tuple(p) for p in contour})!=len(contour) or cv2.contourArea(np.array(contour,np.float32))<4:
+                    raise HTTPException(422,'轮廓需要至少三个不同的边缘点，并围出岩点面积')
+                if action=='add-contour' and len(current['route']['members'])>=600: raise HTTPException(422,'线路岩点数量已达上限')
+                x,y,right,bottom,cutout,mask=self.store._render_contour_assets(board,contour)
+                oid=uuid.uuid4().hex; timestamp=now()
+                if action=='edit-contour':
+                    if not change.object_id or change.object_id not in {o['id'] for o in board['objects']}:
+                        raise HTTPException(422,'岩点不属于当前照片')
+                    db.execute('UPDATE board_objects SET contour_json=?,bbox_json=?,cutout_asset=?,mask_asset=?,object_version=object_version+1,updated_at=? WHERE id=? AND board_version_id=?',
+                        (self.store._json(contour),self.store._json([x,y,right-x,bottom-y]),self.store._json(cutout),self.store._json(mask),timestamp,change.object_id,row['board_id']))
+                    db.execute('UPDATE board_versions SET version=version+1,updated_at=? WHERE id=?',(timestamp,row['board_id']))
+                    db.execute('UPDATE photo_work_sessions SET version=version+1,updated_at=? WHERE id=?',(timestamp,sid))
+                else:
+                    # The user-drawn boundary, membership and retry receipt commit together.
+                    # No model inference, calibration or legacy point segmentation is used.
+                    db.execute('INSERT INTO board_objects VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        (oid,row['board_id'],'hold',row['color'],self.store._json(contour),self.store._json([x,y,right-x,bottom-y]),
+                         self.store._json(cutout),self.store._json(mask),0,0,0,1,.5,'needs_review',1,timestamp,timestamp))
+                    index=len(current['route']['members'])
+                    db.execute('INSERT INTO route_members VALUES(?,?,?,?,?,?)',(row['route_id'],oid,'[]','[]','',index))
+                    db.execute('UPDATE board_versions SET version=version+1,updated_at=? WHERE id=?',(timestamp,row['board_id']))
+                    db.execute('UPDATE routes SET version=version+1,updated_at=? WHERE id=?',(timestamp,row['route_id']))
+                    db.execute("UPDATE photo_work_sessions SET stage='手动补点已保存',version=version+1,updated_at=? WHERE id=?",(timestamp,sid))
             elif action=='add':
                 if row['flow_version']>=2:
                     raise HTTPException(409,'专项模型流程不再使用旧版补点分割；请重新识别或更换照片')
@@ -247,7 +309,7 @@ class PhotoWorkflow:
             else: raise HTTPException(404,'未知操作')
             if change.request_id:
                 db.execute('INSERT INTO photo_work_receipts VALUES(?,?,?)',(sid,change.request_id,fingerprint))
-        if action in {'retry','add','reprocess'}: self.queue.put(sid)
+        if action in {'retry','add','reprocess','recognize-all'}: self.queue.put(sid)
         return self.get(sid,owner)
 
     def notes(self, rid, owner, payload):
@@ -335,22 +397,40 @@ class PhotoWorkflow:
                 db.execute("UPDATE photo_work_sessions SET point_json=NULL,status='ready',stage='岩点已补加',version=version+1,updated_at=? WHERE id=?",(now(),sid))
             return
         if board['status']=='processing':
-            seed=self._seed(source,row['color']) if row['color'] else None
+            seed=self._seed(source,row['color']) if row['color'] and row['flow_version']<3 else None
             result=analyze_board_photo(path,self.store.root,cancelled=cancelled,deadline=time.monotonic()+180,
-                seed=seed,color_group=row['color'],coarse_only=row['flow_version']<2 and not bool(row['color']),
+                seed=seed,color_group=None if row['flow_version']>=4 else row['color'],coarse_only=row['flow_version']<2 and not bool(row['color']),
                 require_climbing_model=row['flow_version']>=2,
                 color_version='interior-v4' if row['flow_version']>=2 else 'interior-v3',
                 calibration=source['calibration'] if row['color'] else None,
                 progress=lambda stage,p:self._progress(sid,stage,min(p,70)))
-            if row['color']: result['objects']=[obj for obj in result['objects'] if obj['color_group']==row['color']]
+            if row['color'] and row['flow_version']<3: result['objects']=[obj for obj in result['objects'] if obj['color_group']==row['color']]
             if cancelled(): return
-            if row['flow_version']>=2: self._progress(sid,'整理识别结果，准备点击选线',90)
+            if row['flow_version']>=2: self._progress(sid,'整理所选颜色线路，准备复核和补点' if row['flow_version']>=3 else '整理识别结果，准备点击选线',90)
             self.store.set_analysis_result(board['id'],result)
             board=self.store.get_board(board['id'],owner)
+        if row['flow_version']>=4:
+            with self.store.transaction() as db:
+                if self._row(db,sid,owner)['status']!='processing': return
+                rid=row['route_id'] or 'work-'+sid
+                if not row['route_id']:
+                    db.execute('INSERT INTO routes VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL)',(rid,owner,board['id'],'自选线路','自选','','','','draft',1,now(),now()))
+                db.execute("UPDATE photo_work_sessions SET color='自选',route_id=?,ai_json=?,status='ready',error=NULL,stage='请选择路线上的岩点，遗漏或边缘不准可精修',progress=100,version=version+1,updated_at=? WHERE id=? AND status='processing'",(rid,json.dumps({'status':'not_requested'}),now(),sid))
+            return
         if not row['color']:
             if not board['objects']: raise ValueError('暂未找到线路颜色，请更换清晰照片')
             with self.store.transaction() as db:
                 db.execute("UPDATE photo_work_sessions SET status='awaiting_color',stage='请点击一个岩点选择线路颜色',progress=100,version=version+1,updated_at=? WHERE id=? AND status='processing'",(now(),sid))
+            return
+        if row['flow_version']>=3:
+            with self.store.transaction() as db:
+                if self._row(db,sid,owner)['status']!='processing': return
+                rid=row['route_id'] or 'work-'+sid
+                if not row['route_id']:
+                    db.execute('INSERT INTO routes VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL)',(rid,owner,board['id'],row['color']+'线路',row['color'],'','','','draft',1,now(),now()))
+                    for index,obj in enumerate(o for o in board['objects'] if o['color_group']==row['color']):
+                        db.execute('INSERT INTO route_members VALUES(?,?,?,?,?,?)',(rid,obj['id'],'[]','[]','',index))
+                db.execute("UPDATE photo_work_sessions SET route_id=?,ai_json=?,status='ready',error=NULL,stage='线路识别完成，请复核或补点',progress=100,version=version+1,updated_at=? WHERE id=? AND status='processing'",(rid,json.dumps({'status':'not_requested','rejected':[],'missing':[]}),now(),sid))
             return
         if not board['objects']: raise ValueError('未找到该颜色的可靠岩点，请放弃后更换照片或颜色')
         if row['flow_version']>=2:
@@ -402,9 +482,9 @@ def workflow_router(workflow):
     @router.get('/{sid}')
     def get(sid:str,request:Request): return workflow.get(sid,owner(request))
     @router.post('/upload')
-    async def upload(request:Request,photo:UploadFile=File(...),request_id:str=Form(...)):
+    def upload(request:Request,photo:UploadFile=File(...),request_id:str=Form(...)):
         from core.photo_route_processing import MAX_UPLOAD_BYTES
-        data=await photo.read(max(MAX_UPLOAD_BYTES,25*1024*1024)+1)
+        data=photo.file.read(max(MAX_UPLOAD_BYTES,25*1024*1024)+1)
         try: return workflow.upload(owner(request),request_id,photo.filename or 'photo.jpg',data,photo.content_type or '')
         except ValueError as exc: raise HTTPException(422,str(exc)) from exc
     @router.post('/{sid}/color')

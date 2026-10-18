@@ -930,8 +930,8 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
         return content_type, kind, suffix, size_limit
 
     @router.post("/boards/upload")
-    async def upload_board(request: Request, photo: UploadFile = File(...), board_name: str = Form(default="")):
-        data = await photo.read(25 * 1024 * 1024 + 1)
+    def upload_board(request: Request, photo: UploadFile = File(...), board_name: str = Form(default="")):
+        data = photo.file.read(25 * 1024 * 1024 + 1)
         if len(data) > 25 * 1024 * 1024:
             raise HTTPException(413, "照片不能超过 25 MB")
         board, job = store.create_upload(
@@ -1001,13 +1001,13 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
     def route(route_id: str, request: Request): return store.get_route(route_id, owner(request))
 
     @router.post("/routes/{route_id}/media")
-    async def upload_route_media(route_id: str, request: Request, media: UploadFile = File(...)):
+    def upload_route_media(route_id: str, request: Request, media: UploadFile = File(...)):
         content_type, kind, suffix, size_limit = validate_media(route_id, owner(request), media.content_type or "", media.filename or "")
         temp = store.assets / f".route-media-{uuid.uuid4().hex}.tmp"
         digest, size = hashlib.sha256(), 0
         try:
             with temp.open("wb") as target:
-                while chunk := await media.read(1024 * 1024):
+                while chunk := media.file.read(1024 * 1024):
                     size += len(chunk)
                     if size > size_limit:
                         raise HTTPException(413, "照片不能超过 25MB，视频不能超过 500MB")
@@ -1057,7 +1057,8 @@ def create_photo_route_v2_router(store: PhotoRouteV2Store, jobs: PhotoRouteJobMa
             raise HTTPException(422, "上传位置无效") from exc
         data = await request.body()
         try:
-            result = route_uploads.append(upload_id, owner(request), offset=offset, data=data)
+            from starlette.concurrency import run_in_threadpool
+            result = await run_in_threadpool(route_uploads.append, upload_id, owner(request), offset=offset, data=data)
         except ChunkUploadError as exc:
             raise HTTPException(409, str(exc)) from exc
         return result

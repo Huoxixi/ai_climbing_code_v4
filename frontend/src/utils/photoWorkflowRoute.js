@@ -3,7 +3,8 @@ const RECORDS_ROOT = '#/my-records'
 const FLOW_SCREENS = new Set(['select-color', 'processing', 'recovery', 'review'])
 
 export function appPageFromHash(hash, allowedPages, fallback = 'dashboard') {
-  const page = String(hash || '').replace(/^#\/?/, '').split('/')[0]
+  let page = String(hash || '').replace(/^#\/?/, '').split('/')[0]
+  if(page==='account')page='settings'
   return allowedPages.includes(page) ? page : fallback
 }
 

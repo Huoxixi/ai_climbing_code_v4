@@ -8,7 +8,9 @@ const chapterSeconds = count => count ? SUMMARY_INTRO + (count - 1) * SUMMARY_ST
 export const routeSeconds = metrics => chapterSeconds(routeMetrics(metrics).length)
 export const summaryMetrics = (metrics, motion) => metrics.filter(m => !routeKeys.includes(m.key) && (!motion || !['moving', 'relative_still'].includes(m.key)))
 export const rhythmStart = (metrics, motion) => routeSeconds(metrics) + chapterSeconds(summaryMetrics(metrics, motion).length)
-export const summarySeconds = (metrics, motion) => rhythmStart(metrics, motion) + (motion ? 6 : 0)
+export const trajectoryStart = (metrics, motion) => rhythmStart(metrics, motion) + (motion ? 6 : 0)
+export const focusStart = (metrics, motion, trajectory) => trajectoryStart(metrics, motion) + (trajectory ? 8 : 0)
+export const summarySeconds = (metrics, motion, trajectory, focus) => focusStart(metrics, motion, trajectory) + (focus ? 8 : 0)
 export const metricValue = metric => metric.display_value || (metric.value == null ? '尚未确认' : `${metric.approximate ? '约 ' : ''}${metric.approximate ? Number(metric.value).toFixed(1) : metric.value}`)
 const limbs = { left_hand: '左手', right_hand: '右手', left_foot: '左脚', right_foot: '右脚' }
 const legacyText = event => {

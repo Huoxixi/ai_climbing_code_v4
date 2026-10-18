@@ -15,13 +15,12 @@
     @close-settings="closeSettings"
     @change-workspace="requestWorkspaceChange"
   >
-    <div v-if="workspace === 'boulder' && (photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status)))" class="photo-task-notice" role="status">
-      <span>{{ photoWork.state.uploading ? '照片正在上传，可以继续使用其他功能' : photoWork.state.session.status === 'ready' ? (photoWork.state.session.viewed ? '当前线路进度已保存' : '线路已提取，进度已保存') : photoWork.state.session.stage }}</span>
+    <div v-if="workspace === 'boulder' && !isPhotoPage && activePage !== 'climb-replay' && (photoWork.state.uploading || (photoWork.state.session && !['saved','abandoned'].includes(photoWork.state.session.status)))" class="photo-task-notice" role="status">
+      <span>{{ photoWork.state.uploading ? '照片正在上传，可以继续使用其他功能' : photoWork.state.session.status === 'ready' ? (photoWork.state.session.viewed ? '当前线路进度已保存' : '线路已提取，进度已保存') : (photoWork.state.session.stage || '照片草稿') }}</span>
       <button type="button" @click="returnPhotoWork">{{ photoWork.state.session?.status === 'ready' ? '返回查看' : '查看当前线路' }}</button>
       <span v-if="photoWork.state.connectionLost">暂时断开，正在重新连接</span>
     </div>
-    <SettingsPage v-if="activePage === 'settings'" />
-    <AccountPage v-else-if="activePage === 'account'" />
+    <SettingsPage v-if="activePage === 'settings'" :workspace="workspace" />
     <ClimbReplayPage v-else-if="activePage === 'climb-replay'" />
     <DashboardPage
       v-else-if="activePage === 'dashboard'"
@@ -173,7 +172,6 @@
 import { computed, inject, nextTick, provide, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AppShell from './components/AppShell.vue'
-import AccountPage from './components/AccountPage.vue'
 import ClimbReplayPage from './components/ClimbReplayPage.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import DashboardPage from './components/DashboardPage.vue'
@@ -196,9 +194,9 @@ import standardBoardService from './services/standardBoardService'
 
 const props = defineProps({ workspace: { type: String, required: true } })
 const emit = defineEmits(['change-workspace'])
-const appPages = ['dashboard','studio','photo-routes','my-records','climb-replay','account','library','boards','standard-board','simulation','ai-lab','settings']
+const appPages = ['dashboard','studio','photo-routes','my-records','climb-replay','library','boards','standard-board','simulation','ai-lab','settings']
 const workspacePages = {
-  boulder: ['photo-routes', 'my-records', 'climb-replay', 'account', 'settings'],
+  boulder: ['photo-routes', 'my-records', 'climb-replay', 'settings'],
   setter: ['dashboard', 'studio', 'library', 'boards', 'standard-board', 'simulation', 'ai-lab', 'settings'],
 }
 const workspaceHome = props.workspace === 'boulder' ? 'photo-routes' : 'dashboard'

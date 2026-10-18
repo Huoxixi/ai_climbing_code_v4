@@ -3,6 +3,7 @@ import math
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import cv2
@@ -260,12 +261,77 @@ class ActionLifecycleTests(unittest.TestCase):
             time.sleep(.01)
         self.fail("action task did not finish")
 
+    def test_existing_analysis_retains_actions_and_recap_without_preparing_media(self):
+        before = copy.deepcopy(self.store.get(self.id, 'alice', private=True))
+        data = self.client.get(self.url).json()
+        self.assertEqual(data['task']['status'], 'idle')
+        self.assertIsNone(data['result_version'])
+        self.assertFalse(data['media_ready'])
+        self.assertTrue(data['result']['groups'])
+        self.assertTrue(data['result']['motion_summary'])
+        self.assertEqual(data['result']['torso_trajectory']['status'], 'insufficient')
+        self.assertEqual(data['result']['torso_trajectory']['segments'], [])
+        keys = {metric['key'] for metric in data['result']['metrics']}
+        self.assertTrue({'route_total', 'route_used', 'route_usage', 'duration'} <= keys)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.store.get(self.id, 'alice', private=True), before)
+
+    def test_read_only_torso_route_uses_four_limb_contact_window(self):
+        from test_replay_torso_trajectory import fixture as torso_fixture
+        raw = evidence()
+        raw['holds'] = torso_fixture()['holds']
+        raw['attempt']['contacts'] = [{'limb': limb, 'hold_id': 1, 'start_time_seconds': .5 if limb == 'right_foot' else 0, 'end_time_seconds': 6}
+                                    for limb in ('left_hand','right_hand','left_foot','right_foot')]
+        self.store.update(self.id, result=raw)
+        before = copy.deepcopy(self.store.get(self.id, 'alice', private=True))
+        data = self.client.get(self.url).json()['result']
+        self.assertEqual(data['torso_trajectory']['version'], 'registered-torso-center-trajectory-v2')
+        self.assertEqual(data['torso_trajectory']['start_seconds'], .5)
+        self.assertEqual(data['route_usage']['route_hold_ids'], ['1', '2'])
+        self.assertEqual(data['route_usage']['used_hold_ids'], ['1'])
+        self.assertEqual(self.store.get(self.id, 'alice', private=True), before)
+        self.assertEqual(self.calls, [])
+
+    def test_legacy_action_read_recovers_wall_evidence_once_without_saving_or_rendering(self):
+        legacy = evidence()
+        for sample in legacy['pose_samples']:
+            sample.pop('wall_reference_transform')
+        self.store.update(self.id, result=legacy)
+        before = copy.deepcopy(self.store.get(self.id, 'alice', private=True))
+        with patch('core.replay_action_jobs.prepare_motion_evidence', return_value=evidence()) as recovery:
+            for _ in range(2):
+                data = self.client.get(self.url).json()['result']
+                self.assertGreater(data['motion_summary']['coverage'], .95)
+                self.assertEqual(data['segmentation_basis'], 'significant_axis_displacement')
+            recovery.assert_called_once()
+        self.assertEqual(self.store.get(self.id, 'alice', private=True), before)
+        self.assertEqual(self.calls, [])
+
+    def test_algorithm_update_preserves_reviewed_event_times_in_new_read_only_groups(self):
+        previous = organize({'result': evidence()})
+        event = {'id': 'kept-review', 'limb': 'left_hand', 'action': 'move',
+                 'start_seconds': .5, 'end_seconds': 1.5, 'facts': [],
+                 'evidence_status': 'human_confirmed', 'event_status': 'human_confirmed'}
+        previous['groups'][0]['events'] = [event]
+        previous['algorithm_version'] = 'source-torso-chain-local-naming-v6'
+        job = self.store.get(self.id, 'alice', private=True)
+        self.store.update(self.id, action_result={'id': 'old-reviewed-version', 'result': previous,
+            'fingerprint': self.manager.fingerprint(job, previous['algorithm_version'])})
+        before = copy.deepcopy(self.store.get(self.id, 'alice', private=True))
+        data = self.client.get(self.url).json()
+        events = [e for g in data['result']['groups'] for e in g['events'] if e['id'] == 'kept-review']
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0]['start_seconds'], events[0]['end_seconds']), (.5, 1.5))
+        self.assertEqual(events[0]['event_status'], 'human_confirmed')
+        self.assertEqual(self.store.get(self.id, 'alice', private=True), before)
+
     def test_owner_cache_export_and_range(self):
         self.assertEqual(self.client.get(self.url, headers={"x-user": "bob"}).status_code, 404)
         self.assertEqual(self.client.post(self.url, json={}).status_code, 202)
         data = self.wait(); version = data["result_version"]
         self.assertEqual(data["task"]["status"], "succeeded")
-        self.assertTrue(self.calls[-1]['preserve_base'])
+        self.assertTrue(self.calls[-1]['analysis_right'])
+        self.assertFalse(self.calls[-1]['preserve_base'])
         self.assertFalse(self.calls[-1]['annotations'])
         self.assertEqual(self.calls[-1]['speed'], 1)
         self.assertEqual(self.calls[-1]['summary_seconds'], 0)

@@ -1,0 +1,10 @@
+{
+  "mode": "browser-only",
+  "entry": "browser-replay.html",
+  "installer": {
+    "file": "ClimbingAssistant-Setup-0.1.17-local.20261010.exe",
+    "url": "https://github.com/Huoxixi/climbing-assistant-local/releases/download/v0.1.17-local.20261010/ClimbingAssistant-Setup-0.1.17-local.20261010.exe",
+    "bytes": 58992128,
+    "sha256": "f65c74341c7945c2f4ebd27d644ca9798ed8f1f7d00a6394e27a22208f8fe5b0"
+  }
+}
