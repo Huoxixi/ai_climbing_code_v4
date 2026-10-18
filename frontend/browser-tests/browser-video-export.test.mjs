@@ -18,8 +18,12 @@ const report={}
 const ffmpeg=process.env.CLIMB_BROWSER_FFMPEG||resolve(root,'../../.tools/boulder-python/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe')
 function independentlyDecode(path){
   if(!existsSync(ffmpeg))return null
-  const output=execFileSync(ffmpeg,['-nostdin','-v','error','-progress','pipe:1','-nostats','-i',path,'-f','null','-'],{windowsHide:true,encoding:'utf8'})
-  const frames=Number([...output.matchAll(/^frame=(\d+)/gm)].at(-1)[1]),duration=Number([...output.matchAll(/^out_time_us=(\d+)/gm)].at(-1)[1])/1e6
+  // FFmpeg 6 progress ends at the last frame's PTS; FFmpeg 7 reports its end.
+  // Decode every frame and use the actual PTS + duration in its time base.
+  const output=execFileSync(ffmpeg,['-nostdin','-v','error','-i',path,'-map','0:v:0','-fps_mode','passthrough','-f','framecrc','-'],{windowsHide:true,encoding:'utf8'})
+  const timeBase=output.match(/^#tb 0:\s*(\d+)\/(\d+)/m),decoded=[...output.matchAll(/^\s*0,\s*(-?\d+),\s*(-?\d+),\s*(\d+),/gm)]
+  assert.ok(timeBase&&decoded.length,'independent decoder must produce timestamped frames')
+  const last=decoded.at(-1),frames=decoded.length,duration=(Number(last[2])+Number(last[3]))*Number(timeBase[1])/Number(timeBase[2])
   assert.equal(frames,27,'a floating-point time boundary must not create a duplicate final frame');assert.ok(Math.abs(duration-.9)<.001)
   return {frames,duration}
 }
