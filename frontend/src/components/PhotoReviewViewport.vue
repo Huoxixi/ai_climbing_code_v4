@@ -1,6 +1,6 @@
 <template>
   <div class="photo-review-viewer">
-    <div class="photo-review-viewer__tools" aria-label="照片缩放">
+    <div class="photo-review-viewer__tools" aria-label="照片缩放" title="触摸板双指或滚轮滑动查看 · 捏合或按钮缩放">
       <button type="button" :disabled="zoom <= 1" @click="scale(zoom / 1.25)">缩小</button>
       <output aria-label="照片缩放比例">{{ Math.round(zoom * 100) }}%</output>
       <button type="button" :disabled="zoom >= 8" @click="scale(zoom * 1.25)">放大</button>

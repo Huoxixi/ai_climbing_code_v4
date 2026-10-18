@@ -19,12 +19,4 @@ os.environ['APP_ENV']='development'
 os.environ['PILOT_AUTH_ENABLED']='false'
 os.environ['PILOT_USERS_FILE']=str(DATA/'data/pilot_users.json')
 os.environ['PILOT_AUDIT_FILE']=str(DATA/'data/pilot_audit.jsonl')
-from main import app
-
-
-@app.on_event('shutdown')
-def shutdown_photos():
-    from main import climb_replay_manager, photo_workflow, photo_route_jobs
-    photo_workflow.close(); photo_route_jobs.close()
-    if climb_replay_manager is not None:
-        climb_replay_manager.close()
+from boulder_local_app import app

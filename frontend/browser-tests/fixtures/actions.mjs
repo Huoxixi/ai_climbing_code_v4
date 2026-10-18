@@ -1,5 +1,6 @@
 // Constructed events only. This fixture contains no climber, photo or user record.
 export const organized = {
+  event_validation: { analysis_valid:true,distinct_event_windows:3,reasons:[],message:'' },
   source_duration_seconds: 8,
   video: { duration_seconds: 8, fps: 24, frame_count: 192, width: 640, height: 360 },
   holds: [{ id: '1' }],
@@ -27,12 +28,12 @@ export const organized = {
     { kind: 'unknown', label: '未观测', percent: 25, seconds: 2 }] },
 }
 
-export async function syntheticMedia(browser) {
+export async function syntheticMedia(browser, size = {width:640,height:360}) {
   const page = await browser.newPage()
   try {
-    const data = await page.evaluate(async () => {
+    const data = await page.evaluate(async size => {
       const canvas = document.createElement('canvas')
-      canvas.width = 640; canvas.height = 360
+      canvas.width = size.width; canvas.height = size.height
       const context = canvas.getContext('2d')
       const stream = canvas.captureStream(24)
       const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' })
@@ -42,14 +43,14 @@ export async function syntheticMedia(browser) {
       recorder.start()
       let frame = 0
       const timer = setInterval(() => {
-        context.fillStyle = '#263b46'; context.fillRect(0, 0, 640, 360)
+        context.fillStyle = '#263b46'; context.fillRect(0, 0, canvas.width, canvas.height)
         context.fillStyle = '#e3bb26'; context.fillRect(20 + (frame++ % 120) * 3, 160, 40, 40)
       }, 1000 / 24)
       await new Promise(resolve => setTimeout(resolve, 8000))
       clearInterval(timer); recorder.stop(); await stopped
       stream.getTracks().forEach(track => track.stop())
       return Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()))
-    })
+    }, size)
     return Buffer.from(data)
   } finally { await page.close() }
 }

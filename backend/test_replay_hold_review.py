@@ -10,10 +10,41 @@ from fastapi import HTTPException
 from core.climb_replay import (ClimbReplayStore, ReplayHoldPoint, VideoInfo,
                                _interpolated_hold_polygons, _multi_frame_clicked_polygon,
                                _registered_hold_polygons,
-                               boxed_hold_polygon, clicked_hold_polygon)
+                               boxed_hold_polygon, clicked_hold_polygon, existing_hold_mask)
 
 
 class ReplayHoldReviewTests(unittest.TestCase):
+    def test_basic_box_excludes_existing_touching_hold_before_detection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'adjacent.mp4'
+            image=np.full((160,200,3),(180,205,220),np.uint8)
+            cv2.rectangle(image,(60,60),(94,92),(170,125,20),-1)
+            cv2.rectangle(image,(95,60),(118,87),(170,125,20),-1)
+            writer=cv2.VideoWriter(str(source),cv2.VideoWriter_fourcc(*'mp4v'),4,(200,160))
+            for _ in range(4):writer.write(image)
+            writer.release()
+            info=VideoInfo(200,160,4,4,1,source.stat().st_size)
+            store=ClimbReplayStore(root/'store')
+            job=store.create(owner='alice',route_id=None,route_color='青色',source=source,
+                original_name='adjacent.mp4',info=info,consent={},retention_mode='keep_private_original')
+            old={'id':1,'polygon':[[.3,.375],[.47,.375],[.47,.575],[.3,.575]],'bbox':[.3,.375,.17,.2]}
+            draft={'holds':[old],'hold_evidence':{'reference_frame':0}}
+            store.update(job['id'],status='awaiting_hold_review',hold_draft=draft)
+            preview=store.preview_hold_at_point(job['id'],'alice',ReplayHoldPoint(
+                point_xy=[.45,.46],time_seconds=0,region_xyxy=[.27,.34,.62,.61]))
+            self.assertGreaterEqual(min(p[0] for p in preview['source_polygon']),95/200)
+            self.assertEqual(store.get(job['id'],'alice',private=True)['hold_draft'],draft)
+            confirmed=store.add_hold_at_point(job['id'],'alice',ReplayHoldPoint(
+                point_xy=[.45,.46],time_seconds=0,region_xyxy=[.27,.34,.62,.61],proposal_id=preview['proposal_id']))
+            self.assertEqual(len(confirmed['hold_draft']['holds']),2)
+            self.assertEqual(confirmed['hold_draft']['holds'][0],old)
+
+    def test_exclusion_follows_contour_and_camera_transform(self):
+        hold={'id':1,'polygon':[[.2,.2],[.4,.2],[.2,.4]],'bbox':[.2,.2,.2,.2]}
+        mask=existing_hold_mask([hold],np.array([[1,0,10],[0,1,0],[0,0,1]],float),100,100)
+        self.assertEqual(mask[25,15],255)
+        self.assertEqual(mask[38,28],0,'do not exclude empty corners of a bounding box')
+
     def test_rough_region_finds_hold_even_when_center_is_wall(self):
         frame = np.full((100, 120, 3), (180, 205, 220), dtype=np.uint8)
         cv2.rectangle(frame, (42, 60), (59, 76), (170, 125, 20), -1)
@@ -112,7 +143,10 @@ class ReplayHoldReviewTests(unittest.TestCase):
             keep = {"id": 1, "bbox": [.1, .1, .12, .12], "polygon": [[.1, .1], [.22, .1],
                     [.22, .22], [.1, .22]], "contour_source": "climbing_model_native_mask",
                     "identity_source": "multi_frame_geometry", "route_candidate": True,
-                    "appearances": 3, "score": .9, "color_group": "灰色"}
+                    "appearances": 3, "score": .9, "color_group": "灰色",
+                    "contour_complete": True,
+                    "contour_evidence": {"version": "native-colour-contour-support-v1",
+                                         "support_frames": [0,1,2]}}
             reject = {"id": 2, "bbox": [.6, .5, .12, .12], "polygon": [[.6, .5], [.72, .5],
                       [.72, .62], [.6, .62]], "contour_source": "climbing_model_native_mask",
                       "identity_source": "multi_frame_geometry", "route_candidate": False,
@@ -134,8 +168,8 @@ class ReplayHoldReviewTests(unittest.TestCase):
                 return {"rendered": True}
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 updated = store.refine_sampled_holds(job["id"], "alice")
-            self.assertEqual(len(updated["result"]["holds"]), 1)
-            self.assertEqual(updated["result"]["hold_evidence"]["selection"],
+            self.assertEqual(len(updated["hold_edit_draft"]["holds"]), 1)
+            self.assertEqual(updated["hold_edit_draft"]["hold_evidence"]["selection"],
                              "minimal_colour_geometry_needs_review")
             repeated = store.refine_sampled_holds(job["id"], "alice")
             self.assertEqual(len(repeated["hold_review_history"]), 1)
@@ -192,9 +226,9 @@ class ReplayHoldReviewTests(unittest.TestCase):
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 updated = store.add_hold_at_point(job["id"], "alice", ReplayHoldPoint(
                     point_xy=[53 / 120, .89], time_seconds=0, region_xyxy=region))
-            self.assertEqual(updated["result"]["holds"][0]["polygon"], boxed_preview["reference_polygon"])
+            self.assertEqual(updated["hold_edit_draft"]["holds"][0]["polygon"], boxed_preview["reference_polygon"])
             self.assertEqual(updated["hold_review_history"][0]["region_xyxy"], region)
-            self.assertEqual(updated["result"]["holds"][0]["identity_source"],
+            self.assertEqual(updated["hold_edit_draft"]["holds"][0]["identity_source"],
                              "user_confirmed_video_click")
             self.assertEqual(updated["hold_review_history"][0]["operation"], "add_hold_at_point")
             with self.assertRaises(HTTPException) as error:
@@ -204,18 +238,19 @@ class ReplayHoldReviewTests(unittest.TestCase):
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 twice = store.add_hold_at_point(job["id"], "alice", ReplayHoldPoint(
                     point_xy=[24 / 120, .37], time_seconds=0))
-            self.assertEqual(len(twice["result"]["holds"]), 2)
+            self.assertEqual(len(twice["hold_edit_draft"]["holds"]), 2)
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 undone = store.undo_clicked_hold(job["id"], "alice", 1)
-            self.assertEqual(len(undone["result"]["holds"]), 1)
-            self.assertEqual(undone["result"]["holds"][0]["review_version"], 2)
+            self.assertEqual(len(undone["hold_edit_draft"]["holds"]), 1)
+            self.assertEqual(undone["hold_edit_draft"]["holds"][0]["review_version"], 2)
             self.assertEqual(undone["hold_review_history"][-1]["target_review_version"], 1)
             with self.assertRaises(HTTPException) as error:
                 store.undo_clicked_hold(job["id"], "alice", 1)
             self.assertEqual(error.exception.status_code, 409)
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 last_undone = store.undo_last_clicked_hold(job["id"], "alice")
-            self.assertEqual(last_undone["result"]["holds"], [])
+            self.assertEqual(last_undone["hold_edit_draft"]["holds"], [])
+            self.assertEqual(last_undone["result"], result)
             self.assertEqual(last_undone["hold_review_history"][-1]["target_review_version"], 2)
 
     def test_repeated_candidate_is_promoted_and_contacts_are_recomputed_without_cloud(self):
@@ -258,6 +293,9 @@ class ReplayHoldReviewTests(unittest.TestCase):
             with patch("core.climb_replay.align_to_reference", return_value=(np.eye(3), {})), \
                  patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 updated = store.promote_hold_candidate(job["id"], "alice", 0)
+                self.assertEqual(updated["result"], result)
+                self.assertTrue(updated["holds_pending_local_analysis"])
+                updated = store.confirm_all_holds(job["id"], "alice", updated["holds_revision"])
             self.assertEqual(updated["result"]["holds"][-1]["id"], 2)
             self.assertEqual(updated["result"]["holds"][-1]["identity_source"],
                              "user_confirmed_video_candidate")
@@ -271,7 +309,7 @@ class ReplayHoldReviewTests(unittest.TestCase):
                 store.promote_hold_candidate(job["id"], "alice", 0)
             with patch("core.climb_replay.render_replay_overlay_video", side_effect=fake_render):
                 reverted = store.undo_clicked_hold(job["id"], "alice", 1)
-            self.assertEqual(len(reverted["result"]["holds"]), 1)
+            self.assertEqual(len(reverted["hold_edit_draft"]["holds"]), 1)
             self.assertEqual(reverted["hold_review_history"][-1]["operation"], "undo_promote_candidate")
 
 

@@ -1,0 +1,132 @@
+import { chromium } from '@playwright/test'
+import test, { after } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdir } from 'node:fs/promises'
+import { startFixtureServer } from './fixtures/server.mjs'
+
+const base=await startFixtureServer(4214)
+const browser=await chromium.launch({headless:true})
+const artifact=new URL('../../.tmp/hold-editor-browser/',import.meta.url)
+await mkdir(artifact,{recursive:true})
+after(()=>browser.close())
+for(const width of [1280,390])test(`single-frame outline editor exact saves, zoom and recovery at ${width}px`,async()=>{
+  const page=await browser.newPage({viewport:{width,height:width===390?844:1000}})
+  page.setDefaultTimeout(10000)
+  let image, preview, frameCount=0, writes=[],errors=[],failNextPreview=false
+  page.on('pageerror',e=>errors.push(e.message))
+  const initial=await browser.newPage()
+  image=await initial.evaluate(()=>{const c=document.createElement('canvas');c.width=720;c.height=1280;const x=c.getContext('2d');x.fillStyle='#b8b3a2';x.fillRect(0,0,720,1280);x.fillStyle='#a6a08f';for(let i=0;i<12;i++){x.beginPath();x.moveTo(i*70,0);x.lineTo(720-i*30,1280);x.strokeStyle='#aaa492';x.stroke()}x.fillStyle='#dcb33a';x.beginPath();x.moveTo(160,170);x.lineTo(320,200);x.lineTo(350,320);x.lineTo(240,380);x.lineTo(150,280);x.closePath();x.fill();return c.toDataURL('image/png')})
+  await initial.close()
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),path=new URL(request.url()).pathname,payload=request.postDataJSON()
+    writes.push({path,payload})
+    if(path.endsWith('/frame'))return route.fulfill({json:{frame_token:'f'.repeat(32),frame_index:payload.frame_index??Math.round((payload.time_seconds||0)*24),time_seconds:(payload.frame_index||0)/24,frame_count:192,fps:24,width:720,height:1280,aligned:true,quality:'保留的原始清晰度',image_data_url:image,holds:[{id:4,polygon:[[.6,.12],[.7,.12],[.7,.2],[.6,.2]]},{id:5,polygon:[[.6,.3],[.7,.3],[.7,.4],[.6,.4]]}],holds_revision:`r${frameCount++}`}})
+    if(path.endsWith('/preview')){
+      assert.ok(['manual','region'].includes(payload.mode))
+      if(failNextPreview){failNextPreview=false;return route.fulfill({status:503,json:{detail:'构造处理失败'}})}
+      preview=structuredClone(payload.polygon)
+      return route.fulfill({json:{candidates:[{proposal_id:'p'.repeat(32),source_polygon:preview,reference_polygon:preview,contour_source:'user_drawn_contour'}]}})
+    }
+    if(path.endsWith('/confirm'))return route.fulfill({json:{id:'editor-fixture',video:{duration_seconds:8,fps:24},hold_draft:{holds:[{id:1,polygon:preview}],hold_evidence:{reference_frame:0}}}})
+    throw new Error(`unexpected API ${path}`)
+  })
+  try{
+    await page.goto(base+'/e2e/hold-editor-harness.html')
+    const surface=page.getByRole('application',{name:'岩点轮廓画布'})
+    await surface.waitFor()
+    assert.equal(await page.getByRole('button',{name:'自由描边',exact:true}).getAttribute('aria-pressed'),'true')
+    const rect=await surface.boundingBox()
+    assert.equal(await page.getByRole('button',{name:'多边形描边',exact:true}).count(),0)
+    assert.equal(await page.getByRole('button',{name:'框选识别区',exact:true}).count(),0)
+    await page.mouse.move(rect.x+rect.width*.2,rect.y+rect.height*.12);await page.mouse.down()
+    for(const [x,y] of [[.4,.13],[.45,.2],[.3,.26],[.18,.2],[.2,.12]])await page.mouse.move(rect.x+x*rect.width,rect.y+y*rect.height,{steps:4})
+    await page.mouse.up()
+    const before=await page.locator('.edited-contour').getAttribute('points')
+    const viewTop=(await page.locator('.editor-viewport').boundingBox()).y
+    const zoomSizes=await page.evaluate(()=>new Promise(resolve=>{
+      const select=document.querySelector('[aria-label="单帧放大倍数"]'),values=[],started=performance.now()
+      select.value='4';select.dispatchEvent(new Event('change',{bubbles:true}))
+      function sample(){values.push(document.querySelector('.editor-image').getBoundingClientRect().width);if(performance.now()-started<340)requestAnimationFrame(sample);else resolve(values)}
+      requestAnimationFrame(sample)
+    }))
+    assert.ok(zoomSizes.some(n=>n>zoomSizes[0]+2&&n<zoomSizes.at(-1)-2),'single-frame zoom has intermediate sizes')
+    assert.ok(Math.abs((await page.locator('.editor-viewport').boundingBox()).y-viewTop)<1,'overview does not push the viewport during zoom')
+    await page.getByLabel('单帧放大倍数').selectOption('4')
+    assert.equal(await page.locator('.edited-contour').getAttribute('points'),before)
+    await page.getByLabel('单帧放大倍数').selectOption('1')
+    await page.waitForFunction(()=>document.querySelector('.editor-viewport')?.dataset.zoomAnimating==='false')
+    await page.getByRole('button',{name:'核对当前轮廓',exact:true}).click()
+    await page.getByRole('button',{name:'确认保存这个岩点',exact:true}).waitFor()
+    const expected=structuredClone(preview)
+    await page.screenshot({path:new URL(`editor-${width}.png`,artifact).pathname.replace(/^\/([A-Za-z]:)/,'$1'),fullPage:true})
+    await page.getByRole('button',{name:'确认保存这个岩点',exact:true}).click()
+    await page.getByText('已保存到岩点草稿，可继续补点').waitFor()
+    const saved=await page.evaluate(()=>window.holdEditorHarness.saved)
+    assert.deepEqual(saved[0].hold_draft.holds[0].polygon,expected)
+    assert.equal(writes.filter(x=>x.path.endsWith('/preview')).length,1,'confirmation does not rerun inference')
+    assert.ok(writes.every(x=>!x.path.includes('/analysis/')&&!x.path.includes('/coaching/')))
+    await page.getByRole('button',{name:'下一帧',exact:true}).click()
+    await page.getByText('第 2 帧',{exact:false}).waitFor()
+    // Real pointer strokes exercise freehand, keyboard refinement and the
+    // brush-to-contour boundary; zooming must not change original coordinates.
+    await page.getByRole('button',{name:'自由描边',exact:true}).click()
+    await surface.scrollIntoViewIfNeeded()
+    const free=await surface.boundingBox()
+    await page.mouse.move(free.x+free.width*.2,free.y+free.height*.12);await page.mouse.down()
+    for(const [x,y] of [[.35,.12],[.35,.25],[.2,.25],[.2,.12]])await page.mouse.move(free.x+x*free.width,free.y+y*free.height,{steps:4})
+    await page.mouse.up()
+    assert.ok(await page.locator('.edited-contour').getAttribute('points'))
+    const refined=await page.locator('.edited-contour').getAttribute('points')
+    await page.getByRole('button',{name:'补画',exact:true}).click()
+    await surface.scrollIntoViewIfNeeded()
+    const brush=await surface.boundingBox()
+    await page.mouse.move(brush.x+brush.width*.34,brush.y+brush.height*.17);await page.mouse.down()
+    await page.mouse.move(brush.x+brush.width*.36,brush.y+brush.height*.18,{steps:4});await page.mouse.up()
+    assert.notEqual(await page.locator('.edited-contour').getAttribute('points'),refined)
+    await page.getByRole('button',{name:'撤销',exact:true}).click()
+    assert.equal(await page.locator('.edited-contour').getAttribute('points'),refined)
+    await page.getByRole('button',{name:'清空轮廓',exact:true}).click()
+    await page.getByLabel('选择要修改轮廓的岩点').selectOption('4')
+    assert.equal(await page.getByRole('button',{name:'自由描边',exact:true}).getAttribute('aria-pressed'),'true','existing hold selection keeps the requested default tool')
+    page.once('dialog',dialog=>dialog.accept())
+    await page.getByLabel('选择要修改轮廓的岩点').selectOption('5')
+    assert.equal(await page.getByRole('button',{name:'撤销',exact:true}).isDisabled(),true,'changing identity cannot undo another hold geometry')
+    page.once('dialog',dialog=>dialog.accept())
+    await page.getByLabel('选择要修改轮廓的岩点').selectOption('0')
+    await page.getByRole('button',{name:'自由描边',exact:true}).click()
+    await surface.scrollIntoViewIfNeeded()
+    const b=await surface.boundingBox()
+    await page.mouse.move(b.x+b.width*.2,b.y+b.height*.12);await page.mouse.down()
+    for(const [x,y] of [[.4,.12],[.4,.25],[.2,.25],[.2,.12]])await page.mouse.move(b.x+b.width*x,b.y+b.height*y,{steps:4})
+    await page.mouse.up()
+    const retryContour=await page.locator('.edited-contour').getAttribute('points')
+    const canvasBeforeError=await surface.boundingBox()
+    failNextPreview=true
+    await page.getByRole('button',{name:'核对当前轮廓',exact:true}).click()
+    await page.getByRole('alert').filter({hasText:'构造处理失败'}).waitFor()
+    assert.deepEqual(await surface.boundingBox(),canvasBeforeError,'feedback does not move or resize drawing surface')
+    assert.equal(await page.locator('.editor-inspector .editor-feedback').count(),1,'feedback stays in the tools panel')
+    assert.equal(await page.locator('.edited-contour').getAttribute('points'),retryContour,'failed review preserves freehand work')
+    await page.getByRole('button',{name:'核对当前轮廓',exact:true}).click()
+    await page.getByRole('button',{name:'确认保存这个岩点',exact:true}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'自由描边',exact:true}).isEnabled(),true)
+    assert.equal(await page.getByRole('button',{name:'调整顶点',exact:true}).count(),0)
+    assert.equal(await page.getByRole('button',{name:'删除选中顶点',exact:true}).count(),0)
+    await page.getByRole('button',{name:'清空轮廓',exact:true}).click()
+    await page.getByRole('button',{name:'画线圈选',exact:true}).click()
+    await surface.scrollIntoViewIfNeeded()
+    const lines=await surface.boundingBox(),beforeLines=writes.filter(x=>x.path.endsWith('/preview')).length
+    const points=[[.2,.12],[.4,.12],[.4,.25],[.2,.25],[.2,.12]]
+    for(let i=0;i<4;i++){
+      await page.mouse.move(lines.x+lines.width*points[i][0],lines.y+lines.height*points[i][1]);await page.mouse.down()
+      await page.mouse.move(lines.x+lines.width*points[i+1][0],lines.y+lines.height*points[i+1][1],{steps:4});await page.mouse.up()
+      if(i<3)assert.equal(writes.filter(x=>x.path.endsWith('/preview')).length,beforeLines,'open lines do not trigger detection')
+    }
+    await page.getByRole('button',{name:'确认保存这个岩点',exact:true}).waitFor()
+    const request=writes.filter(x=>x.path.endsWith('/preview')).at(-1).payload
+    assert.equal(request.mode,'region')
+    assert.equal(request.polygon.length,4,'one drag creates one straight edge')
+    assert.deepEqual(errors,[])
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal page overflow')
+  }finally{await page.close()}
+})

@@ -1,0 +1,6 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><div id="app"></div><script type="module">
+import { createApp, h } from 'vue'
+import LocalReplayPlayer from '../src/components/LocalReplayPlayer.vue'
+createApp({render:()=>h(LocalReplayPlayer,{job:{id:'pose-start',status:'succeeded',skeleton_only:true,
+ media:{source_video:{status:'available'}}, result:{skeleton_only:true,video:{width:640,height:360,fps:24,frame_count:192,duration_seconds:8}}}})}).mount('#app')
+</script></body></html>

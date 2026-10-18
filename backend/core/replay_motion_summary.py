@@ -1,6 +1,7 @@
 """Observed body-motion statistics on the original video clock."""
 from copy import deepcopy
 import math
+from .replay_torso_trajectory import torso_trajectory
 
 
 def prepare_motion_evidence(result, source, cancelled=None):
@@ -84,6 +85,7 @@ def enrich_motion_summary(organized):
     output = deepcopy(organized)
     motion = motion_summary(output)
     output['motion_summary'] = motion
+    output['torso_trajectory'] = torso_trajectory(output)
     output['metrics'] = [m for m in output.get('metrics',[]) if m['key'] != 'longest_still']
     longest = motion['longest_still']
     output['metrics'].append({'key':'longest_still', 'label':'最长可见姿态停留',

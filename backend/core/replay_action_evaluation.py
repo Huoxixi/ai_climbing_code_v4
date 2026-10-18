@@ -52,6 +52,8 @@ def evaluate(dataset):
             raise ValueError("Every attempt needs participant/route groups and a split")
         left, right = "p:"+str(row["participant_group"]), "r:"+str(row["route_group"])
         parent[root(left)] = root(right)
+        if row.get('original_video_group'):
+            parent[root('v:'+str(row['original_video_group']))] = root(right)
     splits = defaultdict(set)
     for row in rows:
         splits[root("p:"+str(row["participant_group"]))].add(row["split"])
@@ -122,6 +124,8 @@ def evaluate(dataset):
         for code in classes:
             counts[code]["groups"].add(group)
     results = {}
+    durations = [row.get('duration_seconds') for row in holdout]
+    minutes = sum(durations)/60 if durations and all(finite(t) and t>0 for t in durations) else None
     for code, stat in counts.items():
         precision = stat["correct"]/stat["predictions"] if stat["predictions"] else None
         recall = stat["correct"]/stat["eligible"] if stat["eligible"] else None
@@ -134,6 +138,7 @@ def evaluate(dataset):
                       and recall is not None and recall >= .85 and interval and interval[0] >= .90 and not stat["unsupported"])
         results[code] = {k: v for k, v in stat.items() if k not in {"groups", "group_predictions", "timing_errors"}}
         results[code].update(precision=precision, recall=recall, coverage=stat['correct']/stat['all_references'] if stat['all_references'] else None,
+                             false_positives_per_minute=(stat['predictions']-stat['correct'])/minutes if minutes else None,
                              eligible_opportunity_rate=stat['eligible']/stat['all_references'] if stat['all_references'] else None,
                              missed_eligible=stat['eligible']-stat['correct'],
                              candidate_precision=stat['candidate_correct']/stat['candidate_predictions'] if stat['candidate_predictions'] else None,

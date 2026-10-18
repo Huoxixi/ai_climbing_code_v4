@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # 🌟 核心修复：Pydantic V2 的配置字典
     model_config = SettingsConfigDict(
-        env_file=".env", 
+        env_file=None if os.getenv("PYTHON_DOTENV_DISABLED") == "1" else ".env",
         env_file_encoding='utf-8',
         extra='ignore'  # 告诉 Pydantic 忽略 .env 里没定义在上面的多余变量
     )

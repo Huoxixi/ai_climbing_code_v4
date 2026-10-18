@@ -490,9 +490,8 @@ class CoachingEngine:
 
     def __init__(self, provider=None, knowledge_root: Path | None = None):
         self.model = os.getenv("REPLAY_COACHING_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
-        api_key = os.getenv("REPLAY_COACHING_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or ""
         self._provider = provider
-        self._api_key = api_key.strip()
+        self._api_key = ""  # Retire implicit Bailian generation; retain historical results.
         self._base = os.getenv("REPLAY_COACHING_BASE_URL", DEFAULT_BASE_URL)
         self.knowledge_root = Path(knowledge_root) if knowledge_root else Path(__file__).resolve().parents[2] / "docs" / "bouldering-knowledge"
 

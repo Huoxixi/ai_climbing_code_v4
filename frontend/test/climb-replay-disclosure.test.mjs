@@ -20,7 +20,7 @@ const findClass = name => elements.find(({ node }) => hasClass(node, name))
 test('精简后的复盘模板可以编译，低频内容使用默认关闭的原生折叠', () => {
   assert.deepEqual(errors, [])
   assert.deepEqual(compileTemplate({ source: descriptor.template.content, filename: 'ClimbReplayPage.vue', id: 'replay-test' }).errors, [])
-  for (const name of ['result-details', 'media-retention', 'analysis-evidence', 'shooting-guide']) {
+  for (const name of ['result-details', 'media-retention', 'analysis-evidence']) {
     const { node } = findClass(name)
     assert.equal(node.tag, 'details', name)
     assert.equal(node.props.some(prop => (prop.type === 6 && prop.name === 'open') || (prop.type === 7 && prop.arg?.content === 'open')), false, name)
@@ -28,22 +28,23 @@ test('精简后的复盘模板可以编译，低频内容使用默认关闭的�
   }
 })
 
-test('视频、当前动作、动作顺序、状态和授权不会被折叠隐藏', () => {
-  for (const name of ['video-stage', 'action-focus', 'event-timeline', 'analysis-state', 'primary-action', 'retention-options']) {
-    const match = findClass(name)
+test('视频、当前动作、动作顺序、状态和上传入口不会被折叠隐藏', () => {
+  for (const name of ['video-stage', 'action-focus', 'event-timeline', 'analysis-state', 'primary-action']) {
+    const match = elements.find(({ node, ancestors }) => hasClass(node, name) && !ancestors.some(parent => parent.tag === 'details'))
     assert.ok(match, name)
     assert.equal(match.ancestors.some(node => node.tag === 'details'), false, name)
   }
   const consent = elements.find(({ node }) => directive(node, 'model') === 'sampleConsent')
-  assert.ok(consent)
-  assert.equal(consent.ancestors.some(node => node.tag === 'details'), false)
+  assert.equal(consent, undefined)
+  assert.equal(findClass('shooting-guide'), undefined)
+  assert.equal(findClass('retention-options'), undefined)
 })
 
 test('统一复盘保留文件管理，旧手动动作编辑退出主流程', () => {
   const expected = {
     'deleteSourceVideo': 'media-retention',
     'deleteOverlayVideo': 'media-retention',
-    'deleteEntireReplay': 'media-retention',
+    'deleteEntireReplay': 'replay-record-toolbar',
   }
   for (const [handler, parent] of Object.entries(expected)) {
     const match = elements.find(({ node }) => directive(node, 'on', 'click') === handler)
@@ -56,10 +57,12 @@ test('统一复盘保留文件管理，旧手动动作编辑退出主流程', ()
   assert.match(source, /<UnifiedReplayPlayer/)
 })
 
-test('历史在空闲入口可见，查看某次复盘时收起且切换记录重置折叠状态', () => {
-  const recent = findClass('recent-section').node
-  assert.equal(recent.tag, 'details')
-  assert.equal(directive(recent, 'bind', 'open'), '!activeJob && !selectedFile')
+test('历史以常驻入口打开分页面板，不挤走当前视频', () => {
+  const entry = elements.find(({ node, ancestors }) => directive(node, 'on', 'click') === 'historyOpen=true' && ancestors.some(parent => hasClass(parent, 'replay-heading-actions')))
+  assert.ok(entry)
+  const history = elements.find(({ node }) => node.tag === 'WorkspaceSheet' && directive(node, 'if') === 'historyOpen')
+  assert.ok(history)
+  assert.match(source, /v-for="job in pageJobs"/)
   assert.equal(directive(findClass('replay-detail-sections').node, 'bind', 'key'), 'activeJob.id')
   assert.equal(directive(findClass('result-details').node, 'bind', 'key'), 'activeJob.id')
   assert.match(source, /confirmedSegmentCount = computed/)

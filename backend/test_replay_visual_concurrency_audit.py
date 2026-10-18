@@ -44,7 +44,8 @@ class VisualReplayConcurrencyAuditTests(unittest.TestCase):
 
         def review():
             try:
-                store.promote_hold_candidate(job_id, "alice", 0)
+                staged = store.promote_hold_candidate(job_id, "alice", 0)
+                store.confirm_all_holds(job_id, "alice", staged["holds_revision"])
             except Exception as exc:
                 errors.append(exc)
 

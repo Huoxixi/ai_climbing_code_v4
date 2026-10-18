@@ -50,6 +50,9 @@ frontend/test-results/
 frontend/playwright-report/
 .local/
 .tmp/
+frontend/dist-browser/
+deploy/browser/downloads/
+backend/model_assets/rtmw-l-384x288/*.onnx
 .impeccable/
 # Member credentials and personal content live only in persistent storage.
 backend/data/accounts.sqlite3*

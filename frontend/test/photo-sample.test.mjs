@@ -30,7 +30,6 @@ test('a deployed sample asset can be downloaded and converted to an upload file'
 test('production build keeps both public samples as server assets instead of inline data', async () => {
   const sources = await Promise.all([
     '../src/components/PhotoRouteWorkflowPage.vue',
-    '../src/components/PhotoRoutesV2Page.vue',
   ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')))
 
   for (const source of sources) {

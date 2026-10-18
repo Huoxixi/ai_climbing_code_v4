@@ -23,14 +23,14 @@ test('调色盘和视频 RGB 样本能映射到最近的十二色并保留实际
   assert.equal(nearestRouteColor([132, 82, 54]).value, '棕色')
 })
 
-test('复盘页可点选样本岩点并关联保存线路', () => {
+test('复盘页直接点选视频样本岩点，历史线路服务保持兼容', () => {
   const page = readFileSync(new URL('../src/components/ClimbReplayPage.vue', import.meta.url), 'utf8')
   const service = readFileSync(new URL('../src/services/climbReplayService.js', import.meta.url), 'utf8')
   assert.match(page, /从画面点选样本岩点/)
-  assert.match(page, /type="color"/)
+  assert.doesNotMatch(page, /type="color"|name="route-color"|replay-extra-color/)
   assert.match(page, /pickColorFromFrame/)
   assert.match(page, /point_xy: point/)
-  assert.match(page, /routeId: selectedRouteId\.value/)
+  assert.doesNotMatch(page, /selectedRouteId|replay-saved-route|loadSavedRoutes|关联线路/)
   assert.match(page, /routeColorSample: colorSample\.value/)
   assert.match(service, /route_color_sample:routeColorSample/)
   assert.match(service, /route_id:routeId/)

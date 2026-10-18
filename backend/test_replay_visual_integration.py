@@ -94,7 +94,9 @@ class VisualReplayIntegrationTests(unittest.TestCase):
                 actual = probe_video(target)
                 self.assertEqual(actual.frame_count, 6 + fps * 8)
                 self.assertEqual(actual.fps, fps)
-                self.assertEqual((actual.width, actual.height), size)
+                self.assertEqual((actual.width, actual.height), (size[0] * 2, size[1]))
+                self.assertEqual(result['visual_replay']['status'], 'ready')
+                self.assertEqual(overlay['video_rect'][2:], overlay['route_map_rect'][2:])
                 self.assertEqual(overlay["analysis_frame_count"], 6)
                 self.assertEqual(result["visual_replay"]["tail_start_seconds"], 6 / fps)
                 self.assertAlmostEqual(result["visual_replay"]["total_duration_seconds"], actual.frame_count / fps)
@@ -150,6 +152,8 @@ class VisualReplayIntegrationTests(unittest.TestCase):
         after = store.get(job_id, private=True)
         path, _ = store.media_file(job_id, "alice", REPLAY_REVIEWED_OVERLAY_MEDIA_KIND)
         self.assertEqual(probe_video(path).frame_count, 6 + 192)
+        self.assertEqual((probe_video(path).width,probe_video(path).height),
+                         (before['result']['overlay']['width'],before['result']['overlay']['height']))
         self.assertEqual(after["result"]["visual_replay"]["status"], "ready")
         self.assertEqual(after["analysis_runs"], before["analysis_runs"])
         with self.assertRaises(HTTPException):
@@ -198,14 +202,15 @@ class VisualReplayIntegrationTests(unittest.TestCase):
         self.assertEqual(unavailable["result"]["visual_replay"]["status"], "unavailable")
         self.assertFalse(unavailable["result"]["visual_replay"]["can_retry"])
 
-    def test_disabled_visual_keeps_existing_resolution_and_does_not_freeze_reference(self):
+    def test_disabled_visual_keeps_equal_panes_and_does_not_freeze_reference(self):
         source, target = self.root / "wide.mp4", self.root / "wide.webm"
         sample_video(source, size=(1344, 800))
         result = evidence(source)
         with patch.dict(os.environ, {"CLIMB_REPLAY_VISUAL_ENABLED": "0"}), \
                 patch("core.climb_replay.run_visual_worker") as worker:
-            render_replay_overlay_video(source, target, result)
-        self.assertEqual(probe_video(target).width, 1344)
+            overlay = render_replay_overlay_video(source, target, result)
+        self.assertEqual(probe_video(target).width, 2560)
+        self.assertEqual(overlay['video_rect'][2:],overlay['route_map_rect'][2:])
         self.assertEqual(probe_video(target).frame_count, 6)
         worker.assert_not_called()
         self.assertFalse((self.root / REPLAY_REFERENCE_FILENAME).exists())

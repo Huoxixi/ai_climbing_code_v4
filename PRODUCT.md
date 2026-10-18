@@ -1,33 +1,19 @@
-# Product
+# 当前产品定位
 
-## Register
+本地产品是给攀岩者实际使用的抱石 App。用户导入照片或攀爬视频，确认线路岩点，观看复盘、回看动作并导出资料。旧岩板定线定位已归档至 docs/历史产品定位_定线工作区_2026-10-09.md，不能用于指导当前页面。
 
-product
+照片流程：上传原图 → 原图取色或选色 → 主动识别所选线路 → 复核、补点 → 保存。
 
-## Users
+本地视频流程：直接选择常见格式原视频 → 上传至本机并转换为统一的 H.264 MP4 → 在转换画面取色 → 识别岩点 → 补齐并确认 → 开始复盘。导入不启动识别；识别直接复用准备好的文件，不再次上传或转换。原文件保留，转换副本无声音、方向已校正；已有 500 MB 输入及前 90 秒处理范围继续适用。本地 App 的收费 AI 服务继续关闭。
 
-Indoor climbing route setters and operators use this app while designing, saving, reviewing, and iterating board routes. They need a task-focused workspace for board assets, hold placement, beta sequence editing, and AI-assisted route evaluation.
+主展示为原比例双画面、动作时间轴、必要播放控件和下方 AI 分析。基础统计以视频外小球展开。时间轴只显示编号与时间，点击回看，可慢放、循环和导出当前动作。AI 引用的时间与实际提供画面必须校验，本地原有动作结果保留。
 
-## Product Purpose
+流程能简单则简单。默认参数由开发验证并确定，用户页面不出现采样档位、实验功能、协议选择、模型内部版本或处理诊断。不将失败处理、技术判断或重复确认转嫁给用户。只保留影响结果的必要操作、费用与外部发送授权。
 
-The local single-machine product helps users manage climbing board assets and use deterministic rules to compose or review route ideas from saved board data. Success means users can quickly select the right board, understand what the AI experiment is evaluating, and move useful results back into the route-setting workspace for editing. The UI must not invent a board material, commercial model, cloud capability, or unsupported AI scope.
+复盘生成后可组合“骨架、真人、动作示意图”，默认真人＋动作示意图；骨架可叠加真人，或在通过本地全片固定镜头及人物检查的无人真实背景上播放。示意图独立完整显示，切换保留播放状态。无人背景无法核验时禁用相应组合，不生成或拼接背景。
 
-## Brand Personality
+导出提供骨架、真人、动作示意图及资料四个复选项，画面选择初始沿用观看但彼此独立；视频保留范围、速度，无声音。资料可单独导出，仅含运动数据、缺测、时间换算及提示词说明，不含原片、截图、音轨或视觉服务原始返回。历史视频及数据保留，生产发布另行授权。
 
-Precise, practical, calm. The interface should feel like a professional setting tool, not a marketing page or decorative demo.
+原始 AI 返回先保存后解析。恢复、展示与导出不新增 AI 请求；状态未知不自动重发。旧视频、历史结果、照片、账号与密钥保留。生产部署另行授权。
 
-## Anti-references
-
-Avoid landing-page styling, oversized hero sections, decorative illustration, vague AI copy, and workflows that hide which board or route is being modified.
-
-## Design Principles
-
-- Keep the active board visible before every AI action.
-- Prefer direct controls over modal-heavy workflows.
-- Make failure states useful, especially when a route cannot be recombined.
-- Preserve the existing utilitarian app shell and Element Plus component language.
-- Explain climbing-specific checks in plain operational language.
-
-## Accessibility & Inclusion
-
-Target clear readable contrast, keyboard-reachable standard controls, reduced reliance on color alone for state, and concise labels for users who are focused on route-setting decisions.
+视觉保持现有黄、灰、黑与清晰文字，优先直接操作、可见反馈、键盘可达和小窗口可用。工程检查通过不等于专业识别准确率通过。

@@ -22,13 +22,15 @@ function harness() {
   return { controller, advance, timers, updates }
 }
 
-test('the automatic recap finishes at the reading duration and only runs once for a record', () => {
+test('the controller opens an automatic pass only once; the card host controls completion', () => {
   const { controller, advance, timers } = harness()
   assert.equal(controller.ended(5.2), true)
   advance(1000)
   assert.equal(controller.state.phase, 'automatic')
   assert.equal(controller.ended(5.2), false)
-  advance(4200)
+  advance(60000)
+  assert.equal(controller.state.phase, 'automatic')
+  controller.collapse()
   assert.equal(controller.state.phase, 'collapsed')
   assert.equal(timers.size, 0)
   assert.equal(controller.ended(5.2), false)
@@ -66,13 +68,13 @@ test('record switching cancels the prior timer and returning to a seen record do
   assert.equal(controller.ended(20), false)
 })
 
-test('reduced motion gets a static reading hold and unmount cancels pending updates', () => {
+test('reduced motion keeps the automatic pass and disposal prevents updates', () => {
   const { controller, advance, timers, updates } = harness()
   controller.ended(3.6, true); advance(7999)
   assert.equal(controller.state.phase, 'automatic')
   assert.equal(controller.state.reducedMotion, true)
-  advance(1)
-  assert.equal(controller.state.phase, 'collapsed')
+  advance(60000)
+  assert.equal(controller.state.phase, 'automatic')
   controller.setRecord('b'); controller.ended(20)
   controller.dispose()
   const count = updates.length
@@ -81,9 +83,9 @@ test('reduced motion gets a static reading hold and unmount cancels pending upda
   assert.equal(updates.length, count)
 })
 
-test('opening summary before the video ends consumes its automatic presentation', () => {
+test('previewing summary before the video ends preserves its first automatic presentation', () => {
   const { controller } = harness()
   assert.equal(controller.ended(0), false)
   controller.open(); controller.collapse()
-  assert.equal(controller.ended(20), false)
+  assert.equal(controller.ended(20), true)
 })

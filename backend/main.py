@@ -27,7 +27,7 @@ from agent.experiments import run_ai_experiment
 from core.board_readiness import apply_board_readiness
 from core.photo_route_drafts import PhotoRouteStore, create_photo_route_router
 from core.photo_route_v2 import PhotoRouteJobManager, PhotoRouteV2Store, create_photo_route_v2_router
-from core.climb_replay import (AliyunReplayAnalyzer, ClimbReplayManager,
+from core.climb_replay import (ClimbReplayManager,
                                ClimbReplayStore, create_climb_replay_router)
 from core.hold_image_processing import (
     PROCESSING_VERSION,
@@ -209,7 +209,8 @@ if CLIMB_REPLAY_ENABLED:
         }
 
     climb_replay_store = ClimbReplayStore(PHOTO_ROUTE_DATA_ROOT / "climb_replay")
-    climb_replay_manager = ClimbReplayManager(climb_replay_store, AliyunReplayAnalyzer())
+    from core.replay_pose_clip import LocalClipReplayAnalyzer
+    climb_replay_manager = ClimbReplayManager(climb_replay_store, LocalClipReplayAnalyzer())
     app.include_router(create_climb_replay_router(
         climb_replay_store,
         climb_replay_manager,
@@ -225,6 +226,8 @@ photo_workflow = PhotoWorkflow(photo_route_v2_store)
 app.include_router(workflow_router(photo_workflow))
 from core.photo_route_settings import settings_router
 app.include_router(settings_router(PHOTO_ROUTE_DATA_ROOT))
+from core.replay_vision_settings import settings_router as replay_vision_settings_router
+app.include_router(replay_vision_settings_router(PHOTO_ROUTE_DATA_ROOT))
 HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images")
 PROCESSED_HOLDS_IMAGES_DIR = os.path.join(DATA_DIR, "holds_images_processed")
 HOLDS_MAPPING_FILE = os.path.join(DATA_DIR, "holds_mapping.json")

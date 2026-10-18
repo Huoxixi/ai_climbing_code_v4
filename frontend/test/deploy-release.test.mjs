@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 test('production Detectron2 cache keeps a pip-installable wheel filename', async () => {
-  const script = await readFile(new URL('../../deploy/scripts/deploy_release.sh', import.meta.url), 'utf8')
+  const script = await readFile(new URL('../../deploy/scripts/deploy_legacy_release.sh', import.meta.url), 'utf8')
   const wheel = script.match(/^DETECTRON2_WHEEL="\$\{DETECTRON2_WHEEL_CACHE\}\/([^"\n]+)"$/m)
 
   assert.ok(wheel, 'the release script must name the cached wheel')

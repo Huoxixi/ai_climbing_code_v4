@@ -7,6 +7,7 @@ is performed. Every detail has to survive confidence and continuity checks.
 from copy import deepcopy
 import math
 import numpy as np
+from .replay_observation_validity import registration_reason, joint_mask
 
 VERSION = "registered-torso-chain-observations-v2"
 LIMBS = {"left_hand": (5, 7, 9), "right_hand": (6, 8, 10),
@@ -29,20 +30,19 @@ def registered_points(sample, video):
     if not sample.get("observed") or sample.get("wall_alignment") not in {"aligned", "reference"}:
         return None
     diagnostics = sample.get("wall_alignment_diagnostics") or sample.get("motion_registration") or {}
-    if isinstance(diagnostics, dict) and (finite(diagnostics.get("median_error_px")) and diagnostics["median_error_px"] > 3
-                                         or finite(diagnostics.get("inliers")) and diagnostics["inliers"] < 12):
+    if registration_reason(sample.get('wall_reference_transform'), diagnostics):
         return None
     try:
         w, h = float(video["width"]), float(video["height"])
         xy, score = np.asarray(sample["kpts_xy"], float), np.asarray(sample["kpts_score"], float)
         matrix = np.asarray(sample["wall_reference_transform"], float)
-        if w <= 0 or h <= 0 or xy.shape != (17, 2) or score.shape != (17,) or matrix.shape != (3, 3) or not np.isfinite(matrix).all() or abs(np.linalg.det(matrix)) < 1e-9:
+        if w <= 0 or h <= 0 or xy.shape != (17, 2) or score.shape != (17,):
             return None
         homogeneous = np.c_[xy * [w, h], np.ones(17)] @ matrix.T
         if not np.isfinite(homogeneous).all() or np.any(abs(homogeneous[:, 2]) < 1e-6):
             return None
         points = homogeneous[:, :2] / homogeneous[:, 2:] / [w, h]
-        valid = (score >= .5) & (score <= 1.) & (xy[:, 0] > 0) & (xy[:, 1] > 0) & (xy[:, 0] < 1) & (xy[:, 1] < 1) & np.isfinite(points).all(axis=1)
+        valid = joint_mask(xy, points, score, sample.get('joint_eligibility'))
         return points, valid
     except (KeyError, ValueError, TypeError, OverflowError, np.linalg.LinAlgError):
         return None

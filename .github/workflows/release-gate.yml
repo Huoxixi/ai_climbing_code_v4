@@ -17,12 +17,15 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install locked backend dependencies
+        if: hashFiles('deploy/browser/profile.json') == ''
         working-directory: backend
         run: pip install -r requirements-production.lock
       - name: Verify climbing model runtime imports
+        if: hashFiles('deploy/browser/profile.json') == ''
         working-directory: backend
         run: python -c "import torch, torchvision, detectron2; print(torch.__version__, torchvision.__version__, detectron2.__version__)"
       - name: Verify backend
+        if: hashFiles('deploy/browser/profile.json') == ''
         working-directory: backend
         env:
           LOCAL_ONLY: "true"
@@ -31,12 +34,22 @@ jobs:
         run: |
           pip check
           python scripts/run_release_tests.py
+      - name: Verify browser-only static backend
+        if: hashFiles('deploy/browser/profile.json') != ''
+        working-directory: backend
+        run: |
+          pip install -r requirements-browser.lock
+          pip check
+          python -m unittest test_browser_web_app -v
+          cd ..
+          python -m unittest discover -s deploy/browser -p test_delivery_safety.py -v
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Verify frontend
+        if: hashFiles('deploy/browser/profile.json') == ''
         working-directory: frontend
         env:
           VITE_ENABLE_SIMULATION: "false"
@@ -47,6 +60,51 @@ jobs:
           npx playwright install --with-deps chromium
           npm run test:release-browser
           npm run build
+      - name: Verify browser frontend and archive desktop source build
+        if: hashFiles('deploy/browser/profile.json') != ''
+        working-directory: frontend
+        env:
+          VITE_ENABLE_SIMULATION: "false"
+          CLIMB_DESKTOP_BUILD: "1"
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run test:browser-unit
+          npx playwright install --with-deps chromium
+          npm run build -- --mode boulder-local
+          cd ..
+          python -c 'from pathlib import Path; from desktop.package_scope import assert_local_frontend; assert_local_frontend(Path("frontend/dist"))'
+      - name: Build and verify browser-only release
+        if: hashFiles('deploy/browser/profile.json') != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          python backend/scripts/install_replay_rtmw.py
+          python deploy/browser/download_installer.py
+          python deploy/browser/create_test_fixture.py .tmp/public-browser-fixtures
+          cd frontend
+          npm run test:browser-unit
+          CLIMB_BROWSER_NATIVE_FIXTURES="$GITHUB_WORKSPACE/.tmp/public-browser-fixtures" \
+            CLIMB_BROWSER_FFMPEG=/usr/bin/ffmpeg \
+            node --test browser-tests/browser-portal.test.mjs browser-tests/browser-video-export.test.mjs
+          npm run build:browser
+          cd ..
+          python deploy/browser/prepare_release.py .tmp/browser-release
+          python deploy/browser/check_package.py .tmp/browser-release
+          (
+            cd .tmp/browser-release/backend
+            RELEASE_SHA="${GITHUB_SHA}" python -m uvicorn main:app --host 127.0.0.1 --port 4341 > "$GITHUB_WORKSPACE/.tmp/browser-package.log" 2>&1
+          ) &
+          package_pid=$!
+          trap 'kill "$package_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4341/api/health; then break; fi
+            sleep 1
+          done
+          cd frontend
+          CLIMB_BROWSER_PACKAGE_URL=http://127.0.0.1:4341 \
+            CLIMB_BROWSER_NATIVE_FIXTURES="$GITHUB_WORKSPACE/.tmp/public-browser-fixtures" \
+            node --test browser-tests/browser-release.test.mjs
       - name: Check repository for committed secret files
         shell: bash
         run: |

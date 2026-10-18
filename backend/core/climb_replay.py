@@ -3,7 +3,7 @@
 This module is deliberately isolated from the photo-route recognition pipeline.
 It owns a small file-backed job queue. Hold segmentation reuses the verified
 local climbing-specific model, while pose estimation uses sampled still frames
-through a mainland-accessible provider. Registration is controlled by
+through the default offline RTMW-L provider. Registration is controlled by
 ``ENABLE_CLIMB_REPLAY`` and is enabled by default for existing installations.
 
 The model contract and contact heuristics are based on Jeremy Park's
@@ -18,6 +18,7 @@ import bisect
 import copy
 import io
 import json
+import logging
 import math
 import os
 import queue
@@ -28,7 +29,7 @@ import tempfile
 import threading
 import time
 import uuid
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -38,16 +39,24 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from core.chunked_upload import ChunkUploadError, ChunkUploadStore
 from core.photo_route_analysis import _climbing_model_masks_batch
-from core.photo_route_colors import TWELVE_COLOR_VERSION, classify_mask_color, lab_color_name, mask_sample_distance
+from core.photo_route_colors import ROUTE_COLOR_NAMES, lab_color_name
+from core.replay_hold_colors import REPLAY_COLOUR_VERSION, observe_hold_colour, region_sample_distance, sample_clicked_hold
+from core.replay_hold_evidence import material_observation, sample_compatible_group, colour_support, boundary_quality
 from core.photo_route_inference_lock import serialized_inference
 from core.replay_hold_fusion import align_pose_record, align_to_reference, box_iou, fuse_hold_detections, match_confirmed_route, polygon_bbox, select_sampled_route_holds, transform_polygon
 from core.replay_segments import build_segments, compare_segments, effective_segments, measured_joint_angles
+from core.replay_pose_display import TORSO_CENTER_STYLE, torso_center
+from core.replay_torso_trajectory import torso_trajectory
+from core.replay_sampling import FocusWindow
 from core.replay_resources import high_resource_slot, run_visual_worker, serialized_heavy_stage
+from core.replay_hold_editor import (EditorFrameRequest, EditorPreviewRequest, EditorCommitRequest, EditorCancelRequest,
+    editor_frame, editor_preview, editor_commit, cancel_editor_request, clear_editor_cache, _put, _proposals, _binding)
 
 
 def utcnow() -> str:
@@ -58,11 +67,11 @@ def utc_after(hours: int) -> str:
     return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
-REPLAY_CONSENT_VERSION = "climb-replay-pose-frames-v1-2026-09-20"
-REPLAY_CONSENT_PROVIDER = "阿里云视觉智能开放平台"
-REPLAY_CONSENT_SERVICE = "BodyPosture"
+REPLAY_CONSENT_VERSION = "climb-replay-local-rtmw-hold-editor-v2-2026-10-07"
+REPLAY_CONSENT_PROVIDER = "本机 RTMW-L"
+REPLAY_CONSENT_SERVICE = "RTMW-L 384×288"
 REPLAY_CONSENT_DATA_TYPES = ["降帧后的单张视频画面", "画面中的人体姿态关键点"]
-REPLAY_PIPELINE_VERSION = "climb-replay-v2.6-reviewed-segments"
+REPLAY_PIPELINE_VERSION = "climb-replay-v3-local-rtmw-20261006"
 REPLAY_POSE_API_VERSION = "2019-12-30"
 DEFAULT_POSE_UNIT_PRICE_CNY = 0.0016
 REPLAY_RETENTION_DELETE = "delete_after_processing"
@@ -73,12 +82,16 @@ REPLAY_OVERLAY_MEDIA_KIND = "overlay_video"
 REPLAY_REVIEWED_OVERLAY_MEDIA_KIND = "reviewed_overlay_video"
 REPLAY_REFERENCE_MEDIA_KIND = "wall_reference"
 REPLAY_REFERENCE_FILENAME = "replay-reference.png"
-REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE = 34.0
+REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE = 60.0
 REPLAY_VIDEO_MIME_TYPES = frozenset({
     "video/mp4", "video/quicktime", "video/x-m4v", "video/webm",
-    "video/3gpp", "video/3gpp2", "video/x-matroska",
+    "video/3gpp", "video/3gpp2", "video/x-matroska", "video/x-msvideo", "video/avi",
+    "video/mpeg", "video/mp2t", "video/x-ms-wmv", "video/x-ms-asf", "video/x-flv",
+    "video/ogg", "application/mxf",
 })
-REPLAY_VIDEO_SUFFIXES = frozenset({".mp4", ".m4v", ".mov", ".webm", ".3gp", ".3g2", ".mkv"})
+REPLAY_VIDEO_SUFFIXES = frozenset({".mp4", ".m4v", ".mov", ".webm", ".3gp", ".3g2", ".mkv",
+    ".avi", ".mpg", ".mpeg", ".mpe", ".ts", ".mts", ".m2ts", ".m2t", ".wmv", ".asf",
+    ".flv", ".f4v", ".vob", ".ogv", ".ogg", ".mxf", ".divx"})
 
 
 class ReplayConfigurationError(RuntimeError):
@@ -94,8 +107,8 @@ class VideoLimits:
     max_bytes: int = 200 * 1024 * 1024
     max_input_bytes: int = 500 * 1024 * 1024
     max_duration_seconds: float = 90.0
-    max_width: int = 1920
-    max_height: int = 1080
+    max_width: int = 1280
+    max_height: int = 720
     max_frames: int = 2700
 
 
@@ -128,25 +141,55 @@ class ReplayColorSample(BaseModel):
         return self
 
 
+from core.replay_skeleton_mode import skeleton_draft, without_hold_data
+
+
 class ReplayUploadCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=100)
     size_bytes: int = Field(gt=0)
+    skip_holds: bool = False
     route_id: str = Field(default="", max_length=64)
     route_color: str = Field(default="", max_length=40)
     consent_version: str = Field(min_length=1, max_length=100)
     consent_granted: bool
-    retention_mode: ReplayRetentionMode = REPLAY_RETENTION_DELETE
+    retention_mode: ReplayRetentionMode = REPLAY_RETENTION_KEEP
     trim_start_seconds: float = Field(default=0, ge=0)
     trim_end_seconds: float | None = Field(default=None, gt=0)
     route_color_sample: ReplayColorSample | None = None
 
 
 class ReplayRetryCreate(BaseModel):
+    skip_holds: bool = False
     model_config = ConfigDict(extra="forbid")
     consent_version: str = Field(min_length=1, max_length=100)
     consent_granted: bool
+    pose_fps: Literal[4, 10, 15, 20] | None = None
+    focus_windows: list[FocusWindow] = Field(default_factory=list, max_length=20)
+
+
+class ReplayHoldsConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: str = Field(min_length=1, max_length=64)
+
+
+def hold_review_input(job: dict) -> dict:
+    return job.get("hold_edit_draft") or job.get("result") or job.get("hold_draft") or {}
+
+
+def hold_geometry(result: dict) -> dict:
+    return {key: copy.deepcopy(result[key]) for key in
+            ("holds", "hold_candidates", "hold_evidence", "models", "route", "hold_review_version", "hold_refinement")
+            if key in result}
+
+
+def holds_revision(result: dict) -> str:
+    """Bind global confirmation to the exact holds and wall reference reviewed."""
+    payload = {"holds": result.get("holds") or [],
+               "reference_frame": (result.get("hold_evidence") or {}).get("reference_frame"),
+               "version": result.get("hold_review_version") or 0}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 class ReplayComparisonCreate(BaseModel):
@@ -171,6 +214,7 @@ class ReplayHoldPoint(BaseModel):
     point_xy: list[float] = Field(min_length=2, max_length=2)
     time_seconds: float = Field(ge=0)
     region_xyxy: list[float] | None = Field(default=None, min_length=4, max_length=4)
+    proposal_id: str | None = Field(default=None, min_length=32, max_length=32)
 
     @field_validator("point_xy")
     @classmethod
@@ -272,8 +316,8 @@ def validate_video_upload_type(filename: str, content_type: str) -> bool:
     """Accept common mobile containers without trusting MIME metadata alone."""
     suffix = Path(filename or "").suffix.lower()
     mime = (content_type or "").split(";", 1)[0].strip().lower()
-    if mime not in REPLAY_VIDEO_MIME_TYPES and suffix not in REPLAY_VIDEO_SUFFIXES:
-        raise ValueError("支持 MP4、MOV、M4V、WebM、3GP 和 MKV 视频")
+    if not mime.startswith('video/') and mime not in REPLAY_VIDEO_MIME_TYPES and suffix not in REPLAY_VIDEO_SUFFIXES:
+        raise ValueError("请选择常见视频文件，如 MP4、MOV、MKV、AVI、WebM、MTS、MPEG 或 WMV。")
     return suffix == ".mp4" and mime in {"", "application/octet-stream", "video/mp4"}
 
 
@@ -311,7 +355,7 @@ def convert_video_to_mp4(
         ffmpeg = get_ffmpeg_exe()
     except (OSError, RuntimeError) as exc:
         raise ValueError("服务器视频转换组件不可用，请联系管理员检查媒体处理组件") from exc
-    for long_edge, short_edge, crf in ((bounds.max_width, bounds.max_height, 26), (1280, 720, 30), (960, 540, 34)):
+    for long_edge, short_edge, crf in ((bounds.max_width, bounds.max_height, 20),):
         width, height = dimensions(long_edge, short_edge)
         target.unlink(missing_ok=True)
         command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
@@ -406,9 +450,21 @@ def validate_video(info: VideoInfo, limits: VideoLimits, *, max_bytes: int | Non
 
 def _atomic_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
-    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temp, path)
+    temp = path.with_name(f".{uuid.uuid4().hex}.tmp")
+    try:
+        temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Windows readers and file scanners can briefly deny replacement. Keep
+        # the previous receipt intact and retry only this atomic commit.
+        for attempt in range(8):
+            try:
+                os.replace(temp, path)
+                break
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(min(0.025 * (2 ** attempt), 0.2))
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 POSE_EDGES = (
@@ -466,19 +522,34 @@ def build_pose_samples(records: list[dict], video_info: VideoInfo) -> list[dict]
         usable_scores = [value for value in scores if value >= 0.15]
         source_frame = int(record.get("source_frame_id") or 0)
         samples.append({
+            **({"wholebody": copy.deepcopy(record["wholebody"])} if record.get("wholebody") else {}),
+            **({"pose_evidence": copy.deepcopy(record["pose_evidence"])} if record.get("pose_evidence") else {}),
+            **({"joint_observations": copy.deepcopy(record["joint_observations"])} if record.get("joint_observations") else {}),
+            **({"joint_eligibility": copy.deepcopy(record["joint_eligibility"])} if record.get("joint_eligibility") is not None else {}),
+            **({"initial_wholebody_observation": copy.deepcopy(record["initial_wholebody_observation"]),
+                "pose_revision": copy.deepcopy(record["pose_revision"])} if record.get("pose_revision") else {}),
             "sample_index": int(record.get("frame_id") or 0),
             "source_frame_id": source_frame,
             "time_seconds": round(source_frame / max(video_info.fps, 1e-9), 6),
             "wall_alignment": record.get("wall_alignment", "unknown"),
             "wall_alignment_diagnostics": record.get("wall_alignment_diagnostics") or {},
             "wall_reference_transform": record.get("wall_reference_transform"),
-            "observed": bool(usable_scores),
-            "confidence": round(float(np.mean(usable_scores)), 6) if usable_scores else 0.0,
+            "observed": bool(len(record['joint_eligibility'])==17
+                and all(isinstance(v,bool) for v in record['joint_eligibility']) and any(record['joint_eligibility']))
+                if record.get('joint_eligibility') is not None else bool(usable_scores),
+            **({'confidence_basis':'not_calibrated',
+                'mean_model_response':round(float(np.mean(scores)),6) if scores else None} if record.get('joint_eligibility') is not None else {}),
+            "confidence": None if record.get('joint_eligibility') is not None else round(float(np.mean(usable_scores)), 6) if usable_scores else 0.0,
             "kpts_xy": record.get("kpts_xy") or [[0.0, 0.0] for _ in range(17)],
             "kpts_score": scores or [0.0] * 17,
             "bbox_xywh": record.get("bbox_xywh") or [0.0, 0.0, 0.0, 0.0],
             "joint_angles_2d": measured_joint_angles(
-                record.get("kpts_xy") or [], scores, video_info.width, video_info.height),
+                record.get("kpts_xy") or [],
+                [1. if eligible else 0. for eligible in record['joint_eligibility']]
+                    if record.get('joint_eligibility') is not None and len(record['joint_eligibility'])==17
+                    and all(isinstance(v,bool) for v in record['joint_eligibility'])
+                    else [0.]*17 if record.get('joint_eligibility') is not None else scores,
+                video_info.width, video_info.height),
         })
     return samples
 
@@ -824,7 +895,25 @@ def native_mask_polygon(mask: np.ndarray, *, max_points: int = 1024) -> np.ndarr
     return reduced.astype(np.int32, copy=False)
 
 
-def clicked_hold_polygon(frame: np.ndarray, point_xy: list[float]) -> list[list[float]]:
+def existing_hold_mask(holds, matrix, width, height, reference_width=None, reference_height=None):
+    """Project existing contours into this frame; bounding boxes are legacy fallback only."""
+    mask = np.zeros((height, width), np.uint8)
+    inverse = np.linalg.inv(matrix)
+    for hold in holds:
+        polygon = hold.get('polygon') or []
+        if len(polygon) < 3 and len(hold.get('bbox') or []) >= 4:
+            x,y,w,h = hold['bbox'][:4]
+            polygon = [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]
+        if len(polygon) < 3:
+            continue
+        points = np.asarray(polygon, np.float32) * [reference_width or width, reference_height or height]
+        mapped = cv2.perspectiveTransform(points.reshape(-1,1,2), inverse).reshape(-1,2)
+        if np.isfinite(mapped).all():
+            cv2.fillPoly(mask, [np.rint(mapped).astype(np.int32)], 255)
+    return mask
+
+
+def clicked_hold_polygon(frame: np.ndarray, point_xy: list[float], excluded_mask=None) -> list[list[float]]:
     """Trace a local colour component around a user click; never invent a box."""
     height, width = frame.shape[:2]
     x = min(width - 1, int(point_xy[0] * width))
@@ -839,6 +928,10 @@ def clicked_hold_polygon(frame: np.ndarray, point_xy: list[float]) -> list[list[
     target = np.median(seed.reshape(-1, 3), axis=0)
     distance = np.linalg.norm(lab.astype(np.float32) - target, axis=2)
     binary = (distance <= 26).astype(np.uint8)
+    if excluded_mask is not None:
+        if excluded_mask[y,x]:
+            raise HTTPException(409, '所选位置已被已有岩点覆盖，请选择旁边尚未识别的区域。')
+        binary[excluded_mask[top:bottom,left:right] > 0] = 0
     count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
     label = int(labels[local_y, local_x])
     if label == 0 or label >= count:
@@ -857,7 +950,7 @@ def clicked_hold_polygon(frame: np.ndarray, point_xy: list[float]) -> list[list[
     return polygon
 
 
-def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list[float]]:
+def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float], excluded_mask=None, allowed_mask=None) -> list[list[float]]:
     """Find the most hold-like colour component inside a rough user rectangle."""
     height, width = frame.shape[:2]
     x0, y0, x1, y1 = region_xyxy
@@ -871,11 +964,17 @@ def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list
     lab = cv2.cvtColor(frame[top:bottom, left:right], cv2.COLOR_BGR2LAB)
     inner = np.zeros(lab.shape[:2], dtype=bool)
     inner[inner_top - top:inner_bottom - top, inner_left - left:inner_right - left] = True
-    border_pixels = lab[~inner]
+    excluded = (excluded_mask[top:bottom,left:right] > 0) if excluded_mask is not None else np.zeros(inner.shape, bool)
+    border_pixels = lab[~inner & ~excluded]
+    if allowed_mask is not None:
+        excluded = excluded | (allowed_mask[top:bottom,left:right] == 0)
+    inner &= ~excluded
+    if np.count_nonzero(inner) < 12:
+        raise HTTPException(409, '选区已被已有岩点覆盖，请框选旁边尚未识别的区域。')
     if len(border_pixels) < 8:
         raise HTTPException(422, "框选范围太贴近画面边缘，请稍微扩大画面后重试。")
     background = np.median(border_pixels, axis=0)
-    min_area = max(12, round(inner_width * inner_height * .045))
+    min_area = max(12, round(np.count_nonzero(inner) * .045))
     region_center = np.asarray([(inner_left + inner_right) / 2 - left,
                                 (inner_top + inner_bottom) / 2 - top])
     region_radius = max(1, math.hypot(inner_width, inner_height) / 2)
@@ -884,10 +983,13 @@ def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list
         for fx in (.18, .34, .5, .66, .82):
             px = min(lab.shape[1] - 1, int(inner_left - left + inner_width * fx))
             py = min(lab.shape[0] - 1, int(inner_top - top + inner_height * fy))
+            if not inner[py,px]:
+                continue
             seed = lab[max(0, py - 1):py + 2, max(0, px - 1):px + 2]
             target = np.median(seed.reshape(-1, 3), axis=0)
             distance = np.linalg.norm(lab.astype(np.float32) - target, axis=2)
             binary = (distance <= 26).astype(np.uint8)
+            binary[excluded] = 0
             count, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, 8)
             label = int(labels[py, px])
             if label <= 0 or label >= count:
@@ -920,6 +1022,7 @@ def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list
         mask[inner & (wall_distance < 14)] = cv2.GC_PR_BGD
         sure = cv2.erode(selected.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
         mask[sure] = cv2.GC_FGD
+        mask[excluded] = cv2.GC_BGD
         if np.count_nonzero(sure) >= 5:
             try:
                 cv2.grabCut(frame[top:bottom, left:right], mask, None,
@@ -937,6 +1040,7 @@ def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list
                         selected = labels == label
             except cv2.error:
                 pass
+    selected &= ~excluded
     contour = native_mask_polygon(selected.astype(np.uint8) * 255, max_points=160)
     if len(contour) < 3:
         raise HTTPException(422, "框内岩点轮廓不完整，请框紧一些或换帧。")
@@ -946,7 +1050,7 @@ def boxed_hold_polygon(frame: np.ndarray, region_xyxy: list[float]) -> list[list
 def _multi_frame_clicked_polygon(source: Path, video: VideoInfo, frame_index: int,
                                  reference_index: int, reference: np.ndarray,
                                  initial: list[list[float]],
-                                 region_xyxy: list[float] | None = None) -> tuple[list[list[float]], int]:
+                                 region_xyxy: list[float] | None = None, existing_holds=None) -> tuple[list[list[float]], int]:
     """Prefer a contour observed consistently in nearby unobstructed frames."""
     initial_box = polygon_bbox(initial)
     center = np.asarray([[[video.width * (initial_box[0] + initial_box[2] / 2),
@@ -977,8 +1081,9 @@ def _multi_frame_clicked_polygon(source: Path, video: VideoInfo, frame_index: in
             if not all(0 <= value <= 1 for value in click):
                 continue
             try:
+                excluded = existing_hold_mask(existing_holds or [], to_reference, video.width, video.height)
                 if region_xyxy is None:
-                    polygon = clicked_hold_polygon(frame, click)
+                    polygon = clicked_hold_polygon(frame, click, excluded)
                 else:
                     expansion = .15
                     bx, by, bw, bh = initial_box
@@ -992,7 +1097,7 @@ def _multi_frame_clicked_polygon(source: Path, video: VideoInfo, frame_index: in
                               float(np.clip(projected[:, 1].min() / video.height, 0, 1)),
                               float(np.clip(projected[:, 0].max() / video.width, 0, 1)),
                               float(np.clip(projected[:, 1].max() / video.height, 0, 1))]
-                    polygon = boxed_hold_polygon(frame, values)
+                    polygon = boxed_hold_polygon(frame, values, excluded)
             except HTTPException:
                 continue
             mapped = transform_polygon(polygon, to_reference, video.width, video.height)
@@ -1140,6 +1245,11 @@ def _replay_output_size(width: int, height: int) -> tuple[int, int]:
     return max(2, int(width * scale) // 2 * 2), max(2, int(height * scale) // 2 * 2)
 
 
+def _replay_split_output_size(width: int, height: int) -> tuple[int, int]:
+    pane_width, pane_height = _replay_output_size(width, height)
+    return pane_width * 2, pane_height
+
+
 def replay_visual_enabled() -> bool:
     return os.getenv("CLIMB_REPLAY_VISUAL_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -1229,6 +1339,31 @@ def _validate_visual_video(path: Path, *, width: int, height: int, fps: float,
         raise ValueError("线路回放未完整生成")
 
 
+def _contain_visual_tail(source: Path, target: Path, *, size: tuple[int, int], fps: float,
+                         cancelled: Callable[[], bool] | None = None) -> None:
+    """Fit the native wall animation on a split canvas without changing aspect."""
+    capture = cv2.VideoCapture(str(source))
+    writer = cv2.VideoWriter(str(target), cv2.VideoWriter_fourcc(*"VP80"), fps, size)
+    try:
+        if not capture.isOpened() or not writer.isOpened():
+            raise RuntimeError("无法适配线路回放画幅")
+        while True:
+            if cancelled and cancelled():
+                raise ReplayCancelled()
+            ok, frame = capture.read()
+            if not ok:
+                break
+            scale = min(size[0] / frame.shape[1], size[1] / frame.shape[0])
+            width, height = round(frame.shape[1] * scale), round(frame.shape[0] * scale)
+            canvas = np.full((size[1], size[0], 3), (13, 16, 18), dtype=np.uint8)
+            x, y = (size[0] - width) // 2, (size[1] - height) // 2
+            canvas[y:y+height, x:x+width] = cv2.resize(frame, (width, height))
+            writer.write(canvas)
+    finally:
+        capture.release()
+        writer.release()
+
+
 def _prepare_visual_tail(result: dict, reference: Path, directory: Path, *,
                          size: tuple[int, int], fps: float,
                          cancelled: Callable[[], bool] | None = None,
@@ -1238,13 +1373,20 @@ def _prepare_visual_tail(result: dict, reference: Path, directory: Path, *,
     try:
         if not reference.is_file():
             raise ValueError("历史复盘缺少墙面参考画面，无法制作线路回放")
-        manifest = build_visual_manifest(_visual_render_evidence(result), result["visual_reference"], output_size=size, fps=fps)
+        # The worker keeps the original wall aspect and its 1280-side resource
+        # limit. The split presentation canvas must not stretch that evidence.
+        metadata = result["visual_reference"]
+        native_size = _replay_output_size(metadata["width"], metadata["height"])
+        manifest = build_visual_manifest(_visual_render_evidence(result), metadata, output_size=native_size, fps=fps)
         manifest_path, tail = directory / "manifest.json", directory / "tail.webm"
+        native_tail = directory / "native-tail.webm" if native_size != size else tail
         _atomic_json(manifest_path, manifest)
         if progress:
             progress("正在制作线路回放", 0)
-        metrics = run_visual_worker(reference, manifest_path, tail, directory / "metrics.json",
+        metrics = run_visual_worker(reference, manifest_path, native_tail, directory / "metrics.json",
                                     cancelled=cancelled, progress=progress)
+        if native_size != size:
+            _contain_visual_tail(native_tail, tail, size=size, fps=fps, cancelled=cancelled)
         _validate_visual_video(tail, width=size[0], height=size[1], fps=fps,
                                expected_frames=int(manifest["frame_count"]), cancelled=cancelled)
         visual.update(status="ready", can_retry=True, failure_reason=None, message="线路回放已生成",
@@ -1329,43 +1471,15 @@ def render_replay_overlay_video(
     cancelled: Callable[[], bool] | None = None,
     stage_progress: Callable[[str, int], None] | None = None,
 ) -> dict:
-    """Validate a short tail first, then encode the analysis body only once."""
+    """Render the original and synchronized right-side analysis, without a tail."""
     info = probe_video(source)
-    if not replay_visual_enabled():
-        result["visual_replay"] = _visual_base_metadata(result, fps=info.fps, analysis_frames=info.frame_count)
-        result["visual_replay"].update(status="disabled", can_retry=False,
-                                       message="线路回放尚未启用")
-        try:
-            with high_resource_slot(cancelled=cancelled, progress=stage_progress):
-                return _render_replay_overlay_video_body(source, target, result,
-                    progress=progress, cancelled=cancelled)
-        except InterruptedError:
-            raise ReplayCancelled()
-    size = _replay_output_size(info.width, info.height)
-    result["visual_replay"] = _visual_base_metadata(result, fps=info.fps, analysis_frames=info.frame_count)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    reference_available = False
+    result["visual_replay"] = _visual_base_metadata(result,fps=info.fps,analysis_frames=info.frame_count)
+    result["visual_replay"].update(status="disabled",can_retry=False,message="动作分析在右侧随视频同步显示")
     try:
-        reference = freeze_replay_reference(source, result)
-        reference_available = True
-        result["visual_replay"]["input_version"] = visual_input_version(result)
-    except Exception:
-        reference = source.parent / REPLAY_REFERENCE_FILENAME
-        result["visual_replay"].update(status="unavailable", failure_reason="reference_unavailable",
-                                        message="缺少可靠的墙面参考画面，已保留基础复盘")
-    with tempfile.TemporaryDirectory(prefix=".visual-", dir=target.parent) as temporary:
-        tail = None
-        if reference_available:
-            tail, result["visual_replay"] = _prepare_visual_tail(
-                result, reference, Path(temporary), size=size, fps=info.fps,
-                cancelled=cancelled, progress=stage_progress)
-        try:
-            with high_resource_slot(cancelled=cancelled, progress=stage_progress):
-                return _render_replay_overlay_video_body(
-                    source, target, result, progress=progress, cancelled=cancelled,
-                    tail_path=tail, output_size=size)
-        except InterruptedError:
-            raise ReplayCancelled()
+        with high_resource_slot(cancelled=cancelled,progress=stage_progress):
+            return _render_replay_overlay_video_body(source,target,result,progress=progress,cancelled=cancelled)
+    except InterruptedError:
+        raise ReplayCancelled()
 
 
 def render_replay_visual_from_overlay(source: Path, target: Path, result: dict, *,
@@ -1378,7 +1492,8 @@ def render_replay_visual_from_overlay(source: Path, target: Path, result: dict, 
     if analysis_frames <= 0 or analysis_frames > info.frame_count:
         raise ValueError("历史复盘没有可靠的分析区间，无法重新制作线路回放")
     result["visual_replay"] = _visual_base_metadata(result, fps=info.fps, analysis_frames=analysis_frames)
-    size = _replay_output_size(info.width, info.height)
+    # Keep the existing derivative geometry when rebuilding only its tail.
+    size = (info.width, info.height)
     with tempfile.TemporaryDirectory(prefix=".visual-", dir=target.parent) as directory:
         temporary = Path(directory)
         tail, result["visual_replay"] = _prepare_visual_tail(
@@ -1419,494 +1534,82 @@ def render_replay_visual_from_overlay(source: Path, target: Path, result: dict, 
 
 
 def _render_replay_overlay_video_body(
-    source: Path,
-    target: Path,
-    result: dict,
-    *,
+    source: Path, target: Path, result: dict, *,
     progress: Callable[[int], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
     tail_path: Path | None = None,
     output_size: tuple[int, int] | None = None,
 ) -> dict:
-    """Render a calm split view with a fixed wall map and measured pose samples."""
+    """Keep original pixels on the left and all analysis on the right."""
+    from .replay_analysis_view import AnalysisView, LAYOUT
     cap = cv2.VideoCapture(str(source))
-    if not cap.isOpened():
-        raise RuntimeError("无法读取原视频生成叠加视频")
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = float(cap.get(cv2.CAP_PROP_FPS))
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if width <= 0 or height <= 0 or fps <= 0 or total <= 0:
+    width,height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps,total = float(cap.get(cv2.CAP_PROP_FPS)),int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if not cap.isOpened() or min(width,height,fps,total)<=0:
         cap.release()
-        raise RuntimeError("原视频信息不完整，无法生成叠加视频")
-    output_width, output_height = output_size or (width + width % 2, height + height % 2)
-    target.parent.mkdir(parents=True, exist_ok=True)
+        raise RuntimeError("原视频信息不完整，无法生成复盘视频")
+    output_width,output_height = output_size or _replay_split_output_size(width,height)
+    snapshot = copy.deepcopy(result)
+    snapshot['video'] = {**snapshot.get('video',{}),'width':width,'height':height,'fps':fps,
+        'frame_count':total,'duration_seconds':total/fps}
+    view = AnalysisView(snapshot)
+    target.parent.mkdir(parents=True,exist_ok=True)
     temporary = target.with_name(f".{target.stem}-{uuid.uuid4().hex}.tmp.webm")
-    writer = cv2.VideoWriter(
-        str(temporary), cv2.VideoWriter_fourcc(*"VP80"), fps,
-        (output_width, output_height),
-    )
+    writer = cv2.VideoWriter(str(temporary),cv2.VideoWriter_fourcc(*"VP80"),fps,(output_width,output_height))
     if not writer.isOpened():
-        cap.release()
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError("当前环境无法编码 WebM 叠加视频")
-
-    holds = result.get("holds") or []
-    reference_index = max(0, min(total - 1, int((result.get("hold_evidence") or {}).get("reference_frame") or 0)))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, reference_index)
-    reference_ok, reference = cap.read()
-    if not reference_ok or reference is None:
-        cap.release()
-        writer.release()
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError("无法读取墙面参考帧")
-    registered_holds = _registered_hold_polygons(cap, reference, holds, fps, total, reference_index)
-    pose_samples = result.get("pose_samples") or []
-    pose_timeline = build_pose_render_timeline(pose_samples, total)
-    contacts = result.get("attempt", {}).get("contacts") or []
-    actions = result.get("attempt", {}).get("action_steps") or build_action_steps(contacts)
-    ordered_contacts = sorted(
-        contacts,
-        key=lambda item: (
-            int(item.get("start_source_frame") or 0),
-            int(item.get("hold_id") or 0),
-        ),
-    )
-    first_use: dict[int, int] = {}
-    for contact in ordered_contacts:
-        hold_id = int(contact.get("hold_id") or 0)
-        start = contact.get("start_source_frame")
-        if hold_id > 0 and start is not None:
-            first_use[hold_id] = min(first_use.get(hold_id, total), int(start))
-
-    panel_ratio = 0.36
-    timeline_columns = min(
-        max(1, len(actions)),
-        max(5, min(10, output_width // 110)),
-    ) if actions else 1
-    timeline_rows = max(1, math.ceil(len(actions) / timeline_columns))
-    action_strip_height = max(
-        54,
-        round(output_height * min(.28, .075 + .065 * timeline_rows)),
-    ) if actions else max(42, round(output_height * .10))
-    content_height = max(2, output_height - action_strip_height)
-    video_pane_width = max(2, round(output_width * (1 - panel_ratio)))
-    video_scale = min(video_pane_width / width, content_height / height)
-    display_width = max(1, round(width * video_scale))
-    display_height = max(1, round(height * video_scale))
-    video_x = max(0, (video_pane_width - display_width) // 2)
-    video_y = max(0, (content_height - display_height) // 2)
-
-    panel_padding = max(6, round(min(output_width, output_height) * .018))
-    panel_x = video_pane_width + panel_padding
-    panel_width = max(1, output_width - panel_x - panel_padding)
-    title_height = max(18, round(content_height * .085))
-    footer_height = max(26, round(content_height * .15))
-    map_y = title_height
-    map_height = max(1, content_height - title_height - footer_height)
-    route_map_x, route_map_y, route_map_width, route_map_height = fit_hold_map_rect(
-        holds, width, height,
-        x=panel_x, y=map_y, width=panel_width, height=map_height,
-    )
-    base_text_scale = max(.24, min(.62, min(output_width, output_height) / 1050))
-    route_color = str((result.get("route") or {}).get("color") or "ROUTE")
-    route_color_label = {
-        "红色": "红色线路", "红": "红色线路", "red": "红色线路",
-        "蓝色": "蓝色线路", "蓝": "蓝色线路", "blue": "蓝色线路",
-        "绿色": "绿色线路", "绿": "绿色线路", "green": "绿色线路",
-        "黄色": "黄色线路", "黄": "黄色线路", "yellow": "黄色线路",
-        "橙色": "橙色线路", "橙": "橙色线路", "orange": "橙色线路",
-        "紫色": "紫色线路", "紫": "紫色线路", "purple": "紫色线路",
-        "粉色": "粉色线路", "粉": "粉色线路", "pink": "粉色线路",
-        "青色": "青色线路", "青": "青色线路", "cyan": "青色线路", "teal": "青色线路",
-        "棕色": "棕色线路", "棕": "棕色线路", "brown": "棕色线路",
-        "白色": "白色线路", "白": "白色线路", "white": "白色线路",
-        "黑色": "黑色线路", "黑": "黑色线路", "black": "黑色线路",
-        "灰色": "灰色线路", "灰": "灰色线路", "gray": "灰色线路",
-    }.get(route_color.strip().lower(), f"{route_color}线路" if route_color else "所选线路")
-    timeline_padding = max(4, panel_padding // 2)
-    timeline_title_height = max(16, round(action_strip_height * .19))
-    timeline_gap = max(4, round(min(output_width, output_height) * .008))
-    timeline_card_width = max(
-        12,
-        (output_width - timeline_padding * 2 - timeline_gap * (timeline_columns - 1))
-        // timeline_columns,
-    )
-    timeline_card_height = max(
-        10,
-        (action_strip_height - timeline_title_height - timeline_padding * 2
-         - timeline_gap * (timeline_rows - 1)) // timeline_rows,
-    )
-
-    def point_on_video(point: list[float]) -> tuple[int, int]:
-        return (
-            round(video_x + float(point[0]) * display_width),
-            round(video_y + float(point[1]) * display_height),
-        )
-
-    def hold_center_on_map(hold: dict) -> tuple[int, int]:
-        bx, by, box_width, box_height = hold.get("bbox") or [0, 0, 0, 0]
-        return (
-            round(route_map_x + (float(bx) + float(box_width) / 2) * route_map_width),
-            round(route_map_y + (float(by) + float(box_height) / 2) * route_map_height),
-        )
-
-    frame_index = 0
-    line_width = max(1, round(min(output_width, output_height) / 420))
-    tail_frames = 0
+        cap.release();writer.release();temporary.unlink(missing_ok=True)
+        raise RuntimeError("当前环境无法编码 WebM 复盘视频")
+    frame_index,tail_frames = 0,0
     try:
         while True:
             if cancelled and cancelled():
                 raise ReplayCancelled()
-            ok, frame = cap.read()
+            ok,frame = cap.read()
             if not ok:
                 break
-            canvas = np.full((output_height, output_width, 3), (13, 16, 18), dtype=np.uint8)
-            cjk_labels: list[dict] = []
-            resized = cv2.resize(
-                frame, (display_width, display_height),
-                interpolation=cv2.INTER_AREA if video_scale < 1 else cv2.INTER_LINEAR,
-            )
-            canvas[video_y:video_y + display_height, video_x:video_x + display_width] = resized
-
-            active = []
-            active_by_hold: dict[int, str] = {}
-            for contact in contacts:
-                start = contact.get("start_source_frame")
-                end = contact.get("end_source_frame")
-                if start is None or end is None or not int(start) <= frame_index <= int(end):
-                    continue
-                limb = str(contact.get("limb") or "")
-                hold_id = int(contact.get("hold_id") or 0)
-                if hold_id > 0:
-                    active.append((limb, hold_id))
-                    active_by_hold[hold_id] = limb
-
-            used_ids = {
-                hold_id for hold_id, start_frame in first_use.items()
-                if start_frame <= frame_index
-            }
-            visible_markers = build_visible_action_markers(actions, frame_index)
-
-            # The video pane stays quiet: true fixed contours, no repeated hold labels.
-            shape_layer = canvas.copy()
-            shape_outlines: list[tuple[np.ndarray, tuple[int, int, int], int]] = []
-            frame_polygons = _interpolated_hold_polygons(registered_holds, frame_index, fps)
-            for hold_index, hold in enumerate(holds):
-                if frame_polygons is None:
-                    break
-                hold_id = int(hold.get("id") or 0)
-                polygon = _scaled_hold_polygon(
-                    {"polygon": frame_polygons[hold_index], "bbox": hold.get("bbox")}, x=video_x, y=video_y,
-                    width=display_width, height=display_height,
-                    minimum=max(2, line_width + 1),
-                )
-                color = (82, 111, 94)
-                thickness = line_width
-                if hold_id in used_ids:
-                    color, thickness = (92, 196, 115), line_width + 1
-                if hold_id in active_by_hold:
-                    color = REPLAY_LIMB_COLORS.get(active_by_hold[hold_id], (96, 231, 151))
-                    thickness = line_width + 2
-                if hold_id in used_ids or hold_id in active_by_hold:
-                    cv2.fillPoly(shape_layer, [polygon], color, cv2.LINE_AA)
-                shape_outlines.append((polygon, color, thickness))
-            canvas = cv2.addWeighted(shape_layer, .20, canvas, .80, 0)
-            for polygon, color, thickness in shape_outlines:
-                cv2.polylines(canvas, [polygon], True, color, thickness, cv2.LINE_AA)
-
-            sample = pose_timeline.get(frame_index)
-            if sample:
-                points = sample.get("kpts_xy") or []
-                scores = sample.get("kpts_score") or []
-                for start, end in POSE_EDGES:
-                    if (start >= len(points) or end >= len(points)
-                            or start >= len(scores) or end >= len(scores)
-                            or float(scores[start] or 0) < 0.15 or float(scores[end] or 0) < 0.15):
-                        continue
-                    start_point = point_on_video(points[start])
-                    end_point = point_on_video(points[end])
-                    cv2.line(canvas, start_point, end_point, (232, 222, 144), line_width + 1, cv2.LINE_AA)
-                for point, score in zip(points, scores):
-                    if float(score or 0) >= 0.15:
-                        cv2.circle(
-                            canvas, point_on_video(point),
-                            line_width + 2, (245, 232, 151), -1, cv2.LINE_AA,
-                        )
-
-            # A fixed-coordinate route map carries identifiers and history.
-            cv2.line(
-                canvas, (video_pane_width, 0), (video_pane_width, content_height),
-                (43, 49, 52), max(1, line_width), cv2.LINE_AA,
-            )
-            cjk_labels.extend([
-                {
-                    "text": "线路动作图", "fallback": "",
-                    "origin": (panel_x, max(2, round(title_height * .08))),
-                    "size": max(10, round(base_text_scale * 25)),
-                    "color": (235, 239, 241),
-                },
-                {
-                    "text": route_color_label, "fallback": "",
-                    "origin": (panel_x, max(15, round(title_height * .48))),
-                    "size": max(8, round(base_text_scale * 18)),
-                    "color": (126, 211, 147),
-                },
-            ])
-
-            visible_sequence = [
-                int(action.get("hold_id") or 0) for action in actions
-                if action.get("start_source_frame") is not None
-                and int(action.get("start_source_frame") or 0) <= frame_index
-                and int(action.get("hold_id") or 0) > 0
-            ]
-            hold_lookup = {int(hold.get("id") or 0): hold for hold in holds}
-            for previous, current in zip(visible_sequence, visible_sequence[1:]):
-                if previous in hold_lookup and current in hold_lookup:
-                    cv2.line(
-                        canvas, hold_center_on_map(hold_lookup[previous]),
-                        hold_center_on_map(hold_lookup[current]),
-                        (55, 119, 72), max(1, line_width), cv2.LINE_AA,
-                    )
-
-            for hold in holds:
-                hold_id = int(hold.get("id") or 0)
-                polygon = _scaled_hold_polygon(
-                    hold, x=route_map_x, y=route_map_y,
-                    width=route_map_width, height=route_map_height,
-                    minimum=max(5, line_width * 3),
-                )
-                x0, y0, x1, y1 = _scaled_hold_box(
-                    hold, x=route_map_x, y=route_map_y,
-                    width=route_map_width, height=route_map_height,
-                    minimum=max(5, line_width * 3),
-                )
-                color = (75, 82, 85)
-                fill = False
-                thickness = max(1, line_width)
-                if hold_id in used_ids:
-                    color, fill = (79, 176, 103), True
-                if hold_id in active_by_hold:
-                    color = REPLAY_LIMB_COLORS.get(active_by_hold[hold_id], (96, 231, 151))
-                    fill = True
-                if fill:
-                    cv2.fillPoly(canvas, [polygon], color, cv2.LINE_AA)
-                cv2.polylines(canvas, [polygon], True, color, thickness, cv2.LINE_AA)
-                markers = visible_markers.get(hold_id) or []
-                if markers:
-                    badge_height = max(11, round(min(output_width, output_height) * .017))
-                    badge_gap = max(2, badge_height // 6)
-                    badge_width = max(22, round(badge_height * 1.75))
-                    total_badge_height = len(markers) * badge_height + (len(markers) - 1) * badge_gap
-                    badge_y = round((y0 + y1 - total_badge_height) / 2)
-                    badge_y = max(map_y, min(content_height - footer_height - total_badge_height, badge_y))
-                    badge_x = x1 + max(3, panel_padding // 3)
-                    if badge_x + badge_width > output_width - panel_padding:
-                        badge_x = x0 - badge_width - max(3, panel_padding // 3)
-                    badge_x = max(video_pane_width + 2, badge_x)
-                    for marker_index, marker in enumerate(markers):
-                        marker_y = badge_y + marker_index * (badge_height + badge_gap)
-                        limb = str(marker.get("limb") or "")
-                        marker_color = REPLAY_LIMB_COLORS.get(limb, (126, 211, 147))
-                        cv2.rectangle(
-                            canvas, (badge_x, marker_y),
-                            (badge_x + badge_width, marker_y + badge_height),
-                            marker_color, -1, cv2.LINE_AA,
-                        )
-                        sequence_text = f"{int(marker.get('step') or 0):02d}"
-                        sequence_scale = max(.2, badge_height / 34)
-                        (sequence_width, sequence_height), _ = cv2.getTextSize(
-                            sequence_text, cv2.FONT_HERSHEY_SIMPLEX, sequence_scale, 1,
-                        )
-                        _overlay_text(
-                            canvas, sequence_text,
-                            (
-                                badge_x + max(1, (badge_width - sequence_width) // 2),
-                                marker_y + max(sequence_height + 1, (badge_height + sequence_height) // 2),
-                            ),
-                            scale=sequence_scale, color=(18, 22, 24),
-                        )
-
-            footer_y = content_height - footer_height + max(12, panel_padding)
-            cjk_labels.append({
-                "text": f"已触及 {len(used_ids)}／{len(holds)}", "fallback": "",
-                "origin": (panel_x, max(0, footer_y - max(9, round(base_text_scale * 17)))),
-                "size": max(9, round(base_text_scale * 20)),
-                "color": (126, 211, 147),
-            })
-            pose_label = (
-                "实测姿态" if sample and sample.get("render_mode") == "measured"
-                else "平滑姿态" if sample else "暂无姿态"
-            )
-            cjk_labels.append({
-                "text": pose_label, "fallback": "",
-                "origin": (max(5, video_x + panel_padding), max(3, video_y + panel_padding // 2)),
-                "size": max(8, round(base_text_scale * 17)),
-                "color": (224, 229, 231) if sample and sample.get("render_mode") == "measured"
-                else (157, 164, 168),
-            })
-
-            # Chronological action ledger: every hand/foot contact keeps one stable slot.
-            timeline_y = content_height
-            cv2.line(
-                canvas, (0, timeline_y), (output_width, timeline_y),
-                (43, 49, 52), max(1, line_width), cv2.LINE_AA,
-            )
-            cjk_labels.append({
-                "text": "动作顺序", "fallback": "",
-                "origin": (timeline_padding, timeline_y + 3),
-                "size": max(10, round(base_text_scale * 22)),
-                "color": (235, 239, 241),
-            })
-            if actions:
-                cards_y = timeline_y + timeline_title_height + timeline_padding
-                node_radius = max(8, min(14, timeline_card_height // 4))
-                for row in range(timeline_rows):
-                    row_start = row * timeline_columns
-                    row_count = min(timeline_columns, len(actions) - row_start)
-                    if row_count <= 1:
-                        continue
-                    first_center = (
-                        timeline_padding + timeline_card_width // 2,
-                        cards_y + row * (timeline_card_height + timeline_gap) + node_radius + 2,
-                    )
-                    last_center = (
-                        timeline_padding + (row_count - 1) * (timeline_card_width + timeline_gap)
-                        + timeline_card_width // 2,
-                        first_center[1],
-                    )
-                    cv2.line(
-                        canvas, first_center, last_center,
-                        (53, 59, 62), max(1, line_width), cv2.LINE_AA,
-                    )
-                for action_index, action in enumerate(actions):
-                    row, column = divmod(action_index, timeline_columns)
-                    x0 = timeline_padding + column * (timeline_card_width + timeline_gap)
-                    y0 = cards_y + row * (timeline_card_height + timeline_gap)
-                    center_x = x0 + timeline_card_width // 2
-                    center_y = y0 + node_radius + 2
-                    limb = str(action.get("limb") or "")
-                    start_frame = int(action.get("start_source_frame") or 0)
-                    end_frame = int(action.get("end_source_frame") or start_frame)
-                    is_current = start_frame <= frame_index <= end_frame
-                    is_completed = start_frame <= frame_index
-                    limb_color = REPLAY_LIMB_COLORS.get(limb, (126, 211, 147))
-                    if is_current:
-                        fill_color, border_color, text_color = limb_color, (238, 241, 242), (16, 20, 22)
-                    elif is_completed:
-                        fill_color, border_color, text_color = limb_color, limb_color, (16, 20, 22)
-                    else:
-                        fill_color, border_color, text_color = (24, 28, 30), (67, 74, 77), (128, 137, 141)
-                    cv2.circle(canvas, (center_x, center_y), node_radius, fill_color, -1, cv2.LINE_AA)
-                    cv2.circle(
-                        canvas, (center_x, center_y), node_radius,
-                        border_color, max(1, line_width + (1 if is_current else 0)), cv2.LINE_AA,
-                    )
-                    step_text = f"{int(action.get('step') or action_index + 1):02d}"
-                    step_scale = max(.20, node_radius / 30)
-                    (step_width, step_height), _ = cv2.getTextSize(
-                        step_text, cv2.FONT_HERSHEY_SIMPLEX, step_scale, 1,
-                    )
-                    _overlay_text(
-                        canvas, step_text,
-                        (
-                            center_x - step_width // 2,
-                            center_y + step_height // 2,
-                        ),
-                        scale=step_scale, color=text_color,
-                    )
-                    limb_name = LIMB_OVERLAY_NAMES.get(limb, "手脚")
-                    limb_size = max(9, min(13, timeline_card_height // 4))
-                    text_width = len(limb_name) * limb_size
-                    cjk_labels.append({
-                        "text": limb_name, "fallback": "",
-                        "origin": (
-                            center_x - text_width // 2,
-                            center_y + node_radius + max(3, timeline_card_height // 14),
-                        ),
-                        "size": limb_size,
-                        "color": limb_color if is_completed else (128, 137, 141),
-                    })
-                    supplementary_name = str(action.get("supplementary_name") or "")
-                    if supplementary_name:
-                        supplementary_size = max(7, min(10, timeline_card_height // 6))
-                        supplementary_width = len(supplementary_name) * supplementary_size
-                        cjk_labels.append({
-                            "text": supplementary_name, "fallback": "",
-                            "origin": (
-                                center_x - supplementary_width // 2,
-                                center_y + node_radius
-                                + max(3, timeline_card_height // 14)
-                                + limb_size + 2,
-                            ),
-                            "size": supplementary_size,
-                            "color": (190, 197, 200) if is_completed else (105, 113, 117),
-                        })
-            else:
-                cjk_labels.append({
-                    "text": "暂无确认的手脚接触",
-                    "fallback": "",
-                    "origin": (
-                        timeline_padding,
-                        min(output_height - 14, timeline_y + timeline_title_height + 2),
-                    ),
-                    "size": max(9, round(base_text_scale * 20)),
-                    "color": (153, 162, 166),
-                })
-            draw_cjk_labels(canvas, cjk_labels)
+            canvas = view.frame(frame,frame_index,(output_width,output_height))
             writer.write(canvas)
             frame_index += 1
-            if progress and (frame_index == total or frame_index % max(1, total // 20) == 0):
-                progress(min(100, round(frame_index * 100 / total)))
-        if frame_index == total:
-            tail_frames = _append_visual_tail(writer, tail_path, canvas, fps=fps, cancelled=cancelled)
-            if tail_path is not None and tail_frames != int((result.get("visual_replay") or {}).get("tail_frame_count") or 0):
-                raise RuntimeError("线路回放帧数发生变化，请重新生成")
+            if progress and (frame_index==total or frame_index%max(1,total//20)==0):
+                progress(min(100,round(frame_index*100/total)))
+        if frame_index!=total:
+            raise RuntimeError("复盘视频未完整生成，请保留原视频后重试")
+        # New analysis is visible throughout playback; no end summary is baked.
     except BaseException:
-        cap.release()
-        writer.release()
-        temporary.unlink(missing_ok=True)
+        cap.release();writer.release();temporary.unlink(missing_ok=True)
         raise
-    cap.release()
-    writer.release()
-    if (frame_index != total or not temporary.is_file()
-            or temporary.stat().st_size <= 0):
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError("叠加视频未完整生成，请保留原视频后重试")
+    cap.release();writer.release()
     try:
-        _validate_visual_video(temporary, width=output_width, height=output_height,
-                               fps=fps, expected_frames=frame_index + tail_frames, cancelled=cancelled)
+        _validate_visual_video(temporary,width=output_width,height=output_height,
+            fps=fps,expected_frames=total,cancelled=cancelled)
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
-    os.replace(temporary, target)
-    return {
-        "schema_version": 3,
-        "container": "webm",
-        "codec": "vp8",
-        "frames_written": frame_index + tail_frames,
-        "analysis_frame_count": frame_index,
-        "analysis_duration_seconds": frame_index / fps,
-        "tail_frame_count": tail_frames,
-        "total_duration_seconds": (frame_index + tail_frames) / fps,
-        "fps": round(fps, 6),
-        "width": output_width,
-        "height": output_height,
-        "pose_rendering": "local_linear_between_measured_samples",
-        "pose_evidence": "cloud_samples_with_local_visual_smoothing",
-        "pose_rendered_frames": len(pose_timeline),
-        "layout": "split_route_map_actions_v7",
-        "hold_map": "route_bounds_zoom_with_touch_markers",
-        "touch_markers": "persistent_sequence_per_contact",
-        "action_labels": "sequence_limb_and_chinese_supplement_v1",
-        "hold_count": len(holds),
-        "action_count": len(actions),
-        "audio_included": False,
-    }
+    os.replace(temporary,target)
+    pane=output_width//2
+    scale=min(pane/width,output_height/height)
+    w,h=max(1,round(width*scale)),max(1,round(height*scale))
+    x,y=(pane-w)//2,(output_height-h)//2
+    return {'schema_version':3,'container':'webm','codec':'vp8','frames_written':total,
+        'analysis_frame_count':total,'analysis_duration_seconds':total/fps,'tail_frame_count':0,
+        'total_duration_seconds':total/fps,'fps':round(fps,6),'width':output_width,'height':output_height,
+        'pose_rendering':'local_linear_between_measured_samples','pose_evidence':'registered_saved_samples',
+        'pose_rendered_frames':len(view.timeline),'center_of_mass':'projected-segment-mass-mean-v1','layout':LAYOUT,
+        'video_rect':[x,y,w,h],'route_map_rect':[pane+x,y,w,h],'route_map_clip':[pane,0,output_width-pane,output_height],
+        'hold_map':'source_scale_current_limb_holds','touch_markers':'none',
+        'hold_highlighting':'current_contact_intervals_only','analysis_side':'right','original_side':'left',
+        'torso_route':'progressive_registered_segments','action_labels':'page_statistics_no_baked_sequence',
+        'hold_count':len(view.holds),'action_count':len((result.get('attempt') or {}).get('action_steps') or build_action_steps((result.get('attempt') or {}).get('contacts') or [])),
+        'audio_included':False}
 
 
 class ReplayAnalyzer(Protocol):
     def analysis_contract(self, video_info: VideoInfo) -> dict: ...
+
+    def detect_holds(self, video: Path, *, route_color: str, video_info: VideoInfo,
+                     route_color_sample: dict | None, saved_route_reference: dict | None,
+                     trim_start_seconds: float, progress: Callable[[str, int], None],
+                     cancelled: Callable[[], bool]) -> dict: ...
 
     def analyze(
         self,
@@ -1914,6 +1617,7 @@ class ReplayAnalyzer(Protocol):
         *,
         route_color: str,
         route_color_sample: dict | None = None,
+        confirmed_holds: dict | None = None,
         video_info: VideoInfo,
         progress: Callable[[str, int], None],
         cancelled: Callable[[], bool],
@@ -1932,6 +1636,11 @@ class ClimbReplayStore:
         self.deletions.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._active_hold_renders: set[str] = set()
+        # Only public snapshots are cached; private worker reads remain fresh.
+        self._public_cache = OrderedDict()
+        self._public_cache_bytes = 0
+        self._public_cache_limit = 16 * 1024 * 1024
+        self._public_cache_entries = 32
         self.recover_interrupted()
 
     def _path(self, job_id: str) -> Path:
@@ -1953,7 +1662,12 @@ class ClimbReplayStore:
 
     @staticmethod
     def _public(job: dict) -> dict:
-        public = {key: value for key, value in job.items() if key not in {"input_path", "source_path", "saved_route_reference", "automatic_result", "coaching", "coaching_history", "template_video", "action_task", "action_result", "action_export", "action_export_media", "action_history", "action_revisions", "action_revision_audit"}}
+        public = {key: value for key, value in job.items() if key not in {"input_path", "source_path", "saved_route_reference", "automatic_result", "coaching", "coaching_history", "template_video", "action_task", "action_result", "action_export", "action_export_media", "action_history", "action_revisions", "action_revision_audit", "action_result_history", "action_commentary_checkpoint", "worker_failure"}}
+        hold_input = hold_review_input(job)
+        public.pop("overlay_history", None)
+        if hold_input:
+            public["holds_revision"] = holds_revision(hold_input)
+        public["holds_pending_local_analysis"] = bool(job.get("hold_edit_draft"))
         if job.get("result"):
             public["reviewed_segments"] = effective_segments(job)
             public["result"] = copy.deepcopy(job["result"])
@@ -1973,6 +1687,8 @@ class ClimbReplayStore:
                 overlay_available = any((media.get(kind) or {}).get("status") == "available" for kind in
                                         (REPLAY_OVERLAY_MEDIA_KIND, REPLAY_REVIEWED_OVERLAY_MEDIA_KIND))
                 visual["can_retry"] = replay_visual_enabled() and job.get("status") == "succeeded" and (source_available or (reference_available and overlay_available))
+        if job.get('skeleton_only'):
+            public = without_hold_data(public)
         return public
 
     @staticmethod
@@ -2013,7 +1729,7 @@ class ClimbReplayStore:
             "media": {
                 "source_video": {
                     "kind": "source_video", "status": "available",
-                    "retention_mode": retention_mode, "delete_at": None,
+                    "retention_mode": REPLAY_RETENTION_KEEP, "delete_at": None,
                     "deleted_at": None, "size_bytes": info.size_bytes,
                     "checksum_sha256": checksum,
                     "content_type": "video/mp4",
@@ -2073,7 +1789,7 @@ class ClimbReplayStore:
             "preparation": {"status": "queued", "trim_start_seconds": trim_start_seconds,
                             "trim_end_seconds": trim_end_seconds, "content_type": content_type},
             "media": {"source_video": {
-                "kind": "source_video", "status": "available", "retention_mode": retention_mode,
+                "kind": "source_video", "status": "available", "retention_mode": REPLAY_RETENTION_KEEP,
                 "delete_at": None, "deleted_at": None, "size_bytes": size,
                 "checksum_sha256": self._sha256(target),
                 "content_type": content_type or "application/octet-stream", "filename": original_name,
@@ -2137,23 +1853,23 @@ class ClimbReplayStore:
             return self._public(job)
 
     def promote_hold_candidate(self, job_id: str, owner: str, candidate_index: int) -> dict:
-        """Confirm one repeated native-mask candidate and recompute from stored poses only."""
+        """Stage one confirmed candidate; defer all recomputation to global confirmation."""
         with self._lock:
             job = self._read(job_id)
             if job.get("owner") != owner:
                 raise HTTPException(404, "未找到复盘任务")
-            if job.get("status") != "succeeded":
-                raise HTTPException(409, "分析完成后才能补入岩点")
+            if job.get("status") not in {"succeeded", "awaiting_hold_review"}:
+                raise HTTPException(409, "本地岩点识别完成后才能补入岩点")
             if job.get("segment_reviews"):
                 raise HTTPException(409, "已有动作段人工复核，请先撤销复核再补入岩点")
             if (job.get("deletion") or {}).get("state") == "queued":
                 raise HTTPException(409, "任务正在删除")
-            result = copy.deepcopy(job.get("result") or {})
+            result = copy.deepcopy(hold_review_input(job))
             candidates = result.get("hold_candidates") or []
             if candidate_index < 0 or candidate_index >= len(candidates):
                 raise HTTPException(404, "未找到候选岩点")
             candidate = candidates[candidate_index]
-            if (candidate.get("contour_source") != "climbing_model_native_mask"
+            if (candidate.get("contour_source") not in {'climbing_model_native_mask','model_guided_mobilesam_mask'}
                     or int(candidate.get("appearances") or 0) < 2
                     or len(candidate.get("polygon") or []) < 3):
                 raise HTTPException(422, "这个候选缺少稳定的模型轮廓，不能直接补入")
@@ -2179,7 +1895,7 @@ class ClimbReplayStore:
             event = {"version": version, "candidate_index": candidate_index, "hold_id": hold["id"],
                      "bbox": hold["bbox"], "color_group": hold.get("color_group"),
                      "reviewed_at": utcnow(), "operation": "promote_candidate"}
-        return self._save_recomputed_holds(job_id, job, result, source, event)
+        return self._save_hold_edits(job_id, job, result, source, event)
 
     def _clicked_hold_proposal(self, job_id: str, owner: str, point: ReplayHoldPoint) -> tuple:
         """Build a read-only proposal; caller holds the store lock."""
@@ -2188,8 +1904,8 @@ class ClimbReplayStore:
             raise HTTPException(404, "未找到复盘任务")
         if (job.get("deletion") or {}).get("state") == "queued":
             raise HTTPException(409, "这条复盘正在删除，无法补入岩点。")
-        if job.get("status") != "succeeded":
-            raise HTTPException(409, "分析完成后才能补入岩点。")
+        if job.get("status") not in {"succeeded", "awaiting_hold_review"}:
+            raise HTTPException(409, "本地岩点识别完成后才能补入岩点。")
         if job.get("segment_reviews"):
             raise HTTPException(409, "已有动作段人工复核。请先撤销动作段复核，再补入岩点。")
         source_item = (job.get("media") or {}).get("source_video") or {}
@@ -2201,7 +1917,7 @@ class ClimbReplayStore:
         video = VideoInfo(**job["video"])
         if point.time_seconds > video.duration_seconds + .1:
             raise HTTPException(422, "所选画面超出视频时长，请重新选择。")
-        result = copy.deepcopy(job.get("result") or {})
+        result = copy.deepcopy(hold_review_input(job))
         reference_index = int((result.get("hold_evidence") or {}).get("reference_frame") or 0)
         frame_index = min(video.frame_count - 1, round(point.time_seconds * video.fps))
         capture = cv2.VideoCapture(str(source))
@@ -2214,23 +1930,23 @@ class ClimbReplayStore:
             capture.release()
         if not ok or frame is None or not reference_ok or reference is None:
             raise HTTPException(422, "无法读取所选画面，请换一帧再试。")
-        polygon = (boxed_hold_polygon(frame, point.region_xyxy)
-                   if point.region_xyxy is not None else clicked_hold_polygon(frame, point.point_xy))
         if frame_index == reference_index:
             matrix = np.eye(3)
         else:
             matrix, _ = align_to_reference(frame, reference)
         if matrix is None:
             raise HTTPException(422, "这帧画面无法对齐墙面，请换一帧再补点。")
+        holds = result.get("holds") or []
+        excluded = existing_hold_mask(holds, matrix, video.width, video.height)
+        polygon = (boxed_hold_polygon(frame, point.region_xyxy, excluded)
+                   if point.region_xyxy is not None else clicked_hold_polygon(frame, point.point_xy, excluded))
         mapped = transform_polygon(polygon, matrix, reference.shape[1], reference.shape[0])
         if len(mapped) < 3:
             raise HTTPException(422, "岩点轮廓无法映射到墙面，请换一帧再试。")
         mapped, frame_support = _multi_frame_clicked_polygon(
-            source, video, frame_index, reference_index, reference, mapped, point.region_xyxy)
+            source, video, frame_index, reference_index, reference, mapped, point.region_xyxy, holds)
         bbox = polygon_bbox(mapped)
         holds = result.get("holds") or []
-        if any(box_iou(bbox, hold["bbox"]) > .3 for hold in holds):
-            raise HTTPException(409, "这个位置已有岩点，无需重复补入。")
         source_polygon = transform_polygon(
             [[x * video.width, y * video.height] for x, y in mapped],
             np.linalg.inv(matrix), video.width, video.height)
@@ -2238,13 +1954,21 @@ class ClimbReplayStore:
 
     def preview_hold_at_point(self, job_id: str, owner: str, point: ReplayHoldPoint) -> dict:
         with self._lock:
-            _, _, _, frame_index, source_polygon, mapped, bbox, support = self._clicked_hold_proposal(
+            job, result, _, frame_index, source_polygon, mapped, bbox, support = self._clicked_hold_proposal(
                 job_id, owner, point)
+            proposal_id = _put(_proposals, {**_binding(self, job, owner, holds_revision(result)),
+                "source_polygon": source_polygon, "reference_polygon": mapped, "bbox": bbox,
+                "frame_index": frame_index, "time_seconds": point.time_seconds, "hold_id": None,
+                "contour_source": "user_box_local_multiframe" if support > 1 else "user_box_local_colour",
+                "score": None}, 64)
             return {"frame_index": frame_index, "source_polygon": source_polygon,
-                    "reference_polygon": mapped, "bbox": bbox, "supporting_frames": support}
+                    "reference_polygon": mapped, "bbox": bbox, "supporting_frames": support,
+                    "proposal_id": proposal_id}
 
     def add_hold_at_point(self, job_id: str, owner: str, point: ReplayHoldPoint) -> dict:
-        """Trace a clicked hold in the source frame and recompute from stored poses."""
+        """Save one traced hold to the draft without recomputing contacts or video."""
+        if point.proposal_id:
+            return editor_commit(self, job_id, owner, point.proposal_id)
         with self._lock:
             job, result, source, frame_index, _, mapped, bbox, support = self._clicked_hold_proposal(
                 job_id, owner, point)
@@ -2268,18 +1992,18 @@ class ClimbReplayStore:
                      "hold_id": hold["id"], "bbox": bbox, "point_xy": point.point_xy,
                      "region_xyxy": point.region_xyxy,
                      "time_seconds": point.time_seconds, "reviewed_at": utcnow()}
-        return self._save_recomputed_holds(job_id, job, result, source, event)
+        return self._save_hold_edits(job_id, job, result, source, event)
 
     def undo_clicked_hold(self, job_id: str, owner: str, review_version: int | None = None) -> dict:
         with self._lock:
             job = self._read(job_id)
             if job.get("owner") != owner:
                 raise HTTPException(404, "未找到复盘任务")
-            if job.get("status") != "succeeded" or (job.get("deletion") or {}).get("state") == "queued":
+            if job.get("status") not in {"succeeded", "awaiting_hold_review"} or (job.get("deletion") or {}).get("state") == "queued":
                 raise HTTPException(409, "这条复盘当前不能撤销补点。")
             if job.get("segment_reviews"):
                 raise HTTPException(409, "已有动作段人工复核。请先撤销动作段复核，再修改岩点。")
-            result = copy.deepcopy(job.get("result") or {})
+            result = copy.deepcopy(hold_review_input(job))
             clicked = [hold for hold in result.get("holds") or []
                        if hold.get("identity_source") in {"user_confirmed_video_click", "user_confirmed_video_candidate"}
                        and (review_version is None or hold.get("review_version") == review_version)]
@@ -2289,16 +2013,122 @@ class ClimbReplayStore:
             source = self._media_path(job_id, job, "source_video")
             if (job.get("media") or {}).get("source_video", {}).get("status") != "available" or not source.is_file():
                 raise HTTPException(409, "原视频已删除，无法重算撤销后的复盘。")
-            result["holds"] = [item for item in result["holds"] if item["id"] != hold["id"]]
+            previous = next((event.get("previous_hold") for event in reversed(job.get("hold_review_history") or [])
+                             if event.get("version") == hold.get("review_version") and event.get("operation") == "edit_hold_contour"), None)
+            result["holds"] = ([previous if item["id"] == hold["id"] else item for item in result["holds"]]
+                               if previous else [item for item in result["holds"] if item["id"] != hold["id"]])
+            original_edit = next((item for item in job.get("hold_review_history") or []
+                                  if item.get("version") == hold.get("review_version")), {})
+            for candidate in original_edit.get("removed_candidates") or []:
+                if (candidate not in (result.get("hold_candidates") or []) and not any(
+                        box_iou(candidate["bbox"], kept["bbox"]) >= .7 for kept in result["holds"])):
+                    result.setdefault("hold_candidates", []).append(copy.deepcopy(candidate))
             event = {"version": len(job.get("hold_review_history") or []) + 1,
                      "operation": "undo_add_hold_at_point" if hold.get("identity_source") == "user_confirmed_video_click" else "undo_promote_candidate",
                      "hold_id": hold["id"],
                      "target_review_version": hold["review_version"],
                      "reviewed_at": utcnow()}
-        return self._save_recomputed_holds(job_id, job, result, source, event)
+        return self._save_hold_edits(job_id, job, result, source, event)
 
     def undo_last_clicked_hold(self, job_id: str, owner: str) -> dict:
         return self.undo_clicked_hold(job_id, owner)
+
+    def remove_hold(self, job_id: str, owner: str, hold_id: int) -> dict:
+        with self._lock:
+            job = self.get(job_id, owner, private=True)
+            if job.get("status") not in {"succeeded", "awaiting_hold_review"} or job.get("segment_reviews"):
+                raise HTTPException(409, "请先完成任务并撤销动作段复核，再修改岩点")
+            result = copy.deepcopy(hold_review_input(job))
+            hold = next((item for item in result.get("holds") or [] if item["id"] == hold_id), None)
+            if hold is None:
+                raise HTTPException(404, "未找到岩点")
+            source = self._media_path(job_id, job, "source_video")
+            if (job.get("media") or {}).get("source_video", {}).get("status") != "available" or not source.is_file():
+                raise HTTPException(409, "原视频已删除，无法修改岩点")
+            result["holds"] = [item for item in result["holds"] if item["id"] != hold_id]
+            event = {"version": len(job.get("hold_review_history") or []) + 1,
+                     "operation": "remove_hold", "hold_id": hold_id, "hold": hold,
+                     "reviewed_at": utcnow()}
+        return self._save_hold_edits(job_id, job, result, source, event)
+
+    def confirm_all_holds(self, job_id: str, owner: str, revision: str) -> dict:
+        with self._lock:
+            job = self.get(job_id, owner, private=True)
+            if job.get("status") not in {"awaiting_hold_review", "succeeded"} or job_id in self._active_hold_renders:
+                raise HTTPException(409, "请先完成岩点修改，再确认全部岩点")
+            if (job.get("deletion") or {}).get("state") == "queued":
+                raise HTTPException(409, "任务正在删除")
+            draft = hold_review_input(job)
+            if not draft.get("holds"):
+                raise HTTPException(422, "请至少确认一个线路岩点")
+            if revision != holds_revision(draft):
+                raise HTTPException(409, "岩点已更新，请重新检查并确认全部岩点")
+            if not job.get("hold_edit_draft"):
+                return self._public(self.update(job_id, holds_confirmation={
+                    "revision": revision, "confirmed_at": utcnow(), "owner": owner}))
+            if job.get("segment_reviews"):
+                raise HTTPException(409, "请先撤销动作段复核，再确认岩点并本地分析")
+            if (job.get("result") or {}).get("visual_replay", {}).get("status") in {"queued", "running"}:
+                raise HTTPException(409, "线路回放正在制作，请完成或取消后再确认岩点")
+            source = self._media_path(job_id, job, "source_video")
+            if not source.is_file() or job.get("media", {}).get("source_video", {}).get("status") != "available":
+                raise HTTPException(409, "原视频已删除，无法本地重新分析")
+            result = copy.deepcopy(job["result"])
+            result.update(job["hold_edit_draft"])
+            event = {"version": len(job.get("hold_review_history") or []) + 1,
+                     "operation": "confirm_all_holds", "reviewed_at": utcnow(),
+                     "confirmed_revision": revision}
+            self._active_hold_renders.add(job_id)
+            if job.get("cancel_requested"):
+                self.update(job_id, cancel_requested=False)
+        try:
+            return self._compute_and_save_holds(job_id, job, result, source, event)
+        finally:
+            with self._lock:
+                self._active_hold_renders.discard(job_id)
+
+    def start_analysis(self, job_id: str, owner: str, consent: dict) -> dict:
+        with self._lock:
+            job = self.get(job_id, owner, private=True)
+            if job.get("status") not in {"awaiting_hold_review", "succeeded", "failed", "cancelled"} or job_id in self._active_hold_renders:
+                raise HTTPException(409, "任务正在处理，请稍后再试")
+            if (job.get("deletion") or {}).get("state") == "queued":
+                raise HTTPException(409, "任务正在删除")
+            draft = skeleton_draft() if consent.get('skip_holds') else hold_review_input(job)
+            revision = holds_revision(draft)
+            if not draft.get("skeleton_only") and (not draft.get("holds") or (job.get("holds_confirmation") or {}).get("revision") != revision):
+                raise HTTPException(409, "请先补点、删点并确认全部岩点，再开始本地分析")
+            if (draft.get("visual_replay") or {}).get("status") in {"queued", "running"}:
+                raise HTTPException(409, "线路回放正在制作，请稍后再试")
+            source = self._media_path(job_id, job, "source_video")
+            if not source.is_file() or job.get("media", {}).get("source_video", {}).get("status") != "available":
+                raise HTTPException(409, "原视频已删除，无法重新分析")
+            attempt = int(job.get("attempt") or 1) + bool(job.get("analysis_runs"))
+            consent = {**consent, "attempt": attempt}
+            # Freeze only the reviewed geometry. Pose requests must use this snapshot.
+            snapshot = {key: copy.deepcopy(draft.get(key)) for key in
+                        ("holds", "hold_candidates", "hold_evidence", "models", "route", "hold_review_version", "skeleton_only")}
+            if job.get("result"):
+                _atomic_json(self._path(job_id).parent / f"analysis-before-{uuid.uuid4().hex}.json", {
+                    "result": job["result"], "automatic_result": job.get("automatic_result"),
+                    "segment_reviews": job.get("segment_reviews"), "media": job.get("media"),
+                    "saved_at": utcnow(), "attempt": job.get("attempt"),
+                })
+            media = copy.deepcopy(job.get("media") or {})
+            media["source_video"]["delete_at"] = None
+            return self._public(self.update(
+                job_id, status="queued", stage="等待本地姿态分析", progress=0,
+                attempt=attempt, hold_draft=snapshot, hold_edit_draft=None, skeleton_only=bool(draft.get("skeleton_only")),
+                analysis_request={"revision": revision, "attempt": attempt, "requested_at": utcnow(), "provider": "local-rtmw",
+                                  "sampling": consent.get('sampling') or {}},
+                paid_analysis_request=None,
+                consent_history=[*(job.get("consent_history") or []), consent],
+                media=media, error=None, error_code=None, cancel_requested=False,
+                started_at=None, finished_at=None))
+
+    def start_paid_analysis(self, job_id: str, owner: str, consent: dict) -> dict:
+        """Compatibility alias; new work always uses the local analysis gate."""
+        return self.start_analysis(job_id, owner, consent)
 
     def refine_sampled_holds(self, job_id: str, owner: str) -> dict:
         """Clean an existing sampled-colour job without any new pose-provider calls."""
@@ -2311,7 +2141,7 @@ class ClimbReplayStore:
             if job.get("status") != "succeeded":
                 raise HTTPException(409, "这条复盘尚未完成，完成后才能清理岩点。")
             history = job.get("hold_review_history") or []
-            result = copy.deepcopy(job.get("result") or {})
+            result = copy.deepcopy(hold_review_input(job))
             if (history and history[0].get("operation") == "refine_sampled_route"
                     and (result.get("hold_refinement") or {}).get("method") == "local_sampled_colour_geometry"):
                 return self._public(job)
@@ -2328,11 +2158,10 @@ class ClimbReplayStore:
             source = self._media_path(job_id, job, "source_video")
             if not source.is_file():
                 raise HTTPException(409, "原视频文件不存在")
-            if sample.get("rgb"):
+            sample_group = ReplayAnalyzerBase._route_colour(str((result.get("route") or {}).get("color") or job.get("route_color") or ""))
+            if sample_group not in ROUTE_COLOR_NAMES and sample.get("rgb"):
                 sample_lab = cv2.cvtColor(np.uint8([[sample["rgb"]]]), cv2.COLOR_RGB2LAB)[0, 0]
                 sample_group = lab_color_name(sample_lab, twelve_colors=True)
-            else:
-                sample_group = AliyunReplayAnalyzer._route_colour(str((result.get("route") or {}).get("color") or job.get("route_color") or ""))
             original_holds = result.get("holds") or []
             all_holds = [*original_holds, *(result.get("hold_candidates") or [])]
             selected, candidates, evidence = select_sampled_route_holds(
@@ -2358,11 +2187,11 @@ class ClimbReplayStore:
             event = {"version": 1, "operation": "refine_sampled_route",
                      "before": len(original_holds), "after": len(selected),
                      "reviewed_at": utcnow()}
-        return self._save_recomputed_holds(job_id, job, result, source, event)
+        return self._save_hold_edits(job_id, job, result, source, event)
 
-    def _save_recomputed_holds(self, job_id: str, job: dict, result: dict,
-                               source: Path, event: dict) -> dict:
-        """Reserve briefly, render without the store lock, then compare and commit."""
+    def _save_hold_edits(self, job_id: str, job: dict, result: dict,
+                         source: Path, event: dict) -> dict:
+        """Stage each edit atomically; global confirmation alone can analyze the batch."""
         with self._lock:
             current = self._read(job_id)
             if job_id in self._active_hold_renders:
@@ -2371,16 +2200,18 @@ class ClimbReplayStore:
                 raise HTTPException(409, "复盘内容已更新，请刷新后重试")
             if (current.get("deletion") or {}).get("state") == "queued":
                 raise HTTPException(409, "这条复盘正在删除")
+            if current.get("status") not in {"succeeded", "awaiting_hold_review"}:
+                raise HTTPException(409, "当前任务不能修改岩点")
+            if holds_revision(hold_review_input(current)) != holds_revision(hold_review_input(job)):
+                raise HTTPException(409, "岩点已更新，请刷新后重试")
             if (current.get("result") or {}).get("visual_replay", {}).get("status") in {"queued", "running"}:
                 raise HTTPException(409, "线路回放正在制作，请完成或取消后再修改岩点")
-            if current.get("cancel_requested"):
-                self.update(job_id, cancel_requested=False)
-            self._active_hold_renders.add(job_id)
-        try:
-            return self._compute_and_save_holds(job_id, job, result, source, event)
-        finally:
-            with self._lock:
-                self._active_hold_renders.discard(job_id)
+            result["hold_review_version"] = int(event["version"])
+            draft_key = "hold_draft" if current.get("status") == "awaiting_hold_review" else "hold_edit_draft"
+            return self._public(self.update(
+                job_id, **{draft_key: hold_geometry(result)}, holds_confirmation=None,
+                paid_analysis_request=None, analysis_request=None,
+                hold_review_history=[*(current.get("hold_review_history") or []), event]))
 
     def _compute_and_save_holds(self, job_id: str, job: dict, result: dict,
                                source: Path, event: dict) -> dict:
@@ -2418,15 +2249,15 @@ class ClimbReplayStore:
         finally:
             cap.release()
         sample_fps = float((result.get("analysis") or {}).get("sampling", {}).get("effective_fps") or 1)
-        attempt = AliyunReplayAnalyzer._contacts(records, result["holds"], sample_fps)
+        contact_trace = []
+        attempt = ReplayAnalyzerBase._contacts(records, result["holds"], sample_fps, source_fps=video.fps, trace=contact_trace)
+        attempt['contact_evidence'] = {'version':1,'basis':'projected_joint_and_duration_not_physical_contact_proof','frames':contact_trace}
         add_attempt_source_times(attempt, samples, video)
         attempt["action_steps"] = build_action_steps(attempt.get("contacts") or [])
         result["attempt"] = attempt
         attempt["segments"] = build_segments(result)
         result["hold_review_version"] = version
-        warning = ("取色线路已按颜色族、轮廓大小和多帧证据清理自动岩点；其他候选仍可人工补入。"
-                   if event["operation"] == "refine_sampled_route" else
-                   "人工补入的模型候选岩点已参与接触重算；接触仍需结合原视频复核。")
+        warning = "全部岩点修订已确认，已复用保存的骨架统一本地重算接触；未新增姿态请求。"
         result["warnings"] = [*(result.get("warnings") or []), warning]
         target = self._path(job_id).parent / f"overlay-review-{version}.webm"
 
@@ -2438,7 +2269,8 @@ class ClimbReplayStore:
             return bool(current.get("cancel_requested") or
                         (current.get("deletion") or {}).get("state") == "queued" or
                         visual_input_version(current.get("result") or {}, current.get("segment_reviews")) !=
-                        visual_input_version(job.get("result") or {}, job.get("segment_reviews")))
+                        visual_input_version(job.get("result") or {}, job.get("segment_reviews")) or
+                        holds_revision(hold_review_input(current)) != event["confirmed_revision"])
 
         try:
             options = {"cancelled": cancelled} if replay_visual_enabled() else {}
@@ -2459,6 +2291,9 @@ class ClimbReplayStore:
                 }
                 self._add_reference_media(media, result, source.parent)
                 current.update(result=result, media=media,
+                               hold_edit_draft=None, paid_analysis_request=None, analysis_request=None,
+                               holds_confirmation={"revision": holds_revision(result),
+                                                   "confirmed_at": event["reviewed_at"], "owner": current["owner"]},
                                automatic_result=current.get("automatic_result") or current.get("result"),
                                hold_review_history=[*(current.get("hold_review_history") or []), event],
                                updated_at=utcnow())
@@ -2469,6 +2304,64 @@ class ClimbReplayStore:
         except BaseException:
             target.unlink(missing_ok=True)
             raise
+
+    def refresh_route_map(self, job_id: str, owner: str) -> dict:
+        """Render saved evidence into a new file; never request or recompute poses."""
+        with self._lock:
+            job = self.get(job_id, owner, private=True)
+            if (job.get("status") != "succeeded" or not job.get("result")
+                    or job.get("deletion") or job_id in self._active_hold_renders
+                    or (job["result"].get("visual_replay") or {}).get("status") in {"queued", "running"}
+                    or any((job.get(key) or {}).get("status") in {"queued", "running"}
+                           for key in ("action_task", "action_export"))):
+                raise HTTPException(409, "请等待当前处理完成后，再本地更新岩点图")
+            source = self._media_path(job_id, job, "source_video")
+            if ((job.get("media", {}).get("source_video") or {}).get("status") != "available"
+                    or not source.is_file()):
+                raise HTTPException(409, "原片已不可用，无法重新生成岩点图；旧复盘仍保留")
+            self._active_hold_renders.add(job_id)
+            expected_revision = holds_revision(hold_review_input(job))
+            result = copy.deepcopy(job["result"])
+            target = self._path(job_id).parent / f"overlay-map-{uuid.uuid4().hex}.webm"
+
+        def cancelled() -> bool:
+            try:
+                current = self.get(job_id, private=True)
+            except HTTPException:
+                return True
+            return bool(current.get("cancel_requested") or current.get("deletion")
+                        or current.get("status") != "succeeded"
+                        or holds_revision(hold_review_input(current)) != expected_revision
+                        or current.get("result") != job["result"])
+
+        try:
+            result["overlay"] = render_replay_overlay_video(source, target, result, cancelled=cancelled)
+            with self._lock:
+                if cancelled():
+                    raise HTTPException(409, "复盘内容已更新，已保留上一版，请刷新后重试")
+                current = self.get(job_id, owner, private=True)
+                media = copy.deepcopy(current.get("media") or {})
+                previous = media.get(REPLAY_REVIEWED_OVERLAY_MEDIA_KIND)
+                history = list(current.get("overlay_history") or [])
+                if previous and previous.get("status") == "available":
+                    history.append({"media": copy.deepcopy(previous),
+                                    "overlay": copy.deepcopy(job["result"].get("overlay")),
+                                    "visual_replay": copy.deepcopy(job["result"].get("visual_replay"))})
+                media[REPLAY_REVIEWED_OVERLAY_MEDIA_KIND] = {
+                    "kind": REPLAY_REVIEWED_OVERLAY_MEDIA_KIND, "status": "available",
+                    "storage_name": target.name, "retention_mode": REPLAY_RETENTION_KEEP,
+                    "delete_at": None, "deleted_at": None, "size_bytes": target.stat().st_size,
+                    "checksum_sha256": self._sha256(target), "content_type": "video/webm",
+                    "filename": f"{Path(job.get('original_name') or 'climb-replay').stem}-当前四肢岩点复盘.webm",
+                    "generated_at": utcnow(), "visual_replay": copy.deepcopy(result.get("visual_replay")),
+                }
+                return self._public(self.update(job_id, result=result, media=media, overlay_history=history))
+        except BaseException:
+            target.unlink(missing_ok=True)
+            raise
+        finally:
+            with self._lock:
+                self._active_hold_renders.discard(job_id)
 
     def finish_preparation(self, job_id: str, path: Path, info: VideoInfo) -> dict:
         job = self.get(job_id, private=True)
@@ -2484,32 +2377,80 @@ class ClimbReplayStore:
         preparation = dict(job["preparation"])
         preparation["status"] = "completed"
         raw = Path(job["source_path"])
+        high_resolution_source = {"storage_name": raw.name,
+            "checksum_sha256": self._sha256(raw), "size_bytes": raw.stat().st_size,
+            "trim_start_seconds": preparation.get("trim_start_seconds") or 0,
+            "retention_mode": REPLAY_RETENTION_KEEP}
+        high_resolution_source['video'] = asdict(probe_video(raw))
+        high_resolution_source['time_mapping'] = 'prepared_timestamp_plus_trim_start; original_decode_timestamp'
+        source.update(retention_mode=REPLAY_RETENTION_KEEP, delete_at=None)
         updated = self.update(job_id, input_path=str(target), source_path=None,
+                              high_resolution_source=high_resolution_source,
                               video=asdict(info), media=media, preparation=preparation,
                               stage="视频已整理，准备分析", progress=12)
-        try:
-            raw.unlink(missing_ok=True)
-        except OSError:
-            # A later cleanup pass removes the redundant upload after a sharing lock clears.
-            pass
         return updated
 
     def get(self, job_id: str, owner: str | None = None, *, private=False) -> dict:
         with self._lock:
+            if not private:
+                return self._cached_public(job_id, owner)
             job = self._read(job_id)
         if owner is not None and job.get("owner") != owner:
             raise HTTPException(404, "未找到复盘任务")
         return job if private else self._public(job)
 
+    def _cached_public(self, job_id: str, owner: str | None) -> dict:
+        """Called under the store lock; atomic replacements invalidate snapshots."""
+        path = self._path(job_id)
+        def fingerprint():
+            stat = path.stat()
+            return (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino,
+                    replay_visual_enabled())
+        try:
+            version = fingerprint()
+        except OSError:
+            previous = self._public_cache.pop(job_id, None)
+            if previous:
+                self._public_cache_bytes -= len(previous[2])
+            raise HTTPException(404, "未找到复盘任务")
+        cached = self._public_cache.get(job_id)
+        if cached and cached[0] == version:
+            if owner is not None and cached[1] != owner:
+                raise HTTPException(404, "未找到复盘任务")
+            self._public_cache.move_to_end(job_id)
+            return json.loads(cached[2])
+        job = self._read(job_id)
+        if owner is not None and job.get("owner") != owner:
+            raise HTTPException(404, "未找到复盘任务")
+        public = self._public(job)
+        encoded = json.dumps(public, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+        previous = self._public_cache.pop(job_id, None)
+        if previous:
+            self._public_cache_bytes -= len(previous[2])
+        try:
+            unchanged = fingerprint() == version
+        except OSError:
+            unchanged = False
+        if unchanged and len(encoded) <= self._public_cache_limit:
+            self._public_cache[job_id] = (version, job.get("owner"), encoded)
+            self._public_cache_bytes += len(encoded)
+            while (self._public_cache_bytes > self._public_cache_limit
+                   or len(self._public_cache) > self._public_cache_entries):
+                _, removed = self._public_cache.popitem(last=False)
+                self._public_cache_bytes -= len(removed[2])
+        return public
+
     def list(self, owner: str) -> list[dict]:
         found = []
         for path in self.jobs.glob("*/job.json"):
             try:
-                job = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+                job = self.get(path.parent.name, owner)
+            except HTTPException as exc:
+                if exc.status_code != 404:
+                    raise
                 continue
             if job.get("owner") == owner:
-                found.append(self._public(job))
+                found.append(job)
         return sorted(found, key=lambda item: item["created_at"], reverse=True)
 
     def update(self, job_id: str, **changes) -> dict:
@@ -2536,7 +2477,7 @@ class ClimbReplayStore:
             expected_name = REPLAY_OVERLAY_FILENAME
         elif media_kind == REPLAY_REVIEWED_OVERLAY_MEDIA_KIND:
             expected_name = str(((job.get("media") or {}).get(media_kind) or {}).get("storage_name") or "")
-            if not re.fullmatch(r"overlay-(?:review-[1-9][0-9]*|visual-[a-f0-9]{32})\.webm", expected_name):
+            if not re.fullmatch(r"overlay-(?:review-[1-9][0-9]*|(?:visual|map)-[a-f0-9]{32})\.webm", expected_name):
                 raise RuntimeError("修订视频文件名未通过安全校验")
             path = (directory / expected_name).resolve()
         elif media_kind == REPLAY_REFERENCE_MEDIA_KIND:
@@ -2630,10 +2571,7 @@ class ClimbReplayStore:
         source = dict(media.get("source_video") or {})
         if source.get("status") != "available":
             return self._public(job)
-        if source.get("retention_mode") == REPLAY_RETENTION_KEEP:
-            source["delete_at"] = None
-        else:
-            source["delete_at"] = utc_after(24 if outcome == "succeeded" else 72)
+        source.update(retention_mode=REPLAY_RETENTION_KEEP, delete_at=None)
         media["source_video"] = source
         if REPLAY_REFERENCE_MEDIA_KIND in media:
             media[REPLAY_REFERENCE_MEDIA_KIND] = {**media[REPLAY_REFERENCE_MEDIA_KIND], "delete_at": source["delete_at"]}
@@ -2685,32 +2623,22 @@ class ClimbReplayStore:
         if media_kind == "source_video":
             changes["input_path"] = None
             changes["source_path"] = None
+            changes["high_resolution_source"] = None
+            clear_editor_cache(self, job_id)
         return self._public(self.update(job_id, **changes))
 
     def cleanup_due_media(self) -> list[str]:
         deleted = []
-        now = datetime.now(timezone.utc)
         for path in self.jobs.glob("*/job.json"):
             try:
                 with self._lock:
                     job = json.loads(path.read_text(encoding="utf-8"))
-                    source = (job.get("media") or {}).get("source_video") or {}
-                    due = source.get("delete_at")
-                if source.get("status") == "available" and due:
-                    when = datetime.fromisoformat(due)
-                    if when.tzinfo is None:
-                        when = when.replace(tzinfo=timezone.utc)
-                    if when <= now:
-                        self.delete_media(job["id"], None, "source_video")
-                        deleted.append(job["id"])
+                # Historical deadlines do not authorize deleting retained originals.
                 with self._lock:
                     job = self._read(job["id"])
                     overlay = (job.get("media") or {}).get(REPLAY_OVERLAY_MEDIA_KIND) or {}
                     if overlay.get("status") == "cleanup_pending":
                         self.discard_overlay(job["id"])
-                    if (job.get("preparation") or {}).get("status") == "completed":
-                        for suffix in (*REPLAY_VIDEO_SUFFIXES, ".video"):
-                            (path.parent / f"source{suffix}").unlink(missing_ok=True)
                     if job.get("status") in {"failed", "cancelled", "succeeded"} and job["id"] not in self._active_hold_renders:
                         (path.parent / ".preparing.mp4").unlink(missing_ok=True)
                         if (job.get("result") or {}).get("visual_replay", {}).get("status") not in {"queued", "running"}:
@@ -2718,8 +2646,10 @@ class ClimbReplayStore:
                                 if temporary.is_dir() and temporary.parent.resolve() == path.parent.resolve():
                                     shutil.rmtree(temporary)
                             current = ((job.get("media") or {}).get(REPLAY_REVIEWED_OVERLAY_MEDIA_KIND) or {}).get("storage_name")
+                            saved_overlays = {item.get("media", {}).get("storage_name")
+                                              for item in job.get("overlay_history") or []}
                             for obsolete in path.parent.glob("overlay-visual-*.webm"):
-                                if obsolete.name != current:
+                                if obsolete.name != current and obsolete.name not in saved_overlays:
                                     obsolete.unlink(missing_ok=True)
             except (OSError, TypeError, ValueError, json.JSONDecodeError, HTTPException):
                 continue
@@ -2731,6 +2661,7 @@ class ClimbReplayStore:
 
     def _request_delete_locked(self, job_id: str, owner: str) -> dict:
         job = self.get(job_id, owner, private=True)
+        clear_editor_cache(self, job_id)
         if getattr(self, "coaching_manager", None):
             self.coaching_manager.invalidate(job_id)
         receipt_path = self._deletion_path(job_id)
@@ -2890,7 +2821,7 @@ class ClimbReplayStore:
                 source = dict(media.get("source_video") or {})
                 if (source.get("status") == "available"
                         and source.get("retention_mode") != REPLAY_RETENTION_KEEP):
-                    source["delete_at"] = utc_after(72)
+                    source.update(retention_mode=REPLAY_RETENTION_KEEP, delete_at=None)
                     media["source_video"] = source
                 item.update(
                     status="failed",
@@ -2914,11 +2845,11 @@ class ClimbReplayStore:
         if job["status"] in {"succeeded", "failed", "cancelled"}:
             return self._public(job)
         changes = {"cancel_requested": True, "stage": "正在取消"}
-        if job["status"] == "queued":
+        if job["status"] in {"queued", "awaiting_hold_review"}:
             changes.update(status="cancelled", progress=job["progress"],
                            error_code="cancelled_by_user", finished_at=utcnow())
         result = self._public(self.update(job_id, **changes))
-        if job["status"] == "queued":
+        if job["status"] in {"queued", "awaiting_hold_review"}:
             result = self.schedule_source_cleanup(job_id, outcome="failed")
         return result
 
@@ -2988,6 +2919,8 @@ class ClimbReplayStore:
             error=None,
             cancel_requested=False,
             result=None,
+            paid_analysis_request=None, analysis_request=None,
+            worker_failure=None,
             attempt=int(job.get("attempt") or 1) + 1,
             consent_history=history,
             media=media,
@@ -3171,7 +3104,20 @@ class ClimbReplayManager:
                     self._execute_visual(job_id)
                 else:
                     self._execute(job_id)
-            except Exception:
+            except Exception as exc:
+                frames = []
+                traceback = exc.__traceback__
+                while traceback is not None:
+                    code = traceback.tb_frame.f_code
+                    frames.append({"file": Path(code.co_filename).name,
+                                   "function": code.co_name, "line": traceback.tb_lineno})
+                    traceback = traceback.tb_next
+                diagnostic = {"exception_type": type(exc).__name__, "frames": frames[-8:]}
+                identifier = getattr(exc, "name", None)
+                if isinstance(identifier, str) and identifier.isidentifier():
+                    diagnostic["identifier"] = identifier
+                # Exception text can contain provider credentials or private paths.
+                logging.getLogger(__name__).error("Replay worker stopped: %s", json.dumps(diagnostic))
                 if action == "delete":
                     self.store.fail_deletion(job_id)
                 else:
@@ -3182,7 +3128,7 @@ class ClimbReplayManager:
                             self.store.update(
                                 job_id, status="failed", stage="分析失败", progress=0,
                                 error="分析任务意外停止，请稍后重试",
-                                error_code="worker_failed", finished_at=utcnow(),
+                                error_code="worker_failed", worker_failure=diagnostic, finished_at=utcnow(),
                             )
                     except Exception:
                         pass
@@ -3294,11 +3240,23 @@ class ClimbReplayManager:
         job = self.store.get(job_id, private=True)
         if job["status"] != "queued" or job.get("cancel_requested"):
             return
-        if not active_consent(job):
+        analysis_request = job.get("analysis_request") or {}
+        draft = job.get("hold_draft") or {}
+        analysis_authorized = bool(
+            analysis_request.get("attempt") == int(job.get("attempt") or 1)
+            and analysis_request.get("revision") == holds_revision(draft)
+            and (draft.get('skeleton_only') or (
+                (job.get("holds_confirmation") or {}).get("revision") == holds_revision(draft)
+                and draft.get("holds"))))
+        if analysis_request and not analysis_authorized:
+            self.store.update(job_id, status="awaiting_hold_review", stage="请重新确认全部岩点",
+                              paid_analysis_request=None, analysis_request=None, holds_confirmation=None)
+            return
+        if analysis_authorized and not active_consent(job):
             self.store.schedule_source_cleanup(job_id, outcome="failed")
             self.store.update(
                 job_id, status="failed", stage="缺少有效授权", progress=0,
-                error="本次任务没有有效的抽样画面第三方处理授权，请重新确认后重试",
+                error="本次任务没有有效的本地分析授权，请重新启动分析",
                 finished_at=utcnow(),
             )
             return
@@ -3306,6 +3264,14 @@ class ClimbReplayManager:
                           started_at=utcnow(), error=None, error_code=None)
         attempt = int(job.get("attempt") or 1)
         run_started = False
+        rerun_target = (self.store._path(job_id).parent / f"overlay-visual-{uuid.uuid4().hex}.webm"
+                        if analysis_authorized and job.get("result") else None)
+
+        def discard_attempt_overlay() -> None:
+            if rerun_target is not None:
+                rerun_target.unlink(missing_ok=True)
+            else:
+                self.store.discard_overlay(job_id)
 
         def is_cancelled() -> bool:
             return self._stop.is_set() or bool(self.store.get(job_id, private=True).get("cancel_requested"))
@@ -3339,12 +3305,45 @@ class ClimbReplayManager:
                 finally:
                     prepared.unlink(missing_ok=True)
             info = VideoInfo(**job["video"])
+            if not analysis_authorized and any(c.get('skip_holds') for c in job.get('consent_history', [])):
+                self.store.update(job_id, status='awaiting_hold_review', hold_draft=skeleton_draft())
+                self.store.start_analysis(job_id, job['owner'], {**job['consent_history'][-1], 'event': 'granted', 'skip_holds': True})
+                job = self.store.get(job_id, private=True)
+                analysis_authorized = True
+            if not analysis_authorized:
+                # Uploads and retries stop here, before SDK initialization or any pose request.
+                draft = job.get("hold_draft")
+                if not draft:
+                    draft_args = {
+                        "route_color": job["route_color"], "video_info": info,
+                        "route_color_sample": job.get("route_color_sample"),
+                        "saved_route_reference": job.get("saved_route_reference"),
+                        "trim_start_seconds": float((job.get("preparation") or {}).get("trim_start_seconds") or 0),
+                        "progress": progress, "cancelled": is_cancelled,
+                    }
+                    draft = self.analyzer.detect_holds(Path(job["input_path"]), **draft_args)
+                if is_cancelled():
+                    raise ReplayCancelled()
+                self.store.update(job_id, status="awaiting_hold_review", stage="请补点、删点并确认全部岩点",
+                                  progress=100, hold_draft=draft, holds_confirmation=None,
+                                  paid_analysis_request=None, analysis_request=None, error=None, error_code=None)
+                return
+            if hasattr(self.analyzer, 'configure_sampling'):
+                self.analyzer.configure_sampling((job.get('analysis_request') or {}).get('sampling'))
+            if hasattr(self.analyzer, 'configure_cache'):
+                from .replay_actions import digest
+                self.analyzer.configure_cache(self.store._path(job_id).parent / '.pose-cache.json', {
+                    'source_sha256':self.store._sha256(Path(job['input_path'])),
+                    'video':job['video'], 'pose_model':self.analyzer.pose_model,
+                    'pose_code_version':'raw-detector-per-box-pose-cache-v3',
+                    'holds_sha256':digest((job.get('hold_draft') or {}).get('holds', []))})
             initial_analysis = self.analyzer.analysis_contract(info)
             self.store.start_analysis_run(job_id, attempt, initial_analysis)
             run_started = True
             analyze_args = {
                 "route_color": job["route_color"], "video_info": info,
                 "progress": progress, "cancelled": is_cancelled, "telemetry": telemetry,
+                "confirmed_holds": job["hold_draft"],
             }
             if job.get("route_color_sample"):
                 analyze_args["route_color_sample"] = job["route_color_sample"]
@@ -3352,50 +3351,89 @@ class ClimbReplayManager:
                     analyze_args["trim_start_seconds"] = float(job.get("preparation", {}).get("trim_start_seconds") or 0)
             if job.get("saved_route_reference"):
                 analyze_args["saved_route_reference"] = job["saved_route_reference"]
+            if rerun_target is not None:
+                analyze_args["overlay_target"] = rerun_target
             result = self.analyzer.analyze(Path(job["input_path"]), **analyze_args)
+            if job.get('skeleton_only'):
+                result = without_hold_data(result)
+            if result.get('pose_samples') and result.get('video'):
+                from .replay_actions import organize
+                from .replay_action_features import enrich_action_features
+                feature_started = time.perf_counter()
+                organized = enrich_action_features(organize({**job, 'result':result}), {**job, 'result':result})
+                result.update(action_evidence=organized['action_evidence'], action_groups=organized['groups'])
+                if job.get('skeleton_only'):
+                    result = without_hold_data(result)
+                result['analysis']['timings_ms']['features'] = round((time.perf_counter()-feature_started)*1000)
+                requested = (job.get('analysis_request') or {}).get('requested_at')
+                if requested:
+                    result['analysis']['timings_ms']['local_elapsed_from_start'] = round(
+                        (datetime.now(timezone.utc)-datetime.fromisoformat(requested)).total_seconds()*1000)
+                self.store.update_analysis_run(job_id, attempt, result['analysis'])
             if is_cancelled():
                 raise ReplayCancelled()
+            if rerun_target is not None and not rerun_target.is_file():
+                raise RuntimeError("新的复盘视频未生成，已保留原版本")
             overlay_path = Path(job["input_path"]).with_name(REPLAY_OVERLAY_FILENAME)
-            if overlay_path.is_file():
+            if rerun_target is None and overlay_path.is_file():
                 self.store.register_overlay(job_id, result)
             self.store.finish_analysis_run(job_id, attempt, state="succeeded")
             self.store.schedule_source_cleanup(job_id, outcome="succeeded")
+            media = copy.deepcopy(self.store.get(job_id, private=True).get("media") or {})
+            if rerun_target is not None:
+                media[REPLAY_REVIEWED_OVERLAY_MEDIA_KIND] = {
+                    "kind": REPLAY_REVIEWED_OVERLAY_MEDIA_KIND, "status": "available",
+                    "storage_name": rerun_target.name, "retention_mode": REPLAY_RETENTION_KEEP,
+                    "delete_at": None, "deleted_at": None, "size_bytes": rerun_target.stat().st_size,
+                    "checksum_sha256": self.store._sha256(rerun_target), "content_type": "video/webm",
+                    "filename": "重新分析复盘.webm", "generated_at": utcnow(),
+                    "visual_replay": copy.deepcopy(result.get("visual_replay")),
+                }
+                self.store._add_reference_media(media, result, rerun_target.parent)
+            elif (media.get(REPLAY_REVIEWED_OVERLAY_MEDIA_KIND) or {}).get("status") == "available":
+                media[REPLAY_REVIEWED_OVERLAY_MEDIA_KIND]["status"] = "superseded"
             self.store.update(job_id, status="succeeded", stage="分析完成", progress=100,
-                              result=result, error_code=None, finished_at=utcnow())
+                              result=result, media=media, segment_reviews={},
+                              paid_analysis_request=None, analysis_request=None, error_code=None, finished_at=utcnow())
         except (ReplayCancelled, InterruptedError):
-            self.store.discard_overlay(job_id)
+            discard_attempt_overlay()
             if run_started:
                 self.store.finish_analysis_run(
                     job_id, attempt, state="cancelled", error_code="cancelled_by_user",
                 )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
-            self.store.update(job_id, status="cancelled", stage="已取消",
+            self.store.update(job_id, status="succeeded" if rerun_target else "cancelled",
+                              stage="重分析已取消，保留原复盘" if rerun_target else "已取消",
                               error=None, error_code="cancelled_by_user", finished_at=utcnow())
         except ReplayConfigurationError as exc:
-            self.store.discard_overlay(job_id)
+            discard_attempt_overlay()
             if run_started:
                 self.store.finish_analysis_run(
                     job_id, attempt, state="failed", error_code="pose_provider_unconfigured",
                 )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
             self.store.update(
-                job_id, status="failed", stage="姿态服务未配置", progress=0,
+                job_id, status="succeeded" if rerun_target else "failed",
+                stage="本地骨架模型不可用，保留原复盘" if rerun_target else "本地骨架模型不可用", progress=0,
                 error=str(exc)[:1000], error_code="pose_provider_unconfigured",
                 finished_at=utcnow(),
             )
         except Exception as exc:  # the public job exposes a concise actionable error
-            self.store.discard_overlay(job_id)
+            discard_attempt_overlay()
             code = "analysis_failed" if run_started else "media_processing_failed"
             if run_started:
                 self.store.finish_analysis_run(
                     job_id, attempt, state="failed", error_code=code,
                 )
             self.store.schedule_source_cleanup(job_id, outcome="failed")
-            self.store.update(job_id, status="failed", stage="分析失败" if run_started else "视频无法处理", progress=0,
+            self.store.update(job_id, status="succeeded" if rerun_target else "failed",
+                              stage="重分析失败，保留原复盘" if rerun_target else ("分析失败" if run_started else "视频无法处理"), progress=0,
                               error=str(exc)[:1000], error_code=code,
                               finished_at=utcnow())
 
     def close(self) -> None:
+        if getattr(self.store, 'prepared_previews', None):
+            self.store.prepared_previews.close()
         if getattr(self.store, "action_manager", None):
             self.store.action_manager.close()
         if getattr(self.store, "template_manager", None):
@@ -3421,17 +3459,908 @@ COLOR_PROMPTS = {
 }
 
 
-class AliyunReplayAnalyzer:
-    """Local hold detection plus Alibaba Cloud body-keypoint estimation."""
+class ReplayAnalyzerBase:
+    """Shared local hold, contact, sampled evidence and replay rendering pipeline."""
 
     hold_model = "local-climbing-mask-rcnn"
-    pose_model = "aliyun-viapi-bodyposture-2019-12-30"
+    pose_model = "unconfigured"
     _coco_parts = {
         0: "nose", 1: "left_eye", 2: "right_eye", 3: "left_ear", 4: "right_ear",
         5: "left_shoulder", 6: "right_shoulder", 7: "left_elbow", 8: "right_elbow",
         9: "left_wrist", 10: "right_wrist", 11: "left_hip", 12: "right_hip",
         13: "left_knee", 14: "right_knee", 15: "left_ankle", 16: "right_ankle",
     }
+
+    def _prepare_pose_run(self, confirmed_holds: dict) -> None:
+        raise NotImplementedError
+
+    def _pose_frame(self, frame, **kwargs):
+        raise NotImplementedError
+
+    def _sampling_positions(self, video_info: VideoInfo) -> tuple[float, np.ndarray]:
+        sample_fps = min(self.pose_fps, video_info.fps)
+        positions = np.unique(np.clip(
+            np.rint(np.arange(0, video_info.duration_seconds, 1 / sample_fps) * video_info.fps).astype(int),
+            0, video_info.frame_count - 1,
+        ))
+        return sample_fps, positions
+
+    @staticmethod
+    def _as_list(value: Any) -> list:
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
+    @classmethod
+    def _pose_candidates(cls, payload: dict) -> list[dict]:
+        data = payload.get("Data") or payload.get("data") or {}
+        candidates = []
+        for output in cls._as_list(data.get("Outputs") or data.get("outputs")):
+            if not isinstance(output, dict):
+                continue
+            for result in cls._as_list(output.get("Results") or output.get("results")):
+                if not isinstance(result, dict):
+                    continue
+                parts = {}
+                for body in cls._as_list(result.get("Bodies") or result.get("bodies")):
+                    if not isinstance(body, dict):
+                        continue
+                    label = str(body.get("Label") or body.get("label") or "").lower()
+                    positions = cls._as_list(body.get("Positions") or body.get("positions"))
+                    raw_points = None
+                    for position in positions:
+                        if isinstance(position, dict):
+                            raw_points = position.get("Points") or position.get("points")
+                            if raw_points is not None:
+                                break
+                    if not isinstance(raw_points, (list, tuple)) or len(raw_points) < 2:
+                        continue
+                    try:
+                        x, y = float(raw_points[0]), float(raw_points[1])
+                        confidence = float(body.get("Confident") or body.get("confident") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if math.isfinite(x) and math.isfinite(y) and math.isfinite(confidence):
+                        parts[label] = ([min(1.0, max(0.0, x)), min(1.0, max(0.0, y))],
+                                        min(1.0, max(0.0, confidence)))
+                valid = [point for point, score in parts.values() if score > .2]
+                if len(valid) < 4:
+                    continue
+                xs, ys = [point[0] for point in valid], [point[1] for point in valid]
+                bbox = [min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)]
+                candidates.append({
+                    "parts": parts,
+                    "bbox": bbox,
+                    "area": bbox[2] * bbox[3],
+                    "confidence": float(np.mean([score for _, score in parts.values()])),
+                })
+        return candidates
+
+    @staticmethod
+    def _hold_frames(video: Path, info: VideoInfo, sample: dict | None,
+                     cancelled: Callable[[], bool] | None = None) -> list[tuple[int, np.ndarray]]:
+        total = info.frame_count
+        cancelled = cancelled or (lambda: False)
+        sample_index = None
+        profile = os.getenv("CLIMB_REPLAY_HOLD_FRAME_PROFILE", "4")
+        frame_budget = int(profile) if profile in {"6", "8"} else 4
+        indices = {min(total - 1, int(round(value))) for value in np.linspace(
+            total * (.02 if frame_budget > 4 else .08), total * (.98 if frame_budget > 4 else .92), frame_budget)}
+        if profile == "seconds":
+            # Offline coverage experiment; default remains four frames.
+            indices.update(min(total-1,round(second*info.fps))
+                           for second in range(math.ceil(info.duration_seconds)))
+        if sample and sample.get("source") == "video" and sample.get("point_xy") is not None:
+            trim = float(sample.get("trim_start_seconds") or 0)
+            sample_index = round((float(sample.get("time_seconds") or 0) - trim) * info.fps)
+            if not 0 <= sample_index < total:
+                raise ValueError("取样时间不在保留的视频片段内，请重新选择岩点")
+            indices.add(sample_index)
+        cap = cv2.VideoCapture(str(video))
+        frames = []
+        try:
+            for index in sorted(indices):
+                if cancelled():
+                    raise InterruptedError("选帧已取消")
+                # Experimental profiles seek a clearer neighbor; default four-frame
+                # behavior stays frozen until the ten-video comparison is reviewed.
+                if frame_budget > 4 and index != sample_index:
+                    options = []
+                    for offset in (-round(info.fps * .12), 0, round(info.fps * .12)):
+                        if cancelled():
+                            raise InterruptedError("选帧已取消")
+                        candidate_index = max(0, min(total - 1, index + offset))
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, candidate_index)
+                        candidate_ok, candidate = cap.read()
+                        if candidate_ok:
+                            small = cv2.resize(candidate, (max(1, candidate.shape[1] // 4), max(1, candidate.shape[0] // 4)))
+                            sharp = cv2.Laplacian(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
+                            options.append((sharp, candidate_index, candidate))
+                    if options:
+                        _, selected_index, selected = max(options, key=lambda item: item[0])
+                        if not any(existing == selected_index for existing, _ in frames):
+                            frames.append((selected_index, selected))
+                        continue
+                cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+                ok, frame = cap.read()
+                if ok and frame is not None:
+                    frames.append((index, frame))
+        finally:
+            cap.release()
+        return frames
+
+    @classmethod
+    @serialized_inference
+    def _video_holds(cls, *, frames: list[tuple[int, np.ndarray]], route_color: str,
+                     route_color_sample: dict | None, saved_route_reference: dict | None,
+                     deadline: float, progress: Callable[[str, int], None],
+                     cancelled: Callable[[], bool],
+                     trace: list[dict] | None = None,
+                     reference_source_frame: int | None = None,
+                     source_video: Path | None = None) -> tuple[list[dict], list[dict], dict, dict | None, str]:
+        if not frames:
+            raise RuntimeError("没有从视频中读取到有效画面")
+        images = [frame for _, frame in frames]
+        sharpness = [cv2.Laplacian(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
+                     for frame in images]
+        reference_index = int(np.argmax(sharpness))
+        if reference_source_frame is not None:
+            reference_index = next((index for index,item in enumerate(frames)
+                                    if item[0]==reference_source_frame),-1)
+            if reference_index < 0:
+                raise ValueError("Frozen reference frame is missing from experiment")
+        requested_frame = route_color_sample.get("prepared_frame_index") if route_color_sample else None
+        if requested_frame is not None:
+            reference_index = next((index for index, item in enumerate(frames)
+                                    if item[0] == requested_frame), reference_index)
+        reference = images[reference_index]
+        from core.replay_hold_fusion import image_content_bounds
+        content_bounds = image_content_bounds(reference)
+        height, width = reference.shape[:2]
+        transformations: list[np.ndarray | None] = []
+        registrations = []
+        for index, frame in enumerate(images):
+            if index == reference_index:
+                transformations.append(np.eye(3))
+                registrations.append({"frame": frames[index][0], "status": "reference"})
+                continue
+            matrix, evidence = align_to_reference(frame, reference)
+            transformations.append(matrix)
+            registrations.append({"frame": frames[index][0],
+                                  "status": "aligned" if matrix is not None else "rejected", **evidence})
+        corners = np.float32([[[0, 0]], [[width, 0]], [[width, height]], [[0, height]]])
+        motion_px = max((float(np.median(np.linalg.norm(
+            cv2.perspectiveTransform(corners, matrix) - corners, axis=2)))
+            for matrix in transformations if matrix is not None), default=0.0)
+        native_metadata=[]
+        outputs, model_version = _climbing_model_masks_batch(
+            images, deadline, cancelled,
+            lambda stage, value: progress(stage, 16 + round(max(0, value - 20) * .37)),
+            pack_masks=True,
+            reuse_model=True,
+            include_volumes=True, native_metadata=native_metadata,
+        )
+
+        def restore_mask(encoded: np.ndarray, frame: np.ndarray) -> np.ndarray:
+            if encoded.shape[1] == frame.shape[1]:
+                return encoded
+            return np.unpackbits(encoded, axis=1, count=frame.shape[1]).astype(np.uint8) * 255
+
+        actual_sample = dict(route_color_sample) if route_color_sample else None
+        sampled_bbox = None
+        if actual_sample and actual_sample.get("source") == "video" and actual_sample.get("point_xy") is not None:
+            requested = actual_sample.get("prepared_frame_index")
+            sample_frame_index = next((index for index, item in enumerate(frames)
+                if item[0] == requested), None)
+            if sample_frame_index is None:
+                raise ValueError("无法读取取样时刻的画面，请重新选择岩点")
+            frame = images[sample_frame_index]
+            px = min(frame.shape[1] - 1, int(actual_sample["point_xy"][0] * frame.shape[1]))
+            py = min(frame.shape[0] - 1, int(actual_sample["point_xy"][1] * frame.shape[0]))
+            masks, _ = outputs[sample_frame_index]
+            mask, rgb, sample_region = sample_clicked_hold(
+                frame, [restore_mask(encoded, frame) for encoded in masks], (px, py))
+            sample_polygon = native_mask_polygon(mask)
+            if len(sample_polygon) >= 3 and transformations[sample_frame_index] is not None:
+                sampled_bbox = polygon_bbox(transform_polygon(
+                    [[float(point[0][0]), float(point[0][1])] for point in sample_polygon],
+                    transformations[sample_frame_index], width, height))
+            actual_sample.update(rgb=rgb, hex="#{:02x}{:02x}{:02x}".format(*rgb),
+                                 evidence="segmented_hold_interior", frame_index=frames[sample_frame_index][0],
+                                 colour_region=sample_region)
+        detections: list[list[dict]] = []
+        target = cls._route_colour(route_color)
+        if target not in ROUTE_COLOR_NAMES and actual_sample and actual_sample.get('rgb'):
+            target = lab_color_name(cv2.cvtColor(np.uint8([[actual_sample['rgb']]]),
+                                               cv2.COLOR_RGB2LAB)[0, 0], twelve_colors=True)
+        for frame_index, ((source_index, frame), (masks, scores), matrix) in enumerate(
+                zip(frames, outputs, transformations)):
+            if matrix is None:
+                if trace is not None:
+                    trace.append({"stage": "registration", "source_frame": source_index,
+                                  "status": "rejected", "reason": registrations[frame_index].get("reason"),
+                                  "model_candidates": len(masks)})
+                detections.append([])
+                continue
+            frame_holds = []
+            for mask_index, (encoded, score) in enumerate(zip(masks, scores)):
+                observation_id = f"frame-{source_index}-mask-{mask_index}"
+                if cancelled():
+                    raise ReplayCancelled()
+                mask = restore_mask(encoded, frame)
+                polygon = native_mask_polygon(mask)
+                if len(polygon) < 3:
+                    if trace is not None:
+                        trace.append({"observation_id": observation_id, "stage": "contour",
+                                      "status": "rejected", "reason": "invalid_native_contour"})
+                    continue
+                source_polygon = [[float(point[0][0]), float(point[0][1])] for point in polygon]
+                mapped = transform_polygon(source_polygon, matrix, width, height)
+                bbox = polygon_bbox(mapped)
+                if bbox[2] <= 0 or bbox[3] <= 0:
+                    if trace is not None:
+                        trace.append({"observation_id": observation_id, "stage": "mapping",
+                                      "status": "rejected", "reason": "degenerate_mapped_contour"})
+                    continue
+                colour, interior, colour_evidence = observe_hold_colour(frame, mask)
+                distance = region_sample_distance(frame, interior, actual_sample["rgb"]) if actual_sample else None
+                material=material_observation(colour_evidence,actual_sample['rgb'] if actual_sample else None)
+                colour=sample_compatible_group(colour,material,target)
+                support=colour_support(frame,interior,actual_sample['rgb'],colour,target,distance,
+                    colour_evidence=colour_evidence) if actual_sample else None
+                candidate = (distance is not None and np.isfinite(distance) and
+                             distance <= REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE and colour == target
+                             if actual_sample else colour == target)
+                if support:candidate=support['qualified']
+                frame_holds.append({
+                    "bbox": bbox, "polygon": mapped, "score": round(float(score), 4),
+                    "color_group": colour, "color_source": actual_sample["source"] if actual_sample else "preset",
+                    "color_evidence": colour_evidence,
+                    "material_observation": material,
+                    "new_body_resolution":bool(colour_evidence.get('body_resolution')),
+                    "boundary_quality": boundary_quality(frame,mask),
+                    "colour_support":support,
+                    "native_class":native_metadata[frame_index]['classes'][mask_index] if frame_index<len(native_metadata) else 0,
+                    "color_distance": round(distance, 4) if distance is not None else None,
+                    "route_candidate": candidate, "route_candidate_reason": "color_sample" if actual_sample else "preset_color",
+                    "identity_source": "multi_frame_geometry", "contour_source": "climbing_model_native_mask",
+                    "contour_complete": all(0 < point[0] < frame.shape[1] - 1 and
+                                            0 < point[1] < frame.shape[0] - 1 for point in source_polygon),
+                    "contour_points": len(mapped), "source_frame": source_index,
+                    "observation_id": observation_id,
+                })
+                if trace is not None:
+                    trace.append({"stage": "mapping", "status": "retained", **frame_holds[-1]})
+            detections.append(frame_holds)
+        all_holds = fuse_hold_detections(detections, color_distance_limit=REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE,
+                                         sample_group=target, evidence_policy='material_boundary')
+        if trace is not None:
+            trace.extend({"stage": "fusion", "status": "retained", **hold} for hold in all_holds)
+        if sampled_bbox is not None:
+            for hold in all_holds:
+                if cls._iou(hold["bbox"], sampled_bbox) > .5:
+                    hold["identity_source"] = "user_sampled_hold"
+                    hold["route_candidate_reason"] = "user_sampled_hold"
+                    break
+        projected = []
+        route_registration = None
+        if saved_route_reference:
+            try:
+                image = cv2.imdecode(np.fromfile(saved_route_reference["asset_path"], np.uint8), cv2.IMREAD_COLOR)
+            except OSError:
+                image = None
+            if image is not None:
+                matrix, route_registration = align_to_reference(image, reference)
+                if matrix is not None:
+                    for member in saved_route_reference["members"]:
+                        polygon = transform_polygon(member["contour"], matrix, width, height)
+                        if len(polygon) >= 3:
+                            projected.append({"object_id": member["object_id"], "bbox": polygon_bbox(polygon),
+                                              "polygon": polygon})
+            else:
+                route_registration = {"reason": "saved_photo_unavailable"}
+        strong_registration = bool(route_registration and
+            route_registration.get("inliers", 0) >= 25 and
+            route_registration.get("median_error_px", float("inf")) <= 3)
+        confirmed, remaining = match_confirmed_route(
+            all_holds, projected, include_projected_unmatched=strong_registration)
+        if confirmed:
+            holds = confirmed
+            candidates = remaining
+            selection = "confirmed_saved_route"
+            sampled_selection = None
+        else:
+            minimum_appearances = 2 if sum(item is not None for item in transformations) >= 2 else 1
+            if actual_sample and actual_sample.get("rgb"):
+                sample_group = target
+                holds, candidates, sampled_selection = select_sampled_route_holds(
+                    all_holds, sample_group=sample_group,
+                    minimum_appearances=minimum_appearances,
+                    trace=trace,
+                    content_bounds=content_bounds,
+                )
+                selection = "sampled_colour_geometry_needs_review"
+            else:
+                holds, candidates, sampled_selection = select_sampled_route_holds(
+                    all_holds, sample_group=target,
+                    minimum_appearances=minimum_appearances,
+                    trace=trace,
+                    content_bounds=content_bounds,
+                )
+                selection = "minimal_colour_geometry_needs_review"
+            candidates.extend(item for item in remaining if item.get("appearances") == 0)
+        recovery=None
+        if not confirmed and actual_sample and actual_sample.get('rgb'):
+            from core.replay_hold_recovery import recover_hold_candidates
+            added,extra_rejected,recovery=recover_hold_candidates(frames=frames,matrices=transformations,
+                reference_frame=frames[reference_index][0],detections=detections,native_outputs=outputs,
+                all_holds=all_holds,existing=holds,sample_group=target,sample_rgb=actual_sample['rgb'],
+                model_fn=_climbing_model_masks_batch,polygon_fn=native_mask_polygon,
+                deadline=deadline,cancelled=cancelled,progress=progress,trace=trace)
+            holds.extend(added);candidates.extend(extra_rejected)
+        expansion = None
+        if not confirmed:
+            from core.replay_hold_expansion import expand_native_evidence, EXPANSION_VERSION
+            from core.replay_hold_resampling import resample_weak_candidates, refine_weak_candidates, refine_native_fragments
+            expansion = {'version': EXPANSION_VERSION, 'accepted_contours_preserved': True}
+            sample_rgb = actual_sample.get('rgb') if actual_sample else None
+            try:
+                additions, detail = expand_native_evidence(frames=frames, outputs=outputs,
+                    detections=detections, existing=holds, sample_group=target,
+                    sample_rgb=sample_rgb, trace=trace)
+                holds.extend(additions)
+                expansion.update(detail)
+            except (ReplayCancelled, InterruptedError):
+                raise
+            except (RuntimeError, ValueError, OSError, ImportError, TimeoutError) as exc:
+                expansion.update(status='native_expansion_unavailable', reason=type(exc).__name__, added=0)
+            try:
+                extra_frames, extra_outputs, extra_detections, resampling = resample_weak_candidates(
+                    source_video=source_video, frames=frames, outputs=outputs, detections=detections,
+                    existing=holds, sample_group=target, sample_rgb=sample_rgb,
+                    reference_frame=frames[reference_index][0], model_fn=_climbing_model_masks_batch,
+                    polygon_fn=native_mask_polygon, alignment_fn=align_to_reference,
+                    deadline=deadline, cancelled=cancelled, progress=progress)
+                expansion['resampling'] = resampling
+                if extra_frames:
+                    additions, detail = expand_native_evidence(frames=frames+extra_frames,
+                        outputs=outputs+extra_outputs, detections=detections+extra_detections,
+                        existing=holds, sample_group=target, sample_rgb=sample_rgb, trace=trace)
+                    holds.extend(additions)
+                    expansion['resampling_added'] = detail['added']
+                    expansion['added'] = expansion.get('added', 0)+detail['added']
+                    additions, refinement = refine_weak_candidates(frames=extra_frames,
+                        outputs=extra_outputs, detections=extra_detections, existing=holds,
+                        sample_group=target, sample_rgb=sample_rgb, reference=reference,
+                        alignment_fn=align_to_reference, polygon_fn=native_mask_polygon,
+                        deadline=deadline, cancelled=cancelled, progress=progress, trace=trace)
+                    holds.extend(additions)
+                    expansion['weak_refinement'] = refinement
+                    expansion['added'] += len(additions)
+            except (ReplayCancelled, InterruptedError):
+                raise
+            except (RuntimeError, ValueError, OSError, ImportError, TimeoutError) as exc:
+                expansion['resampling'] = {'reason':'additional_observation_unavailable',
+                    'error_type':type(exc).__name__, 'accepted_contours_preserved':True}
+            try:
+                budget=max(0,8-(expansion.get('weak_refinement') or {}).get('prompts',0))
+                additions, refinement = refine_native_fragments(frames=frames, outputs=outputs,
+                    detections=detections, existing=holds, sample_group=target,
+                    sample_rgb=sample_rgb, reference_frame=frames[reference_index][0],
+                    alignment_fn=align_to_reference, polygon_fn=native_mask_polygon,
+                    deadline=deadline, cancelled=cancelled, progress=progress,
+                    trace=trace, prompt_budget=budget)
+                holds.extend(additions)
+                expansion['native_fragment_refinement']=refinement
+                expansion['added']=expansion.get('added',0)+len(additions)
+            except (ReplayCancelled, InterruptedError):
+                raise
+            except (RuntimeError, ValueError, OSError, ImportError, TimeoutError) as exc:
+                expansion['native_fragment_refinement']={'status':'unavailable',
+                    'error_type':type(exc).__name__, 'accepted_contours_preserved':True}
+        holds.sort(key=lambda hold: (-(hold["bbox"][1] + hold["bbox"][3] / 2), hold["bbox"][0]))
+        for index, hold in enumerate(holds, 1):
+            hold["id"] = index
+        diagnostics = {"selection": selection, "reference_frame": frames[reference_index][0],
+                       "frame_profile": os.getenv("CLIMB_REPLAY_HOLD_FRAME_PROFILE", "4"),
+                       "raw_model_candidates_by_frame": [len(item[0]) for item in outputs],
+                       "aligned_candidates_by_frame": [len(item) for item in detections],
+                       "sampled_source_frames": [item[0] for item in frames],
+                       "frames_decoded": len(frames), "frames_aligned": sum(item is not None for item in transformations),
+                       "registrations": registrations, "saved_route_registration": route_registration,
+                       "camera_motion_px": round(motion_px, 2),
+                       "confirmed_members_matched": sum(item.get("appearances", 0) > 0 for item in confirmed),
+                       "confirmed_members_projected": sum(item.get("appearances", 0) == 0 for item in candidates),
+                       "all_candidates": len(all_holds), "sampled_selection": sampled_selection,
+                       "hold_colour_version": REPLAY_COLOUR_VERSION,
+                       "model_guided_recovery":recovery, "native_route_expansion":expansion}
+        version = f"{model_version}+multiframe-aligned-v1+{REPLAY_COLOUR_VERSION}"
+        if expansion is not None:version += '+'+expansion['version']
+        return holds, candidates, diagnostics, actual_sample, version
+
+    @staticmethod
+    def _jpeg(frame: np.ndarray) -> tuple[bytes, int, int]:
+        height, width = frame.shape[:2]
+        ratio = min(1.0, 1280 / max(height, width))
+        if ratio < 1:
+            frame = cv2.resize(frame, (round(width * ratio), round(height * ratio)),
+                               interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+        if not ok:
+            raise RuntimeError("无法编码视频抽样帧")
+        encoded_height, encoded_width = frame.shape[:2]
+        return buf.tobytes(), encoded_width, encoded_height
+
+    @staticmethod
+    def _route_colour(value: str) -> str:
+        aliases = {english: chinese for chinese, english in COLOR_PROMPTS.items() if len(chinese) > 1}
+        return aliases.get(value.strip().lower(), value.strip())
+
+    @staticmethod
+    def _iou(a: list[float], b: list[float]) -> float:
+        ax, ay, aw, ah = a; bx, by, bw, bh = b
+        x0, y0 = max(ax, bx), max(ay, by)
+        x1, y1 = min(ax + aw, bx + bw), min(ay + ah, by + bh)
+        overlap = max(0.0, x1 - x0) * max(0.0, y1 - y0)
+        union = aw * ah + bw * bh - overlap
+        return overlap / union if union > 1e-9 else 0.0
+
+    @staticmethod
+    def _choose_track(items: list[dict]) -> tuple[Any, list[dict]]:
+        by_track: dict[Any, list[dict]] = defaultdict(list)
+        for item in items:
+            by_track[item.get("track_id")].append(item)
+        if not by_track:
+            raise RuntimeError("视频中没有识别到攀爬者")
+        track = max(by_track, key=lambda key: (len(by_track[key]),
+            np.mean([record.get("bbox_xywh", [0, 0, 0, 0])[2] *
+                     record.get("bbox_xywh", [0, 0, 0, 0])[3] for record in by_track[key]])))
+        return track, by_track[track]
+
+    @staticmethod
+    def _inside(point: tuple[float, float], hold: dict, margin: float) -> bool:
+        x, y = point
+        polygon = hold.get("polygon") or []
+        if isinstance(polygon, list) and len(polygon) >= 3:
+            contour = np.asarray(polygon, dtype=np.float32).reshape((-1, 1, 2))
+            return cv2.pointPolygonTest(contour, (float(x), float(y)), True) >= -margin
+        bx, by, bw, bh = hold["bbox"]
+        return bx - margin <= x <= bx + bw + margin and by - margin <= y <= by + bh + margin
+
+    @classmethod
+    def _contacts(cls, records: list[dict], holds: list[dict], fps: float, *, source_fps: float | None = None,
+                  trace: list | None = None, diagnostic_policy: dict | None = None) -> dict:
+        # Offline one-variable comparisons share the production event/time engine.
+        # These policies are deliberately absent from user settings and defaults.
+        policy = diagnostic_policy or {}
+        margin = float(policy.get('margin', .02))
+        foot_offset = float(policy.get('foot_offset', .02))
+        minimum_score = float(policy.get('minimum_score', .5))
+        duration = float(policy.get('duration', .4))
+        limbs = {"left_hand": 9, "right_hand": 10, "left_foot": 15, "right_foot": 16}
+        dwell = max(1, round(duration * fps))
+        records = sorted(records, key=lambda item: int(item.get("frame_id", -1)))
+        current = {key: None for key in limbs}
+        since = {key: 0 for key in limbs}
+        run = {key: 0 for key in limbs}
+        confirmed = {key: False for key in limbs}
+        stable_at = {key: None for key in limbs}
+        contacts: list[dict] = []
+        holding: dict[int, dict[str, int]] = {}
+        midline = []
+        times = {int(r.get('frame_id', -1)): float(r.get('source_frame_id', 0)) / source_fps
+                 for r in records} if source_fps else {}
+        previous_time = None
+
+        def close(key: str, frame: int) -> None:
+            if current[key] is not None and confirmed[key]:
+                contacts.append({"limb": key, "hold_id": current[key], "start_frame": since[key],
+                                 "end_frame": max(since[key], frame - 1),
+                                 "stable_frame": stable_at[key]})
+            current[key], run[key], confirmed[key], stable_at[key] = None, 0, False, None
+
+        for item in records:
+            frame = int(item.get("frame_id", -1))
+            if source_fps and previous_time is not None and not 0 < times[frame] - previous_time <= .6:
+                for key in limbs:
+                    close(key, frame)
+            if source_fps:
+                previous_time = times[frame]
+            points = item.get("kpts_xy") or []
+            scores = item.get("kpts_score") or []
+            torso = [points[i] for i in (5, 6, 11, 12) if i < len(points) and points[i] != [0, 0]]
+            if torso:
+                midline.append({"frame": frame, "x": round(float(np.mean([p[0] for p in torso])), 5),
+                                "y": round(float(np.mean([p[1] for p in torso])), 5)})
+            active = {}
+            for key, index in limbs.items():
+                reason = None
+                observed = item.get('observed', (item.get('pose_evidence') or {}).get('observed', True))
+                if item.get('contact_registration_reason'):
+                    reason = item['contact_registration_reason']
+                elif (observed is False or item.get('interpolated') or item.get('render_mode') in {'interpolated','edge_hold'}
+                        or item.get('observation_kind') == 'display_interpolation'
+                        or (item.get('pose_evidence') or {}).get('observation_kind') == 'display_interpolation'):
+                    reason = 'not_model_observation'
+                elif index >= len(points) or len(points[index] or []) != 2:
+                    reason = 'missing_joint'
+                elif index >= len(scores) or scores[index] is None:
+                    reason = 'missing_score'
+                else:
+                    try:
+                        xy = tuple(map(float, points[index]))
+                        score = float(scores[index])
+                        if not all(math.isfinite(v) for v in (*xy, score)):
+                            reason = 'nonfinite_joint_or_score'
+                        elif not all(0 < v < 1 for v in xy):
+                            reason = 'outside_image'
+                        elif score < minimum_score or score > 1:
+                            reason = 'weak_joint'
+                    except (TypeError, ValueError):
+                        reason = 'invalid_joint_or_score'
+                if reason:
+                    if trace is not None:
+                        trace.append({'frame':frame,'source_frame':item.get('source_frame_id'),
+                                      'limb':key,'state':'unknown','reason':reason})
+                    close(key, frame); continue
+                x, y = map(float, points[index])
+                if "foot" in key:
+                    y += foot_offset
+                parts = [(x, y)]
+                if policy.get('contact_part') == 'wholebody':
+                    indices = {'left_hand':[95,99,103,107,111], 'right_hand':[116,120,124,128,132],
+                               'left_foot':[17,18], 'right_foot':[20,21]}[key]
+                    whole = item.get('wholebody') or {}
+                    wp, ws = whole.get('kpts_xy') or [], whole.get('kpts_score') or []
+                    parts = [tuple(map(float,wp[j])) for j in indices if j < len(wp) and j < len(ws)
+                             and len(wp[j] or []) == 2 and ws[j] is not None
+                             and all(math.isfinite(float(v)) for v in (*wp[j],ws[j]))
+                             and float(ws[j]) >= minimum_score and all(0 <= float(v) <= 1 for v in wp[j])]
+                choices = [hold for hold in holds if any(cls._inside(part, hold, margin) for part in parts)]
+                if policy.get('reject_ambiguous') and len(choices) > 1:
+                    if trace is not None:
+                        trace.append({'frame':frame,'source_frame':item.get('source_frame_id'),'limb':key,
+                                      'state':'unknown','reason':'competing_holds','candidate_ids':[h['id'] for h in choices]})
+                    close(key,frame); continue
+                chosen = min(choices, key=lambda hold: abs(x - hold["bbox"][0] - hold["bbox"][2] / 2)
+                             + abs(y - hold["bbox"][1] - hold["bbox"][3] / 2)) if choices else None
+                hold_id = chosen["id"] if chosen else None
+                if hold_id != current[key]:
+                    close(key, frame)
+                    current[key], since[key] = hold_id, frame
+                if hold_id is not None:
+                    run[key] += 1
+                    enough = times[frame] - times[since[key]] >= duration - 1e-8 if source_fps else run[key] >= dwell
+                    confirmed[key] = confirmed[key] or enough
+                    if confirmed[key] and stable_at[key] is None:
+                        stable_at[key] = frame
+                    if confirmed[key]:
+                        active[key] = hold_id
+                if trace is not None:
+                    trace.append({'frame':frame,'source_frame':item.get('source_frame_id'),'limb':key,
+                                  'state':'contact_candidate_confirmed' if confirmed[key] else 'near' if choices else 'no_support',
+                                  'reason':None if confirmed[key] else 'duration_gate' if choices else 'outside_holds',
+                                  'candidate_ids':[h['id'] for h in choices], 'chosen_id':hold_id,
+                                  'point_xy':[x,y], 'score':scores[index], 'parts_xy':parts})
+            holding[frame] = active
+        last_frame = int(records[-1].get("frame_id", 0)) + 1 if records else 0
+        for key in limbs:
+            close(key, last_frame)
+
+        first_use: dict[int, int] = {}
+        for contact in contacts:
+            first_use[contact["hold_id"]] = min(first_use.get(contact["hold_id"], 10**9), contact["start_frame"])
+        sequence = [hold for hold, _ in sorted(first_use.items(), key=lambda pair: pair[1])]
+        start = next((frame for frame, active in sorted(holding.items())
+                      if any(k.endswith("hand") for k in active) and any(k.endswith("foot") for k in active)), None)
+        top = min(holds, key=lambda hold: hold["bbox"][1] + hold["bbox"][3] / 2)["id"] if holds else None
+        completion = next((frame for frame, active in sorted(holding.items())
+                           if top is not None and active.get("left_hand") == top and active.get("right_hand") == top), None)
+        end = completion if completion is not None else (max(holding) if holding else None)
+        window_frames = max(1, (end - start + 1)) if start is not None and end is not None else 1
+        per_limb = {}
+        for key in limbs:
+            relevant = [c for c in contacts if c["limb"] == key]
+            clip_start = start if start is not None else 0
+            clip_end = end if end is not None else max(0, last_frame - 1)
+            count = sum(max(0, min(c["end_frame"], clip_end) -
+                            max(c["start_frame"], clip_start) + 1) for c in relevant)
+            per_limb[key] = {"contact_seconds": round(count / fps, 3),
+                             "coverage_of_attempt": round(count / window_frames, 4),
+                             "holds": list(dict.fromkeys(c["hold_id"] for c in relevant))}
+        if source_fps and times:
+            window_seconds = max(1 / source_fps, times.get(end, 0) - times.get(start, 0)) if start is not None and end is not None else 0
+            for key in limbs:
+                seconds = sum(max(0, times.get(min(c['end_frame'], clip_end), 0) - times.get(max(c['start_frame'], clip_start), 0))
+                              for c in contacts if c['limb'] == key)
+                per_limb[key].update(contact_seconds=round(seconds, 3),
+                    coverage_of_attempt=round(min(1, seconds / window_seconds), 4) if window_seconds else None)
+        return {
+            "start_frame": start,
+            "completion_frame": completion,
+            "topped_out": completion is not None,
+            "elapsed_seconds": round((completion - start) / fps, 3)
+                if start is not None and completion is not None else None,
+            "sequence": sequence,
+            "contacts": contacts,
+            "per_limb": per_limb,
+            "midline": midline,
+        }
+
+    def detect_holds(self, video: Path, *, route_color: str, video_info: VideoInfo,
+                     route_color_sample: dict | None = None,
+                     saved_route_reference: dict | None = None,
+                     trim_start_seconds: float = 0,
+                     progress: Callable[[str, int], None], cancelled: Callable[[], bool]) -> dict:
+        """Local-only preparation; deliberately independent of pose credentials and SDK."""
+        progress("选取清晰视频帧", 10)
+        prepared_sample = dict(route_color_sample) if route_color_sample else None
+        if prepared_sample and prepared_sample.get("source") == "video" and prepared_sample.get("point_xy") is not None:
+            prepared_sample["trim_start_seconds"] = trim_start_seconds
+            prepared_sample["prepared_frame_index"] = round(
+                (float(prepared_sample["time_seconds"]) - trim_start_seconds) * video_info.fps)
+        frames = self._hold_frames(video, video_info, prepared_sample, cancelled=cancelled)
+        if not frames:
+            raise RuntimeError("没有从视频中读取到有效画面")
+        progress("本地识别并对齐岩点", 16)
+        holds, candidates, evidence, sample, version = self._video_holds(
+            frames=frames, route_color=route_color, route_color_sample=prepared_sample,
+            saved_route_reference=saved_route_reference, deadline=time.monotonic() + 240,
+            progress=progress, cancelled=cancelled, source_video=video)
+        if cancelled():
+            raise ReplayCancelled()
+        # Even a zero-hold draft can be repaired manually before global confirmation.
+        return {"schema_version": 2, "video": asdict(video_info),
+                "route": {"color": route_color, "color_sample": sample},
+                "models": {"holds": version}, "holds": holds,
+                "hold_candidates": candidates, "hold_evidence": evidence}
+
+    def analyze(self, video: Path, *, route_color: str, video_info: VideoInfo,
+                confirmed_holds: dict | None = None,
+                overlay_target: Path | None = None,
+                route_color_sample: dict | None = None,
+                saved_route_reference: dict | None = None,
+                trim_start_seconds: float = 0,
+                progress: Callable[[str, int], None], cancelled: Callable[[], bool],
+                telemetry: Callable[[dict], None]) -> dict:
+        if not confirmed_holds or (not confirmed_holds.get("holds") and not confirmed_holds.get("skeleton_only")):
+            raise RuntimeError("请先确认全部岩点，再启动姿态分析")
+        started = time.perf_counter()
+        analysis = self.analysis_contract(video_info)
+        usage = analysis["usage"]
+        timings = analysis["timings_ms"]
+        processed_frames = 0
+
+        def snapshot() -> dict:
+            timings["total"] = max(0, round((time.perf_counter() - started) * 1000))
+            if hasattr(self, 'runtime_metadata'):
+                analysis['runtime'] = self.runtime_metadata()
+                timings.update(analysis['runtime'].get('timings_ms', {}))
+            usage["unprocessed_frames"] = max(0, usage["planned_requests"] - processed_frames)
+            analysis["cost"]["billable_requests_estimate"] = (0 if analysis["provider"].get("execution") == "local" else usage["successful_requests"])
+            analysis["cost"]["estimated_amount"] = round(
+                usage["successful_requests"] * analysis["cost"]["unit_price"], 6,
+            )
+            return json.loads(json.dumps(analysis, ensure_ascii=False))
+
+        def publish() -> None:
+            telemetry(snapshot())
+
+        def empty_pose(sample_index: int, source_index: int, reason=None) -> dict:
+            return {
+                "frame_id": sample_index, "source_frame_id": int(source_index),
+                "wall_alignment": "unavailable",
+                "track_id": 0, "kpts_xy": [[0.0, 0.0] for _ in range(17)],
+                "kpts_score": [0.0] * 17, "bbox_xywh": [0.0, 0.0, 0.0, 0.0],
+                "pose_evidence": {'provider':analysis['provider']['name'], 'observed':False,
+                    'reason':reason or getattr(self, 'last_pose_failure', None) or 'no_pose_returned'},
+            }
+
+        publish()
+        try:
+            self._prepare_pose_run(confirmed_holds)
+            holds = copy.deepcopy(confirmed_holds["holds"])
+            hold_candidates = copy.deepcopy(confirmed_holds.get("hold_candidates") or [])
+            hold_diagnostics = copy.deepcopy(confirmed_holds.get("hold_evidence") or {})
+            actual_sample = (confirmed_holds.get("route") or {}).get("color_sample")
+            hold_version = (confirmed_holds.get("models") or {}).get("holds")
+            analysis["models"]["holds"]["version"] = hold_version
+            publish()
+            if cancelled():
+                raise ReplayCancelled()
+
+            sample_fps, positions = self._sampling_positions(video_info)
+            stage_started = time.perf_counter()
+            cap = cv2.VideoCapture(str(video))
+            if not cap.isOpened():
+                raise RuntimeError("无法重新读取视频进行姿态识别")
+            records = []
+            contact_records = []
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(hold_diagnostics.get("reference_frame") or 0))
+            reference_ok, hold_reference = cap.read()
+            if not reference_ok:
+                cap.release()
+                raise RuntimeError("无法读取已确认岩点的墙面参考帧")
+            pose_alignment_failed = 0
+            detected_pose_frames = 0
+            try:
+                if hasattr(self, '_prepare_clip_observations'):
+                    self._prepare_clip_observations(video, video_info, positions, hold_reference,
+                                                    progress=progress, cancelled=cancelled)
+                    publish()
+                progress("抽帧识别攀爬者姿态", 55)
+                for sample_index, source_index in enumerate(positions):
+                    if cancelled():
+                        raise ReplayCancelled()
+                    processed_frames = sample_index + 1
+                    cursor = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                    if 0 <= int(source_index) - cursor <= 90:
+                        for _ in range(int(source_index) - cursor):
+                            if not cap.grab():
+                                break
+                    else:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, int(source_index))
+                    ok, frame = cap.read()
+                    if not ok:
+                        usage["decode_failed_frames"] += 1
+                        missing = empty_pose(sample_index, int(source_index), 'decode_failed')
+                        records.append(missing)
+                        contact_records.append(missing)
+                        publish()
+                        continue
+
+                    request_state = {"made": False}
+                    person_alignment = None
+                    if hasattr(self, 'set_person_reference_transform'):
+                        registration_started = time.perf_counter()
+                        person_alignment = (self._person_alignment(int(source_index))
+                                            if hasattr(self, '_person_alignment') else None)
+                        if person_alignment is None:
+                            person_alignment = align_to_reference(frame, hold_reference)
+                        timings['registration'] = timings.get('registration', 0) + round(
+                            (time.perf_counter()-registration_started)*1000)
+                        self.set_person_reference_transform(person_alignment[0],
+                            [hold_reference.shape[1], hold_reference.shape[0]],
+                            [frame.shape[1], frame.shape[0]])
+                    if analysis["provider"].get("execution") == "local":
+                        usage["local_inferences"] += 1
+
+                    def before_request(size_bytes: int) -> None:
+                        request_state["made"] = True
+                        usage["actual_requests"] += 1
+                        usage["request_image_bytes"] += size_bytes
+
+                    try:
+                        record = self._pose_frame(
+                            frame, frame_id=sample_index, source_frame_id=int(source_index),
+                            before_request=before_request,
+                        )
+                    except Exception:
+                        if request_state["made"]:
+                            usage["failed_requests"] += 1
+                        if analysis["provider"].get("execution") == "local":
+                            usage["failed_local_inferences"] += 1
+                        publish()
+                        raise
+                    if analysis["provider"].get("execution") == "local":
+                        if getattr(self, 'last_pose_cache_hit', False):
+                            usage['cached_pose_frames'] = usage.get('cached_pose_frames', 0) + 1
+                            usage['local_inferences'] -= 1
+                        else:
+                            usage["successful_local_inferences"] += 1
+                        analysis["runtime"] = self.runtime_metadata()
+                    if request_state["made"]:
+                        usage["successful_requests"] += 1
+                    if record:
+                        detected_pose_frames += 1
+                        usage["successful_pose_frames"] += 1
+                        if person_alignment is not None:
+                            matrix, alignment = person_alignment
+                        else:
+                            registration_started = time.perf_counter()
+                            matrix, alignment = align_to_reference(frame, hold_reference)
+                            timings['registration'] = timings.get('registration', 0) + round(
+                                (time.perf_counter()-registration_started)*1000)
+                        record["wall_alignment"] = "aligned" if matrix is not None else "failed"
+                        record["wall_alignment_diagnostics"] = alignment
+                        record["wall_reference_transform"] = matrix.tolist() if matrix is not None else None
+                        records.append(record)
+                        if matrix is None:
+                            pose_alignment_failed += 1
+                        contact_records.append(align_pose_record(
+                            record, matrix, hold_reference.shape[1], hold_reference.shape[0]))
+                    else:
+                        usage["responses_without_pose"] += 1
+                        missing = empty_pose(sample_index, int(source_index))
+                        records.append(missing)
+                        contact_records.append(missing)
+                    publish()
+                    progress("抽帧识别攀爬者姿态", 55 + round(25 * processed_frames / len(positions)))
+            finally:
+                cap.release()
+                if hasattr(self, 'flush_pose_cache'):
+                    self.flush_pose_cache()
+                timings["pose"] = max(0, round((time.perf_counter() - stage_started) * 1000))
+                publish()
+
+            if not detected_pose_frames:
+                raise RuntimeError("视频中没有识别到攀爬者，请检查机位和光线")
+            track_id, records = self._choose_track(records)
+
+            stage_started = time.perf_counter()
+            progress("整理骨架数据" if confirmed_holds.get("skeleton_only") else "计算手脚与岩点接触", 82)
+            contact_trace = []
+            attempt = {} if confirmed_holds.get('skeleton_only') else self._contacts(contact_records, holds, sample_fps, source_fps=video_info.fps, trace=contact_trace)
+            if not confirmed_holds.get('skeleton_only'):
+                attempt['contact_evidence'] = {'version':1,'basis':'projected_joint_and_duration_not_physical_contact_proof','frames':contact_trace}
+            pose_samples = build_pose_samples(records, video_info)
+            add_attempt_source_times(attempt, pose_samples, video_info)
+            attempt["action_steps"] = build_action_steps(attempt.get("contacts") or [])
+            timings["contact"] = max(0, round((time.perf_counter() - stage_started) * 1000))
+
+            stage_started = time.perf_counter()
+            progress("生成可导出的叠加视频", 86)
+            result = {
+                "schema_version": 2,
+                "segment_schema_version": 1,
+                "status": "prototype_needs_review",
+                "route": {"color": route_color, "color_sample": actual_sample},
+                "models": {"holds": hold_version, "pose": self.pose_model},
+                "video": asdict(video_info),
+                "track_id": track_id,
+                "frames_with_pose": detected_pose_frames,
+                "holds": holds,
+                "hold_candidates": hold_candidates,
+                "hold_evidence": hold_diagnostics,
+                "hold_review_version": confirmed_holds.get("hold_review_version", 0),
+                "pose_samples": pose_samples,
+                "attempt": attempt,
+                "analysis": analysis,
+                "warnings": [
+                    "当前为技术验证结果，手脚接触需要用户复核。",
+                    self.pose_processing_notice,
+                    "导出视频在相邻实测姿态帧之间做本地线性平滑；分析证据仍以实测抽样帧为准。",
+                    "导出的叠加视频保留原画面，但当前不包含原视频音轨。",
+                    "岩点接触使用本地专项模型原生实例分割轮廓与短时停留判断，接触边界仍需用户复核。",
+                    f"{pose_alignment_failed} 帧姿态未能可靠对齐墙面参考，已从接触判断中排除。",
+                    (f"{hold_diagnostics['confirmed_members_projected']} 个已确认岩点仅通过照片对齐投影定位，"
+                     "未在抽样帧中被模型重新检测到，已放在其他候选且不参与接触判断。") if hold_diagnostics.get("confirmed_members_projected") else
+                    "已确认线路岩点优先采用照片与视频的几何对应，颜色仅参与候选筛选。",
+                    ("检测到机位变化；接触计算已对齐姿态帧，但导出视频中的固定岩点框仅供参考。"
+                     if hold_diagnostics.get("camera_motion_px", 0) > .02 * min(video_info.width, video_info.height)
+                     else "固定岩点图采用多帧配准融合，单帧漏检不会直接决定岩点身份。"),
+                    "开始时间根据首个手脚同时稳定接触估算，尚未使用地面分割。",
+                ],
+            }
+            attempt["segments"] = build_segments(result)
+            if confirmed_holds.get('skeleton_only'):
+                result = without_hold_data(result)
+                result['warnings'] = [self.pose_processing_notice]
+            result["torso_trajectory"] = torso_trajectory(result)
+            result["overlay"] = render_replay_overlay_video(
+                video, overlay_target or video.with_name(REPLAY_OVERLAY_FILENAME), result,
+                progress=lambda value: progress(
+                    "生成可导出的叠加视频", 86 + round(10 * value / 100),
+                ),
+                cancelled=cancelled,
+                stage_progress=lambda stage, value: progress(stage, 86 + round(10 * value / 100)),
+            )
+            timings["overlay"] = max(0, round((time.perf_counter() - stage_started) * 1000))
+
+            stage_started = time.perf_counter()
+            progress("整理复盘报告", 97)
+            timings["report"] = max(0, round((time.perf_counter() - stage_started) * 1000))
+            publish()
+            return result
+        finally:
+            publish()
+
+
+
+class AliyunReplayAnalyzer(ReplayAnalyzerBase):
+    """Historical adapter only; never selected by the application factory."""
+    pose_model = "aliyun-viapi-bodyposture-2019-12-30"
+    pose_processing_notice = "历史阿里云姿态：抽样画面由阿里云人体姿态服务分析。"
 
     def __init__(self, access_key_id: str | None = None, access_key_secret: str | None = None,
                  *, pose_fps: float | None = None, client: Any | None = None):
@@ -3461,21 +4390,13 @@ class AliyunReplayAnalyzer:
         self._request_lock = threading.Lock()
         self._last_request_at = 0.0
 
-    def _sampling_positions(self, video_info: VideoInfo) -> tuple[float, np.ndarray]:
-        sample_fps = min(self.pose_fps, video_info.fps)
-        positions = np.unique(np.clip(
-            np.rint(np.arange(0, video_info.duration_seconds, 1 / sample_fps) * video_info.fps).astype(int),
-            0, video_info.frame_count - 1,
-        ))
-        return sample_fps, positions
-
     def analysis_contract(self, video_info: VideoInfo) -> dict:
         sample_fps, positions = self._sampling_positions(video_info)
         return {
             "contract_version": 1,
             "pipeline_version": REPLAY_PIPELINE_VERSION,
             "provider": {
-                "name": "aliyun-viapi", "service": REPLAY_CONSENT_SERVICE,
+                "name": "aliyun-viapi", "service": "BodyPosture",
                 "region": self.region_id, "api_version": REPLAY_POSE_API_VERSION,
             },
             "models": {
@@ -3483,7 +4404,7 @@ class AliyunReplayAnalyzer:
                 "pose": {"name": self.pose_model, "version": REPLAY_POSE_API_VERSION},
             },
             "algorithms": {
-                "hold_color": TWELVE_COLOR_VERSION,
+                "hold_color": REPLAY_COLOUR_VERSION,
                 "contact": "mask-contour-dwell-0.4s-v2",
             },
             "sampling": {
@@ -3574,273 +4495,6 @@ class AliyunReplayAnalyzer:
                 f"阿里云人体姿态识别请求失败：{concise}"
             ) from exc
 
-    @staticmethod
-    def _as_list(value: Any) -> list:
-        if value is None:
-            return []
-        return value if isinstance(value, list) else [value]
-
-    @classmethod
-    def _pose_candidates(cls, payload: dict) -> list[dict]:
-        data = payload.get("Data") or payload.get("data") or {}
-        candidates = []
-        for output in cls._as_list(data.get("Outputs") or data.get("outputs")):
-            if not isinstance(output, dict):
-                continue
-            for result in cls._as_list(output.get("Results") or output.get("results")):
-                if not isinstance(result, dict):
-                    continue
-                parts = {}
-                for body in cls._as_list(result.get("Bodies") or result.get("bodies")):
-                    if not isinstance(body, dict):
-                        continue
-                    label = str(body.get("Label") or body.get("label") or "").lower()
-                    positions = cls._as_list(body.get("Positions") or body.get("positions"))
-                    raw_points = None
-                    for position in positions:
-                        if isinstance(position, dict):
-                            raw_points = position.get("Points") or position.get("points")
-                            if raw_points is not None:
-                                break
-                    if not isinstance(raw_points, (list, tuple)) or len(raw_points) < 2:
-                        continue
-                    try:
-                        x, y = float(raw_points[0]), float(raw_points[1])
-                        confidence = float(body.get("Confident") or body.get("confident") or 0)
-                    except (TypeError, ValueError):
-                        continue
-                    if math.isfinite(x) and math.isfinite(y) and math.isfinite(confidence):
-                        parts[label] = ([min(1.0, max(0.0, x)), min(1.0, max(0.0, y))],
-                                        min(1.0, max(0.0, confidence)))
-                valid = [point for point, score in parts.values() if score > .2]
-                if len(valid) < 4:
-                    continue
-                xs, ys = [point[0] for point in valid], [point[1] for point in valid]
-                bbox = [min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)]
-                candidates.append({
-                    "parts": parts,
-                    "bbox": bbox,
-                    "area": bbox[2] * bbox[3],
-                    "confidence": float(np.mean([score for _, score in parts.values()])),
-                })
-        return candidates
-
-    @staticmethod
-    def _hold_frames(video: Path, info: VideoInfo, sample: dict | None) -> list[tuple[int, np.ndarray]]:
-        total = info.frame_count
-        indices = {int(round(value)) for value in np.linspace(total * .08, total * .92, 4)}
-        if sample and sample.get("source") == "video" and sample.get("point_xy") is not None:
-            trim = float(sample.get("trim_start_seconds") or 0)
-            sample_index = round((float(sample.get("time_seconds") or 0) - trim) * info.fps)
-            if not 0 <= sample_index < total:
-                raise ValueError("取样时间不在保留的视频片段内，请重新选择岩点")
-            indices.add(sample_index)
-        cap = cv2.VideoCapture(str(video))
-        frames = []
-        try:
-            for index in sorted(indices):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, index)
-                ok, frame = cap.read()
-                if ok and frame is not None:
-                    frames.append((index, frame))
-        finally:
-            cap.release()
-        return frames
-
-    @classmethod
-    @serialized_inference
-    def _video_holds(cls, *, frames: list[tuple[int, np.ndarray]], route_color: str,
-                     route_color_sample: dict | None, saved_route_reference: dict | None,
-                     deadline: float, progress: Callable[[str, int], None],
-                     cancelled: Callable[[], bool]) -> tuple[list[dict], list[dict], dict, dict | None, str]:
-        if not frames:
-            raise RuntimeError("没有从视频中读取到有效画面")
-        images = [frame for _, frame in frames]
-        sharpness = [cv2.Laplacian(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
-                     for frame in images]
-        reference_index = int(np.argmax(sharpness))
-        requested_frame = route_color_sample.get("prepared_frame_index") if route_color_sample else None
-        if requested_frame is not None:
-            reference_index = next((index for index, item in enumerate(frames)
-                                    if item[0] == requested_frame), reference_index)
-        reference = images[reference_index]
-        height, width = reference.shape[:2]
-        transformations: list[np.ndarray | None] = []
-        registrations = []
-        for index, frame in enumerate(images):
-            if index == reference_index:
-                transformations.append(np.eye(3))
-                registrations.append({"frame": frames[index][0], "status": "reference"})
-                continue
-            matrix, evidence = align_to_reference(frame, reference)
-            transformations.append(matrix)
-            registrations.append({"frame": frames[index][0],
-                                  "status": "aligned" if matrix is not None else "rejected", **evidence})
-        corners = np.float32([[[0, 0]], [[width, 0]], [[width, height]], [[0, height]]])
-        motion_px = max((float(np.median(np.linalg.norm(
-            cv2.perspectiveTransform(corners, matrix) - corners, axis=2)))
-            for matrix in transformations if matrix is not None), default=0.0)
-        outputs, model_version = _climbing_model_masks_batch(
-            images, deadline, cancelled,
-            lambda stage, value: progress(stage, 16 + round(max(0, value - 20) * .37)),
-            pack_masks=True,
-        )
-
-        def restore_mask(encoded: np.ndarray, frame: np.ndarray) -> np.ndarray:
-            if encoded.shape[1] == frame.shape[1]:
-                return encoded
-            return np.unpackbits(encoded, axis=1, count=frame.shape[1]).astype(np.uint8) * 255
-
-        actual_sample = dict(route_color_sample) if route_color_sample else None
-        sampled_bbox = None
-        if actual_sample and actual_sample.get("source") == "video" and actual_sample.get("point_xy") is not None:
-            requested = actual_sample.get("prepared_frame_index")
-            sample_frame_index = next((index for index, item in enumerate(frames)
-                if item[0] == requested), None)
-            if sample_frame_index is None:
-                raise ValueError("无法读取取样时刻的画面，请重新选择岩点")
-            frame = images[sample_frame_index]
-            px = min(frame.shape[1] - 1, int(actual_sample["point_xy"][0] * frame.shape[1]))
-            py = min(frame.shape[0] - 1, int(actual_sample["point_xy"][1] * frame.shape[0]))
-            masks, _ = outputs[sample_frame_index]
-            matches = []
-            for encoded in masks:
-                mask = restore_mask(encoded, frame)
-                if mask[py, px] > 0:
-                    matches.append(mask)
-            if not matches:
-                raise ValueError("所点位置未落在识别出的岩点内，请选择清晰且未被遮挡的岩点")
-            mask = min(matches, key=lambda item: int(np.count_nonzero(item)))
-            sample_polygon = native_mask_polygon(mask)
-            if len(sample_polygon) >= 3 and transformations[sample_frame_index] is not None:
-                sampled_bbox = polygon_bbox(transform_polygon(
-                    [[float(point[0][0]), float(point[0][1])] for point in sample_polygon],
-                    transformations[sample_frame_index], width, height))
-            interior = cv2.erode(mask, np.ones((5, 5), np.uint8))
-            pixels = frame[interior > 0]
-            if len(pixels) < 10:
-                pixels = frame[mask > 0]
-            rgb = np.median(pixels[:, ::-1], axis=0).astype(int).tolist()
-            actual_sample.update(rgb=rgb, hex="#{:02x}{:02x}{:02x}".format(*rgb),
-                                 evidence="segmented_hold_interior", frame_index=frames[sample_frame_index][0])
-        detections: list[list[dict]] = []
-        target = cls._route_colour(route_color)
-        for frame_index, ((source_index, frame), (masks, scores), matrix) in enumerate(
-                zip(frames, outputs, transformations)):
-            if matrix is None:
-                continue
-            frame_holds = []
-            for encoded, score in zip(masks, scores):
-                if cancelled():
-                    raise ReplayCancelled()
-                mask = restore_mask(encoded, frame)
-                polygon = native_mask_polygon(mask)
-                if len(polygon) < 3:
-                    continue
-                source_polygon = [[float(point[0][0]), float(point[0][1])] for point in polygon]
-                mapped = transform_polygon(source_polygon, matrix, width, height)
-                bbox = polygon_bbox(mapped)
-                if bbox[2] <= 0 or bbox[3] <= 0:
-                    continue
-                colour = classify_mask_color(frame, mask, version=TWELVE_COLOR_VERSION)
-                if colour == "待确认":
-                    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)[mask > 0]
-                    if len(lab):
-                        colour = lab_color_name(np.median(lab, axis=0).astype(np.uint8), twelve_colors=True)
-                distance = mask_sample_distance(frame, mask, actual_sample["rgb"]) if actual_sample else None
-                candidate = distance <= REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE if distance is not None else colour == target
-                frame_holds.append({
-                    "bbox": bbox, "polygon": mapped, "score": round(float(score), 4),
-                    "color_group": colour, "color_source": actual_sample["source"] if actual_sample else "preset",
-                    "color_distance": round(distance, 4) if distance is not None else None,
-                    "route_candidate": candidate, "route_candidate_reason": "color_sample" if actual_sample else "preset_color",
-                    "identity_source": "multi_frame_geometry", "contour_source": "climbing_model_native_mask",
-                    "contour_points": len(mapped), "source_frame": source_index,
-                })
-            detections.append(frame_holds)
-        all_holds = fuse_hold_detections(detections, color_distance_limit=REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE)
-        if sampled_bbox is not None:
-            for hold in all_holds:
-                if cls._iou(hold["bbox"], sampled_bbox) > .5:
-                    hold["identity_source"] = "user_sampled_hold"
-                    hold["route_candidate"] = True
-                    hold["route_candidate_reason"] = "user_sampled_hold"
-                    break
-        projected = []
-        route_registration = None
-        if saved_route_reference:
-            try:
-                image = cv2.imdecode(np.fromfile(saved_route_reference["asset_path"], np.uint8), cv2.IMREAD_COLOR)
-            except OSError:
-                image = None
-            if image is not None:
-                matrix, route_registration = align_to_reference(image, reference)
-                if matrix is not None:
-                    for member in saved_route_reference["members"]:
-                        polygon = transform_polygon(member["contour"], matrix, width, height)
-                        if len(polygon) >= 3:
-                            projected.append({"object_id": member["object_id"], "bbox": polygon_bbox(polygon),
-                                              "polygon": polygon})
-            else:
-                route_registration = {"reason": "saved_photo_unavailable"}
-        strong_registration = bool(route_registration and
-            route_registration.get("inliers", 0) >= 25 and
-            route_registration.get("median_error_px", float("inf")) <= 3)
-        confirmed, remaining = match_confirmed_route(
-            all_holds, projected, include_projected_unmatched=strong_registration)
-        if confirmed:
-            holds = confirmed
-            candidates = remaining
-            selection = "confirmed_saved_route"
-            sampled_selection = None
-        else:
-            minimum_appearances = 2 if sum(item is not None for item in transformations) >= 2 else 1
-            if actual_sample and actual_sample.get("rgb"):
-                sample_rgb = np.uint8([[actual_sample["rgb"]]])
-                sample_lab = cv2.cvtColor(sample_rgb, cv2.COLOR_RGB2LAB)[0, 0]
-                sample_group = lab_color_name(sample_lab, twelve_colors=True)
-                holds, candidates, sampled_selection = select_sampled_route_holds(
-                    all_holds, sample_group=sample_group,
-                    minimum_appearances=minimum_appearances,
-                )
-                selection = "sampled_colour_geometry_needs_review"
-            else:
-                holds, candidates, sampled_selection = select_sampled_route_holds(
-                    all_holds, sample_group=target,
-                    minimum_appearances=minimum_appearances,
-                )
-                selection = "minimal_colour_geometry_needs_review"
-            candidates.extend(item for item in remaining if item.get("appearances") == 0)
-        holds.sort(key=lambda hold: (-(hold["bbox"][1] + hold["bbox"][3] / 2), hold["bbox"][0]))
-        for index, hold in enumerate(holds, 1):
-            hold["id"] = index
-        diagnostics = {"selection": selection, "reference_frame": frames[reference_index][0],
-                       "frames_decoded": len(frames), "frames_aligned": sum(item is not None for item in transformations),
-                       "registrations": registrations, "saved_route_registration": route_registration,
-                       "camera_motion_px": round(motion_px, 2),
-                       "confirmed_members_matched": sum(item.get("appearances", 0) > 0 for item in confirmed),
-                       "confirmed_members_projected": sum(item.get("appearances", 0) == 0 for item in candidates),
-                       "all_candidates": len(all_holds), "sampled_selection": sampled_selection}
-        return holds, candidates, diagnostics, actual_sample, f"{model_version}+multiframe-aligned-v1"
-
-    @staticmethod
-    def _jpeg(frame: np.ndarray) -> tuple[bytes, int, int]:
-        height, width = frame.shape[:2]
-        ratio = min(1.0, 1280 / max(height, width))
-        if ratio < 1:
-            frame = cv2.resize(frame, (round(width * ratio), round(height * ratio)),
-                               interpolation=cv2.INTER_AREA)
-        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
-        if not ok:
-            raise RuntimeError("无法编码视频抽样帧")
-        encoded_height, encoded_width = frame.shape[:2]
-        return buf.tobytes(), encoded_width, encoded_height
-
-    @staticmethod
-    def _route_colour(value: str) -> str:
-        aliases = {english: chinese for chinese, english in COLOR_PROMPTS.items() if len(chinese) > 1}
-        return aliases.get(value.strip().lower(), value.strip())
-
     def _pose_frame(self, frame: np.ndarray, *, frame_id: int, source_frame_id: int,
                     before_request: Callable[[int], None] | None = None) -> dict | None:
         jpeg, _, _ = self._jpeg(frame)
@@ -3864,328 +4518,8 @@ class AliyunReplayAnalyzer:
             "bbox_xywh": [round(float(value), 6) for value in person["bbox"]],
         }
 
-    @staticmethod
-    def _iou(a: list[float], b: list[float]) -> float:
-        ax, ay, aw, ah = a; bx, by, bw, bh = b
-        x0, y0 = max(ax, bx), max(ay, by)
-        x1, y1 = min(ax + aw, bx + bw), min(ay + ah, by + bh)
-        overlap = max(0.0, x1 - x0) * max(0.0, y1 - y0)
-        union = aw * ah + bw * bh - overlap
-        return overlap / union if union > 1e-9 else 0.0
-
-    @staticmethod
-    def _choose_track(items: list[dict]) -> tuple[Any, list[dict]]:
-        by_track: dict[Any, list[dict]] = defaultdict(list)
-        for item in items:
-            by_track[item.get("track_id")].append(item)
-        if not by_track:
-            raise RuntimeError("视频中没有识别到攀爬者")
-        track = max(by_track, key=lambda key: (len(by_track[key]),
-            np.mean([record.get("bbox_xywh", [0, 0, 0, 0])[2] *
-                     record.get("bbox_xywh", [0, 0, 0, 0])[3] for record in by_track[key]])))
-        return track, by_track[track]
-
-    @staticmethod
-    def _inside(point: tuple[float, float], hold: dict, margin: float) -> bool:
-        x, y = point
-        polygon = hold.get("polygon") or []
-        if isinstance(polygon, list) and len(polygon) >= 3:
-            contour = np.asarray(polygon, dtype=np.float32).reshape((-1, 1, 2))
-            return cv2.pointPolygonTest(contour, (float(x), float(y)), True) >= -margin
-        bx, by, bw, bh = hold["bbox"]
-        return bx - margin <= x <= bx + bw + margin and by - margin <= y <= by + bh + margin
-
-    @classmethod
-    def _contacts(cls, records: list[dict], holds: list[dict], fps: float) -> dict:
-        limbs = {"left_hand": 9, "right_hand": 10, "left_foot": 15, "right_foot": 16}
-        dwell = max(1, round(0.4 * fps))
-        records = sorted(records, key=lambda item: int(item.get("frame_id", -1)))
-        current = {key: None for key in limbs}
-        since = {key: 0 for key in limbs}
-        run = {key: 0 for key in limbs}
-        confirmed = {key: False for key in limbs}
-        stable_at = {key: None for key in limbs}
-        contacts: list[dict] = []
-        holding: dict[int, dict[str, int]] = {}
-        midline = []
-
-        def close(key: str, frame: int) -> None:
-            if current[key] is not None and confirmed[key]:
-                contacts.append({"limb": key, "hold_id": current[key], "start_frame": since[key],
-                                 "end_frame": max(since[key], frame - 1),
-                                 "stable_frame": stable_at[key]})
-            current[key], run[key], confirmed[key], stable_at[key] = None, 0, False, None
-
-        for item in records:
-            frame = int(item.get("frame_id", -1))
-            points = item.get("kpts_xy") or []
-            scores = item.get("kpts_score") or []
-            torso = [points[i] for i in (5, 6, 11, 12) if i < len(points) and points[i] != [0, 0]]
-            if torso:
-                midline.append({"frame": frame, "x": round(float(np.mean([p[0] for p in torso])), 5),
-                                "y": round(float(np.mean([p[1] for p in torso])), 5)})
-            active = {}
-            for key, index in limbs.items():
-                if index >= len(points) or points[index] == [0, 0] or (
-                    index < len(scores) and scores[index] is not None and float(scores[index]) < 0.15
-                ):
-                    close(key, frame); continue
-                x, y = map(float, points[index])
-                if "foot" in key:
-                    y += 0.02
-                choices = [hold for hold in holds if cls._inside((x, y), hold, 0.02)]
-                chosen = min(choices, key=lambda hold: abs(x - hold["bbox"][0] - hold["bbox"][2] / 2)
-                             + abs(y - hold["bbox"][1] - hold["bbox"][3] / 2)) if choices else None
-                hold_id = chosen["id"] if chosen else None
-                if hold_id != current[key]:
-                    close(key, frame)
-                    current[key], since[key] = hold_id, frame
-                if hold_id is not None:
-                    run[key] += 1
-                    confirmed[key] = confirmed[key] or run[key] >= dwell
-                    if confirmed[key] and stable_at[key] is None:
-                        stable_at[key] = frame
-                    if confirmed[key]:
-                        active[key] = hold_id
-            holding[frame] = active
-        last_frame = int(records[-1].get("frame_id", 0)) + 1 if records else 0
-        for key in limbs:
-            close(key, last_frame)
-
-        first_use: dict[int, int] = {}
-        for contact in contacts:
-            first_use[contact["hold_id"]] = min(first_use.get(contact["hold_id"], 10**9), contact["start_frame"])
-        sequence = [hold for hold, _ in sorted(first_use.items(), key=lambda pair: pair[1])]
-        start = next((frame for frame, active in sorted(holding.items())
-                      if any(k.endswith("hand") for k in active) and any(k.endswith("foot") for k in active)), None)
-        top = min(holds, key=lambda hold: hold["bbox"][1] + hold["bbox"][3] / 2)["id"] if holds else None
-        completion = next((frame for frame, active in sorted(holding.items())
-                           if active.get("left_hand") == top and active.get("right_hand") == top), None)
-        end = completion if completion is not None else (max(holding) if holding else None)
-        window_frames = max(1, (end - start + 1)) if start is not None and end is not None else 1
-        per_limb = {}
-        for key in limbs:
-            relevant = [c for c in contacts if c["limb"] == key]
-            clip_start = start if start is not None else 0
-            clip_end = end if end is not None else max(0, last_frame - 1)
-            count = sum(max(0, min(c["end_frame"], clip_end) -
-                            max(c["start_frame"], clip_start) + 1) for c in relevant)
-            per_limb[key] = {"contact_seconds": round(count / fps, 3),
-                             "coverage_of_attempt": round(count / window_frames, 4),
-                             "holds": list(dict.fromkeys(c["hold_id"] for c in relevant))}
-        return {
-            "start_frame": start,
-            "completion_frame": completion,
-            "topped_out": completion is not None,
-            "elapsed_seconds": round((completion - start) / fps, 3)
-                if start is not None and completion is not None else None,
-            "sequence": sequence,
-            "contacts": contacts,
-            "per_limb": per_limb,
-            "midline": midline,
-        }
-
-    def analyze(self, video: Path, *, route_color: str, video_info: VideoInfo,
-                route_color_sample: dict | None = None,
-                saved_route_reference: dict | None = None,
-                trim_start_seconds: float = 0,
-                progress: Callable[[str, int], None], cancelled: Callable[[], bool],
-                telemetry: Callable[[dict], None]) -> dict:
-        started = time.perf_counter()
-        analysis = self.analysis_contract(video_info)
-        usage = analysis["usage"]
-        timings = analysis["timings_ms"]
-        processed_frames = 0
-
-        def snapshot() -> dict:
-            timings["total"] = max(0, round((time.perf_counter() - started) * 1000))
-            usage["unprocessed_frames"] = max(0, usage["planned_requests"] - processed_frames)
-            analysis["cost"]["billable_requests_estimate"] = usage["successful_requests"]
-            analysis["cost"]["estimated_amount"] = round(
-                usage["successful_requests"] * analysis["cost"]["unit_price"], 6,
-            )
-            return json.loads(json.dumps(analysis, ensure_ascii=False))
-
-        def publish() -> None:
-            telemetry(snapshot())
-
-        def empty_pose(sample_index: int, source_index: int) -> dict:
-            return {
-                "frame_id": sample_index, "source_frame_id": int(source_index),
-                "wall_alignment": "unavailable",
-                "track_id": 0, "kpts_xy": [[0.0, 0.0] for _ in range(17)],
-                "kpts_score": [0.0] * 17, "bbox_xywh": [0.0, 0.0, 0.0, 0.0],
-            }
-
-        publish()
-        try:
-            # Fail before local inference so a missing provider configuration
-            # cannot spend local CPU or send any image data.
-            self._client()
-
-            stage_started = time.perf_counter()
-            progress("选取清晰视频帧", 10)
-            prepared_sample = dict(route_color_sample) if route_color_sample else None
-            if prepared_sample and prepared_sample.get("source") == "video" and prepared_sample.get("point_xy") is not None:
-                prepared_sample["trim_start_seconds"] = trim_start_seconds
-                prepared_sample["prepared_frame_index"] = round(
-                    (float(prepared_sample["time_seconds"]) - prepared_sample["trim_start_seconds"]) * video_info.fps)
-            hold_frames = self._hold_frames(video, video_info, prepared_sample)
-            if not hold_frames:
-                timings["background"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-                publish()
-                raise RuntimeError("没有从视频中读取到有效画面")
-            timings["background"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-            publish()
-
-            stage_started = time.perf_counter()
-            progress("逐帧识别并对齐岩点", 16)
-            holds, hold_candidates, hold_diagnostics, actual_sample, hold_version = self._video_holds(
-                frames=hold_frames, route_color=route_color, route_color_sample=prepared_sample,
-                saved_route_reference=saved_route_reference,
-                deadline=time.monotonic() + 240, progress=progress, cancelled=cancelled,
-            )
-            timings["hold_inference"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-            analysis["models"]["holds"]["version"] = hold_version
-            publish()
-            if cancelled():
-                raise ReplayCancelled()
-            if not holds:
-                raise RuntimeError(f"没有找到“{route_color}”线路候选岩点，请尝试从画面点选样本岩点")
-
-            sample_fps, positions = self._sampling_positions(video_info)
-            stage_started = time.perf_counter()
-            cap = cv2.VideoCapture(str(video))
-            if not cap.isOpened():
-                raise RuntimeError("无法重新读取视频进行姿态识别")
-            records = []
-            contact_records = []
-            hold_reference = next(frame for index, frame in hold_frames
-                                  if index == hold_diagnostics["reference_frame"])
-            pose_alignment_failed = 0
-            detected_pose_frames = 0
-            try:
-                progress("抽帧识别攀爬者姿态", 55)
-                for sample_index, source_index in enumerate(positions):
-                    if cancelled():
-                        raise ReplayCancelled()
-                    processed_frames = sample_index + 1
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, int(source_index))
-                    ok, frame = cap.read()
-                    if not ok:
-                        usage["decode_failed_frames"] += 1
-                        missing = empty_pose(sample_index, int(source_index))
-                        records.append(missing)
-                        contact_records.append(missing)
-                        publish()
-                        continue
-
-                    request_state = {"made": False}
-
-                    def before_request(size_bytes: int) -> None:
-                        request_state["made"] = True
-                        usage["actual_requests"] += 1
-                        usage["request_image_bytes"] += size_bytes
-
-                    try:
-                        record = self._pose_frame(
-                            frame, frame_id=sample_index, source_frame_id=int(source_index),
-                            before_request=before_request,
-                        )
-                    except Exception:
-                        if request_state["made"]:
-                            usage["failed_requests"] += 1
-                        publish()
-                        raise
-                    if request_state["made"]:
-                        usage["successful_requests"] += 1
-                    if record:
-                        detected_pose_frames += 1
-                        usage["successful_pose_frames"] += 1
-                        matrix, alignment = align_to_reference(frame, hold_reference)
-                        record["wall_alignment"] = "aligned" if matrix is not None else "failed"
-                        record["wall_alignment_diagnostics"] = alignment
-                        record["wall_reference_transform"] = matrix.tolist() if matrix is not None else None
-                        records.append(record)
-                        if matrix is None:
-                            pose_alignment_failed += 1
-                        contact_records.append(align_pose_record(
-                            record, matrix, hold_reference.shape[1], hold_reference.shape[0]))
-                    else:
-                        usage["responses_without_pose"] += 1
-                        missing = empty_pose(sample_index, int(source_index))
-                        records.append(missing)
-                        contact_records.append(missing)
-                    publish()
-                    progress("抽帧识别攀爬者姿态", 55 + round(25 * processed_frames / len(positions)))
-            finally:
-                cap.release()
-                timings["pose"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-                publish()
-
-            if not detected_pose_frames:
-                raise RuntimeError("视频中没有识别到攀爬者，请检查机位和光线")
-            track_id, records = self._choose_track(records)
-
-            stage_started = time.perf_counter()
-            progress("计算手脚与岩点接触", 82)
-            attempt = self._contacts(contact_records, holds, sample_fps)
-            pose_samples = build_pose_samples(records, video_info)
-            add_attempt_source_times(attempt, pose_samples, video_info)
-            attempt["action_steps"] = build_action_steps(attempt.get("contacts") or [])
-            timings["contact"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-
-            stage_started = time.perf_counter()
-            progress("生成可导出的叠加视频", 86)
-            result = {
-                "schema_version": 2,
-                "segment_schema_version": 1,
-                "status": "prototype_needs_review",
-                "route": {"color": route_color, "color_sample": actual_sample},
-                "models": {"holds": hold_version, "pose": self.pose_model},
-                "video": asdict(video_info),
-                "track_id": track_id,
-                "frames_with_pose": detected_pose_frames,
-                "holds": holds,
-                "hold_candidates": hold_candidates,
-                "hold_evidence": hold_diagnostics,
-                "pose_samples": pose_samples,
-                "attempt": attempt,
-                "analysis": analysis,
-                "warnings": [
-                    "当前为技术验证结果，手脚接触需要用户复核。",
-                    "岩点由服务器本地专项模型识别，并直接保留模型原生掩膜轮廓；姿态仅对降帧画面调用阿里云人体姿态关键点服务。",
-                    "导出视频在相邻实测姿态帧之间做本地线性平滑；分析证据仍以实测抽样帧为准。",
-                    "导出的叠加视频保留原画面，但当前不包含原视频音轨。",
-                    "岩点接触使用本地专项模型原生实例分割轮廓与短时停留判断，接触边界仍需用户复核。",
-                    f"{pose_alignment_failed} 帧姿态未能可靠对齐墙面参考，已从接触判断中排除。",
-                    (f"{hold_diagnostics['confirmed_members_projected']} 个已确认岩点仅通过照片对齐投影定位，"
-                     "未在抽样帧中被模型重新检测到，已放在其他候选且不参与接触判断。") if hold_diagnostics.get("confirmed_members_projected") else
-                    "已确认线路岩点优先采用照片与视频的几何对应，颜色仅参与候选筛选。",
-                    ("检测到机位变化；接触计算已对齐姿态帧，但导出视频中的固定岩点框仅供参考。"
-                     if hold_diagnostics.get("camera_motion_px", 0) > .02 * min(video_info.width, video_info.height)
-                     else "固定岩点图采用多帧配准融合，单帧漏检不会直接决定岩点身份。"),
-                    "开始时间根据首个手脚同时稳定接触估算，尚未使用地面分割。",
-                ],
-            }
-            attempt["segments"] = build_segments(result)
-            result["overlay"] = render_replay_overlay_video(
-                video, video.with_name(REPLAY_OVERLAY_FILENAME), result,
-                progress=lambda value: progress(
-                    "生成可导出的叠加视频", 86 + round(10 * value / 100),
-                ),
-                cancelled=cancelled,
-                stage_progress=lambda stage, value: progress(stage, 86 + round(10 * value / 100)),
-            )
-            timings["overlay"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-
-            stage_started = time.perf_counter()
-            progress("整理复盘报告", 97)
-            timings["report"] = max(0, round((time.perf_counter() - stage_started) * 1000))
-            publish()
-            return result
-        finally:
-            publish()
+    def _prepare_pose_run(self, confirmed_holds: dict) -> None:
+        self._client()
 
 
 def create_climb_replay_router(
@@ -4274,13 +4608,16 @@ def create_climb_replay_router(
         return user.username
 
     def consent_policy() -> dict:
-        region = str(getattr(manager.analyzer, "region_id", "cn-shanghai"))
+        region = "local"
         return {
             "version": REPLAY_CONSENT_VERSION,
             "provider": REPLAY_CONSENT_PROVIDER,
             "service": REPLAY_CONSENT_SERVICE,
             "region": region,
             "data_types": list(REPLAY_CONSENT_DATA_TYPES),
+            "execution": "local", "requires_paid_consent": False, "uploads_frames": False,
+            "keeps_high_resolution": True,
+            "model": "rtmw-l-384x288-cocktail14-20231122",
             "purpose": "生成本次攀岩复盘所需的人体姿态关键点",
             "full_video_sent": False,
         }
@@ -4288,7 +4625,7 @@ def create_climb_replay_router(
     def consent_grant(version: str, granted: bool, *, attempt: int) -> dict:
         policy = consent_policy()
         if not granted:
-            raise HTTPException(422, "请先明确同意本次抽样画面第三方处理")
+            raise HTTPException(422, "请先明确同意本次本地视频分析")
         if version != policy["version"]:
             raise HTTPException(409, "数据处理告知已更新，请阅读最新说明并重新同意")
         return {
@@ -4296,13 +4633,14 @@ def create_climb_replay_router(
             "provider": policy["provider"], "service": policy["service"],
             "region": policy["region"], "data_types": policy["data_types"],
             "purpose": policy["purpose"], "full_video_sent": policy["full_video_sent"],
+            "execution": "local", "uploads_frames": False,
             "granted_at": utcnow(),
         }
 
     def retention_choice(value: str) -> ReplayRetentionMode:
         if value not in {REPLAY_RETENTION_DELETE, REPLAY_RETENTION_KEEP}:
             raise HTTPException(422, "请选择有效的视频保留方式")
-        return value  # type: ignore[return-value]
+        return REPLAY_RETENTION_KEEP
 
     def resolve_route(username: str, route_id: str, route_color: str) -> tuple[str, str]:
         route_id = route_id.strip()
@@ -4318,6 +4656,35 @@ def create_climb_replay_router(
 
     def route_reference(username: str, route_id: str) -> dict | None:
         return route_reference_lookup(route_id, username) if route_id and route_reference_lookup else None
+
+    from core.replay_preview import preview_router
+    router.include_router(preview_router(store, owner, limits))
+
+    @router.post('/prepared-videos/{key}/start', status_code=202)
+    def start_prepared_video(key: str, payload: ReplayUploadCreate, request: Request):
+        username = owner(request)
+        route_id, route_color = (None, '') if payload.skip_holds else resolve_route(username, payload.route_id, payload.route_color)
+        consent = consent_grant(payload.consent_version, payload.consent_granted, attempt=1)
+        consent.update(event='local_processing_granted', skip_holds=payload.skip_holds)
+        color_sample = parse_color_sample(payload.route_color_sample)
+        with store._lock:
+            manager.ensure_capacity()
+            prepared = store.prepared_previews.take(key, username)
+            try:
+                info = prepared['info']
+                if payload.trim_start_seconds != 0 or (payload.trim_end_seconds is not None and abs(payload.trim_end_seconds-info.duration_seconds) > .1):
+                    raise HTTPException(409, '视频范围已变化，请重新导入后取色。')
+                root = Path(prepared['work'].name)
+                job = store.create_pending(owner=username, route_id=route_id, route_color=route_color,
+                    source=root/'source.mp4', original_name=prepared['filename'], content_type=prepared['content_type'],
+                    consent=consent, retention_mode=retention_choice(payload.retention_mode),
+                    trim_start_seconds=0, trim_end_seconds=info.duration_seconds,
+                    route_color_sample=color_sample, saved_route_reference=route_reference(username, route_id))
+                job = store.finish_preparation(job['id'], root/'preview.mp4', info)
+                manager.enqueue(job['id'])
+                return job
+            finally:
+                prepared['work'].cleanup()
 
     @router.get("/consent-policy")
     def get_consent_policy(request: Request):
@@ -4396,21 +4763,24 @@ def create_climb_replay_router(
         return test_video_response(items[0])
 
     @router.post("/jobs", status_code=202)
-    async def create_job(
+    def create_job(
         request: Request,
         video: UploadFile = File(...),
         route_id: str = Form(default=""),
         route_color: str = Form(default=""),
         consent_version: str = Form(default=""),
         consent_granted: bool = Form(default=False),
-        retention_mode: str = Form(default=REPLAY_RETENTION_DELETE),
+        retention_mode: str = Form(default=REPLAY_RETENTION_KEEP),
         trim_start_seconds: float = Form(default=0),
         trim_end_seconds: float | None = Form(default=None),
         route_color_sample: str = Form(default=""),
+        skip_holds: bool = Form(default=False),
     ):
         username = owner(request)
-        route_id, route_color = resolve_route(username, route_id, route_color)
+        route_id, route_color = (None, "") if skip_holds else resolve_route(username, route_id, route_color)
         consent = consent_grant(consent_version, consent_granted, attempt=1)
+        consent["event"] = "local_processing_granted"
+        consent["skip_holds"] = skip_holds
         retention = retention_choice(retention_mode)
         try:
             color_sample = parse_color_sample(route_color_sample)
@@ -4425,7 +4795,7 @@ def create_climb_replay_router(
         size, digest = 0, hashlib.sha256()
         try:
             with upload.open("wb") as target:
-                while chunk := await video.read(1024 * 1024):
+                while chunk := video.file.read(1024 * 1024):
                     size += len(chunk)
                     if size > limits.max_input_bytes:
                         raise HTTPException(413, f"视频不能超过 {limits.max_input_bytes // (1024 * 1024)} MB")
@@ -4452,8 +4822,10 @@ def create_climb_replay_router(
     @router.post("/uploads")
     def create_upload(payload: ReplayUploadCreate, request: Request):
         username = owner(request)
-        route_id, route_color = resolve_route(username, payload.route_id, payload.route_color)
+        route_id, route_color = (None, "") if payload.skip_holds else resolve_route(username, payload.route_id, payload.route_color)
         consent = consent_grant(payload.consent_version, payload.consent_granted, attempt=1)
+        consent["event"] = "local_processing_granted"
+        consent["skip_holds"] = payload.skip_holds
         try:
             validate_video_upload_type(payload.filename, payload.content_type)
         except ValueError as exc:
@@ -4477,7 +4849,8 @@ def create_climb_replay_router(
         except ValueError as exc:
             raise HTTPException(422, "上传位置无效") from exc
         try:
-            return replay_uploads.append(upload_id, owner(request), offset=offset, data=await request.body())
+            data = await request.body()
+            return await run_in_threadpool(replay_uploads.append, upload_id, owner(request), offset=offset, data=data)
         except ChunkUploadError as exc:
             raise HTTPException(409, str(exc)) from exc
 
@@ -4488,7 +4861,7 @@ def create_climb_replay_router(
         try:
             meta, part = replay_uploads.finish(upload_id, username)
             details = meta["metadata"]
-            route_id, route_color = resolve_route(username, details.get("route_id", ""), details.get("route_color", ""))
+            route_id, route_color = (None, "") if details["consent"].get("skip_holds") else resolve_route(username, details.get("route_id", ""), details.get("route_color", ""))
             with store._lock:
                 manager.ensure_capacity()
                 job = store.create_pending(
@@ -4557,6 +4930,59 @@ def create_climb_replay_router(
     def preview_hold_at_point(job_id: str, point: ReplayHoldPoint, request: Request):
         return store.preview_hold_at_point(job_id, owner(request), point)
 
+    @router.post("/jobs/{job_id}/holds/editor/frame")
+    def read_editor_frame(job_id: str, payload: EditorFrameRequest, request: Request):
+        return editor_frame(store, job_id, owner(request), payload)
+
+    @router.post("/jobs/{job_id}/holds/editor/preview")
+    def preview_editor_contour(job_id: str, payload: EditorPreviewRequest, request: Request):
+        try:
+            return editor_preview(store, job_id, owner(request), payload)
+        except (TimeoutError, InterruptedError) as exc:
+            raise HTTPException(422, "局部识别未完成，描边内容已保留；可继续手绘或重试。") from exc
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(422, "本地专项模型暂不可用，可先手绘轮廓并保存。") from exc
+
+    @router.post("/jobs/{job_id}/holds/editor/cancel")
+    def cancel_editor_inference(job_id: str, payload: EditorCancelRequest, request: Request):
+        return cancel_editor_request(store, job_id, owner(request), payload.request_id)
+
+    @router.post("/jobs/{job_id}/holds/editor/confirm")
+    def confirm_editor_contour(job_id: str, payload: EditorCommitRequest, request: Request):
+        return editor_commit(store, job_id, owner(request), payload.proposal_id)
+
+    @router.delete("/jobs/{job_id}/holds/{hold_id}")
+    def remove_replay_hold(job_id: str, hold_id: int, request: Request):
+        return store.remove_hold(job_id, owner(request), hold_id)
+
+    @router.post("/jobs/{job_id}/holds/confirm-all")
+    def confirm_replay_holds(job_id: str, payload: ReplayHoldsConfirmation, request: Request):
+        return store.confirm_all_holds(job_id, owner(request), payload.revision)
+
+    @router.post("/jobs/{job_id}/route-map/refresh")
+    def refresh_route_map(job_id: str, request: Request):
+        return store.refresh_route_map(job_id, owner(request))
+
+    @router.post("/jobs/{job_id}/analysis/start", status_code=202)
+    def start_replay_analysis(job_id: str, payload: ReplayRetryCreate, request: Request):
+        username = owner(request)
+        with store._lock:
+            manager.ensure_capacity()
+            consent = consent_grant(payload.consent_version, payload.consent_granted, attempt=1)
+            consent['skip_holds'] = payload.skip_holds
+            consent['sampling'] = {'pose_fps': payload.pose_fps,
+                                   'focus_windows': [row.model_dump() for row in payload.focus_windows]}
+            from core.replay_sampling import native_plan
+            selected = store.get(job_id, username, private=True)
+            if selected.get('video'):
+                try:
+                    native_plan(VideoInfo(**selected['video']), payload.pose_fps or 10, payload.focus_windows)
+                except ValueError:
+                    raise HTTPException(422, '重点采样片段须位于当前视频时间范围内') from None
+            result = store.start_analysis(job_id, username, consent)
+            manager.enqueue(job_id)
+        return result
+
     @router.post("/jobs/{job_id}/holds/point/undo")
     def undo_last_clicked_hold(job_id: str, request: Request):
         return store.undo_last_clicked_hold(job_id, owner(request))
@@ -4591,6 +5017,22 @@ def create_climb_replay_router(
     @router.get("/jobs/{job_id}/media/source-video")
     def get_source_video(job_id: str, request: Request, download: bool = False):
         return media_response(job_id, request, "source_video", download=download)
+
+    @router.get('/jobs/{job_id}/media/original-video')
+    def get_original_video(job_id: str, request: Request):
+        job = store.get(job_id, owner(request), private=True)
+        prepared, item = store.media_file(job_id, owner(request), 'source_video')
+        high = job.get('high_resolution_source') or {}
+        name = high.get('storage_name')
+        if not name:
+            raise HTTPException(404, '这条历史记录没有保留上传原片，现有播放副本仍可使用。')
+        if name not in {f'source{suffix}' for suffix in (*REPLAY_VIDEO_SUFFIXES, '.video')}:
+            raise HTTPException(404, '原片不可用')
+        path = prepared.parent / name
+        if not path.is_file() or path.resolve().parent != prepared.resolve().parent:
+            raise HTTPException(404, '原片不可用')
+        return FileResponse(path, filename=job['original_name'],
+            headers={'Cache-Control':'private, no-store', 'X-Content-Type-Options':'nosniff'})
 
     @router.get("/jobs/{job_id}/media/overlay-video")
     def get_overlay_video(job_id: str, request: Request, download: bool = False):

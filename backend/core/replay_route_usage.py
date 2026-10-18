@@ -6,6 +6,9 @@ ROUTE_KEYS = ('route_total', 'route_used', 'route_usage')
 
 
 def enrich_route_usage(organized, evidence=None):
+    if organized.get('skeleton_only') or (evidence or {}).get('skeleton_only'):
+        from .replay_skeleton_mode import without_hold_data
+        return without_hold_data(organized)
     output = deepcopy(organized)
     source = evidence if evidence is not None else organized
     def identity(value):
