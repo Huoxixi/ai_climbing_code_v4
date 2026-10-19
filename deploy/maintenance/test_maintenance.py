@@ -18,6 +18,7 @@ def module(name):
     spec=importlib.util.spec_from_file_location('maintenance_'+name,HERE/(name+'.py'))
     result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
 ops=module('maintenance');installer=module('install')
+bootstrap=module('bootstrap_mode')
 
 
 class MaintenanceTests(unittest.TestCase):
@@ -128,6 +129,15 @@ class MaintenanceTests(unittest.TestCase):
         for args in [[],['maintenance-status','/etc/passwd'],['maintenance-cleanup; id'],['shell'],['maintenance-cleanup','--force']]:
             with self.assertRaises(RuntimeError):ops.main(args)
 
+    def test_tools_only_bootstrap_is_explicit_and_never_changes_other_release_tags(self):
+        manifest=json.loads((HERE/'bootstrap_tags.json').read_text())
+        self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc1',manifest),'ssh-maintenance')
+        for tag in ['pilot-v2026.10.18-rc3','pilot-v2026.10.19-rc2','pilot-v2026.10.20-rc1']:
+            self.assertEqual(bootstrap.mode(tag,manifest),'browser')
+        for tag in ['pilot-v2026.10.19-rc1; id','--force','main']:
+            with self.assertRaises(RuntimeError):bootstrap.mode(tag,manifest)
+        with self.assertRaises(RuntimeError):bootstrap.mode('pilot-v2026.10.19-rc1',{'schema':1,'tags':{'pilot-v2026.10.19-rc1':'shell'}})
+
     def test_cancel_rechecks_identity_after_opening_stable_process_handle(self):
         current=self.release(4);self.active(current)
         @contextlib.contextmanager
@@ -159,6 +169,21 @@ class MaintenanceTests(unittest.TestCase):
 
 @unittest.skipIf(os.name=='nt','POSIX installer integration runs in the Linux release gate')
 class InstallerTests(unittest.TestCase):
+    def test_standard_deployment_lock_is_reused_without_releasing_parent_lock(self):
+        import fcntl
+        with tempfile.TemporaryDirectory(dir=TEMP) as folder:
+            lock=Path(folder)/'release.lock';fd=os.open(lock,os.O_RDWR|os.O_CREAT,0o600)
+            try:
+                os.fchmod(fd,0o644)
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                inherited,close=installer.deployment_lock(lock,inherited_fd=fd,owner=os.getuid())
+                self.assertEqual(inherited,fd);self.assertFalse(close)
+                self.assertEqual(stat.S_IMODE(os.fstat(fd).st_mode),0o600)
+                other=os.open(lock,os.O_RDWR)
+                try:
+                    with self.assertRaises(BlockingIOError):fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                finally:os.close(other)
+            finally:os.close(fd)
     def test_transaction_rolls_back_dispatcher_sudoers_and_launcher_if_probe_fails(self):
         with tempfile.TemporaryDirectory(dir=TEMP) as folder:
             root=Path(folder).resolve();source=HERE.parents[1];sha='a'*40

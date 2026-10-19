@@ -44,6 +44,31 @@ def atomic(path, body, mode):
         Path(name).unlink(missing_ok=True)
 
 
+def deployment_lock(lock, inherited_fd=8, owner=0):
+    """Reuse only the private lock inode inherited from the standard deployer."""
+    inherited=False
+    try:
+        handle=os.fstat(inherited_fd)
+        actual=lock.lstat()
+        inherited=(not lock.is_symlink() and stat.S_ISREG(handle.st_mode)
+                   and (handle.st_dev,handle.st_ino)==(actual.st_dev,actual.st_ino))
+    except OSError:
+        pass
+    fd=inherited_fd if inherited else os.open(lock,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
+    try:
+        import fcntl
+        info=os.fstat(fd)
+        if info.st_uid!=owner or info.st_mode&0o022:raise RuntimeError('Deployment lock has an unsafe owner or write permissions')
+        fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        # Older reviewed deployers created this file with umask 022 inside a
+        # root-only directory. Tighten it without replacing the locked inode.
+        os.fchmod(fd,0o600)
+    except BaseException:
+        if not inherited:os.close(fd)
+        raise
+    return fd,not inherited
+
+
 def install_files(source, sha, root=Path('/'), run=subprocess.run):
     """Root override and command injection exist only for isolated integration tests."""
     def p(value): return root/value.lstrip('/')
@@ -123,7 +148,6 @@ def install_files(source, sha, root=Path('/'), run=subprocess.run):
 
 
 def main(tag):
-    import fcntl
     if os.geteuid()!=0: raise RuntimeError('Run once in the existing root console')
     if not re.fullmatch(r'pilot-v\d{4}\.\d{2}\.\d{2}-rc\d+',tag): raise RuntimeError('Invalid immutable tag')
     source=Path(__file__).resolve().parents[2]
@@ -136,13 +160,11 @@ def main(tag):
     subprocess.run(['/usr/sbin/visudo','-c'],check=True,capture_output=True)
     lock=Path('/run/ai-climbing-deploy/release.lock')
     directory(lock.parent,0o700)
-    fd=os.open(lock,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600)
+    fd,close_lock=deployment_lock(lock)
     try:
-        info=os.fstat(fd)
-        if info.st_uid!=0 or info.st_mode&0o077: raise RuntimeError('Deployment lock is not private')
-        fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
         receipt=install_files(source,sha)
-    finally: os.close(fd)
+    finally:
+        if close_lock:os.close(fd)
     print(json.dumps(receipt))
     print('MAINTENANCE_READY='+sha)
 

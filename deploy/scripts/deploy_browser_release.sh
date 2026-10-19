@@ -7,6 +7,15 @@ tag="${2:-}"
 [[ "$source_dir" == /tmp/ai-climbing-release.*/source && "$tag" =~ ^pilot-v[0-9A-Za-z._-]+$ ]] || exit 1
 sha="$(git -C "$source_dir" rev-parse HEAD)"
 [[ "$sha" == "$(git -C "$source_dir" rev-parse "refs/tags/$tag^{commit}")" ]] || exit 1
+release_mode="$(python3.12 -I "$source_dir/deploy/maintenance/bootstrap_mode.py" "$tag")"
+if [[ "$release_mode" == ssh-maintenance ]]; then
+  # The stable dispatcher already owns the shared deployment lock on fd 8.
+  # This reviewed tag updates tools only; never build/switch/restart the site.
+  python3.12 -I "$source_dir/deploy/maintenance/install.py" "$tag"
+  echo "Fixed SSH maintenance tools installed from $tag ($sha); website unchanged."
+  exit 0
+fi
+[[ "$release_mode" == browser ]] || exit 1
 release_root=/opt/ai-climbing/releases
 current=/opt/ai-climbing/current
 building="$release_root/.$tag.building"
