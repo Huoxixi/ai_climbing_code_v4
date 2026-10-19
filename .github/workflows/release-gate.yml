@@ -43,6 +43,7 @@ jobs:
           python -m unittest test_browser_web_app -v
           cd ..
           python -m unittest discover -s deploy/browser -p test_delivery_safety.py -v
+          python -m unittest discover -s deploy/maintenance -p test_maintenance.py -v
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
