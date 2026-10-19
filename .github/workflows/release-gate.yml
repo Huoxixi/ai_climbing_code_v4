@@ -87,7 +87,7 @@ jobs:
           npm run test:browser-unit
           CLIMB_BROWSER_NATIVE_FIXTURES="$GITHUB_WORKSPACE/.tmp/public-browser-fixtures" \
             CLIMB_BROWSER_FFMPEG=/usr/bin/ffmpeg \
-            node --test browser-tests/browser-portal.test.mjs browser-tests/browser-video-export.test.mjs
+            node --test browser-tests/browser-portal.test.mjs browser-tests/browser-video-export.test.mjs browser-tests/browser-wall-registration.test.mjs
           npm run build:browser
           cd ..
           python deploy/browser/prepare_release.py .tmp/browser-release

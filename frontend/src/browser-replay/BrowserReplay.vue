@@ -23,13 +23,20 @@
         <button v-if="!sourceUrl" class="drop-zone" type="button" @click="fileInput?.click()">
           <span class="upload-mark" aria-hidden="true"><Upload/></span><strong>选择本地视频</strong><span>建议 H.264 MP4 · 最大 500 MB</span><small>只读取本机文件，不上传</small>
         </button>
-        <input id="video-file" ref="fileInput" class="sr-only" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" :disabled="analyzing||detecting||exporting" @change="chooseFile" />
+        <input id="video-file" ref="fileInput" class="sr-only" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" :disabled="analyzing||detecting||exporting||wallPreparing||saving" @change="chooseFile" />
         <div v-show="sourceUrl" class="video-stage" :style="{'--source-ratio':loaded?video?.videoWidth/video?.videoHeight:1}">
           <video ref="video" :src="sourceUrl || undefined" :controls="!analyzing&&!detecting" playsinline preload="auto" :class="{'hide-human':!showHuman}" @loadeddata="videoReady" @timeupdate="draw" @seeked="seeked" @error="decodeError"></video>
           <canvas ref="overlay" :class="{selectable:selecting}" :aria-label="selecting ? '点击框选你要分析的人物' : '骨架叠加画面'" @click="selectPerson"></canvas>
         </div>
         <div v-if="sourceUrl" class="picture-controls"><label><input v-model="showHuman" type="checkbox" :disabled="!samples.length||exporting" />真人</label><label><input v-model="showSkeleton" type="checkbox" :disabled="!samples.length||exporting" @change="draw" />骨架</label><span>{{ samples.length ? '未检出或人物不确定的时刻留空' : '拖动视频到人物清晰可见的画面' }}</span></div>
         <div v-if="sourceUrl" class="playback-controls"><button type="button" :disabled="!loaded||analyzing||detecting" @click="togglePlayback">{{ playing ? '暂停' : '播放' }}</button><input type="range" min="0" :max="duration || 1" step="0.01" :value="playTime" :disabled="!loaded||analyzing||detecting" aria-label="视频播放位置" @input="seekTo" /><span>{{ playTime.toFixed(1) }} / {{ duration.toFixed(1) }} 秒</span></div>
+        <div v-if="completed" class="wall-controls">
+          <label>骨架背景<select v-model="backgroundMode" aria-label="骨架背景" :disabled="exporting||wallPreparing||saving"><option value="dark">深色</option><option value="wall" :disabled="!wallScene">真实墙面</option></select></label>
+          <template v-if="!wallPreparing"><button type="button" :disabled="busy||saving" @click="prepareWall()">{{wallScene?'重新寻找无人背景':'寻找无人背景'}}</button><button type="button" :disabled="busy||saving||!loaded" @click="prepareWall(Math.min(playTime,Math.max(0,duration-1e-6)))">使用当前帧作为背景</button></template>
+          <button v-else type="button" @click="cancelWall">停止寻找</button>
+          <p v-if="wallPreparing" role="status">{{wallMessage}}</p><p v-else-if="wallScene" role="status">无人背景：{{wallScene.source_time_seconds.toFixed(2)}} 秒 · {{wallScene.aligned}} / {{wallScene.observed}} 个骨架观测已对齐{{wallScene.aligned<wallScene.observed?'，未对齐时刻留空':''}}</p>
+          <p v-if="wallError" class="web-error" role="alert">{{wallError}}</p>
+        </div>
       </div>
       <aside class="control-panel">
         <h2>{{record?'已保存的复盘':'准备复盘'}}</h2>
@@ -59,12 +66,14 @@
   </main>
 </template>
 <script setup>
-import {computed,nextTick,onBeforeUnmount,onMounted,ref,watch} from 'vue'
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,shallowRef,watch} from 'vue'
 import {Upload} from '@element-plus/icons-vue'
 import {LocalPoseEngine,waitForVideo,readVideoFrame} from './localEngine.js'
 import {MODEL_FILES,MODEL_VERSION} from './modelManifest.js'
 import {continueTarget} from './poseMath.js'
-import {drawSkeleton,sampleAtTime} from './replayDrawing.js'
+import {drawReplayScene} from './replayDrawing.js'
+import {prepareWallScene} from './wallScene.js'
+import {validWallScene} from './wallGeometry.js'
 import {exportReplayVideo} from './videoExport.js'
 import {saveReplay,LOCAL_HISTORY_OWNER} from './localHistory.js'
 const props=defineProps({embedded:Boolean,record:Object})
@@ -73,14 +82,16 @@ const saving=ref(false),saved=ref(false),saveError=ref('')
 const exporting=ref(false),exportProgress=ref(0),exportStatus=ref(''),exportError=ref(''),exportUrl=ref(''),exportName=ref(''),exportExtension=ref('')
 let exportController
 const exportDuration=computed(()=>completed.value?Math.max(0,Number(analysisMeta?.end_seconds||0)-Number(analysisMeta?.start_seconds||0)):0)
-let currentFile,savedRecordId
+let currentFile,savedRecordId,savedOwner=LOCAL_HISTORY_OWNER
+const wallScene=shallowRef(null),wallPreparing=ref(false),wallMessage=ref(''),wallError=ref(''),backgroundMode=ref('dark')
+let wallController,wallImage
 
 const video=ref(),overlay=ref(),fileInput=ref(),sourceUrl=ref(''),fileName=ref(''),ready=ref(false),preparing=ref(false),provider=ref(''),engineMessage=ref('正在准备模型…'),cacheWarning=ref(false)
 const modelProgress=ref({}),totalBytes=MODEL_FILES.reduce((s,f)=>s+f.bytes,0),modelLoaded=computed(()=>Object.values(modelProgress.value).reduce((s,v)=>s+v,0))
 const loaded=ref(false),detecting=ref(false),analyzing=ref(false),selecting=ref(false),candidates=ref([]),target=ref(null),targetTime=ref(0),sampleFps=ref(10),samples=ref([]),completed=ref(false),status=ref('模型准备期间也可以选择视频。'),error=ref(''),analysisProgress=ref(0),showHuman=ref(true),showSkeleton=ref(true),playTime=ref(0),playing=ref(false),duration=ref(0)
-const busy=computed(()=>preparing.value||detecting.value||analyzing.value||exporting.value),observedCount=computed(()=>samples.value.filter(s=>s.observed).length)
+const busy=computed(()=>preparing.value||detecting.value||analyzing.value||exporting.value||wallPreparing.value),observedCount=computed(()=>samples.value.filter(s=>s.observed).length)
 // Background model loading must not prevent opening an existing local record.
-watch([detecting,analyzing,exporting,saving],()=>emit('busy',detecting.value||analyzing.value||exporting.value||saving.value),{immediate:true})
+watch([detecting,analyzing,exporting,saving,wallPreparing],()=>emit('busy',detecting.value||analyzing.value||exporting.value||saving.value||wallPreparing.value),{immediate:true})
 let engine,decoder,controller,generation=0,destroyed=false,analysisMeta
 const scratch=document.createElement('canvas')
 function progress(data){
@@ -99,9 +110,10 @@ async function prepare(){
   finally{if(token===generation)preparing.value=false}
 }
 async function chooseFile(event){
+  if(analyzing.value||detecting.value||exporting.value||wallPreparing.value||saving.value)return
   const file=event.target.files?.[0];if(!file)return
   if(file.size>500*1024*1024){error.value='视频超过 500 MB，请选择较短片段。';event.target.value='';return}
-  clearExport();currentFile=file;saved.value=false;savedRecordId=undefined;saveError.value=''
+  clearExport();clearWall();currentFile=file;saved.value=false;savedRecordId=undefined;savedOwner=LOCAL_HISTORY_OWNER;saveError.value=''
   if(sourceUrl.value)URL.revokeObjectURL(sourceUrl.value)
   decoder?.pause();decoder?.removeAttribute('src');decoder?.load()
   sourceUrl.value=URL.createObjectURL(file);fileName.value=file.name;loaded.value=false;candidates.value=[];target.value=null;samples.value=[];completed.value=false;selecting.value=false;showHuman.value=true;error.value='';status.value='正在读取本地视频…'
@@ -147,7 +159,7 @@ async function decoderReady(signal){
   })
 }
 async function analyze(){
-  clearExport()
+  clearExport();clearWall()
   savedRecordId=undefined;saved.value=false;saveError.value=''
   const token=generation;controller=new AbortController();analyzing.value=true;completed.value=false;samples.value=[];error.value='';analysisProgress.value=0;video.value.pause()
   const start=targetTime.value,end=Math.min(video.value.duration,start+90),fps=sampleFps.value,total=Math.ceil((end-start)*fps)
@@ -159,15 +171,16 @@ async function analyze(){
     for(let i=0;i<total;i++){
       controller.signal.throwIfAborted()
       const time=start+i/fps;await waitForVideo(decoder,time,{signal:controller.signal})
-      let box=i===0?previous:null
+      let box=i===0?previous:null,detections=[]
       if(i>0&&time-lastSeen<=.6){
-        const detections=await engine.infer('detect',readVideoFrame(decoder,scratch));box=continueTarget(detections,previous)?.box
+        detections=await engine.infer('detect',readVideoFrame(decoder,scratch));box=continueTarget(detections,previous)?.box
       }
       const sample={time_seconds:time,observed:false}
       if(box){
         const pose=await engine.infer('pose',readVideoFrame(decoder,scratch),box)
         sample.observed=true;sample.box=box;sample.kpts_xy=pose.points.slice(0,17);sample.kpts_score=pose.scores.slice(0,17);sample.joint_eligibility=pose.eligible.slice(0,17)
         sample.wholebody={schema:'coco-wholebody-133',coordinates:'source_image_normalized',kpts_xy:pose.points,kpts_score:pose.scores,joint_eligibility:pose.eligible}
+        sample.scene_exclusions=(detections.length?detections.map(d=>d.box):[box]).map(b=>b.map((v,j)=>v/(j%2?decoder.videoHeight:decoder.videoWidth)))
         previous=box;lastSeen=time
       }else sample.missing_reason=time-lastSeen>.6?'target_lost_requires_new_anchor':'missing_or_ambiguous_detection'
       if(token!==generation)return
@@ -179,8 +192,10 @@ async function analyze(){
     await waitForVideo(video.value,start,{signal:controller.signal});draw()
   }catch(e){if(token===generation)error.value=e.message}
   finally{if(token===generation)analyzing.value=false;decoder?.pause();decoder?.removeAttribute('src');decoder?.load()}
+  if(completed.value&&token===generation)await prepareWall()
 }
 function stop(){
+  if(wallPreparing.value){cancelWall();return}
   generation++;controller?.abort();engine?.close();ready.value=false;preparing.value=false;analyzing.value=false;detecting.value=false;completed.value=false;samples.value=[];error.value='';engineMessage.value='已停止。重新准备时会复用已保存的模型缓存。';status.value='已停止本机计算。';draw()
 }
 function draw(){
@@ -192,22 +207,41 @@ function draw(){
   if(selecting.value){
     candidates.value.forEach(({box:b},i)=>{ctx.strokeStyle='#f1d04b';ctx.lineWidth=3*scale;ctx.strokeRect(b[0],b[1],b[2]-b[0],b[3]-b[1]);ctx.fillStyle='#f1d04b';ctx.font=`bold ${18*scale}px sans-serif`;ctx.fillText(`人物 ${i+1}`,b[0]+5*scale,Math.max(23*scale,b[1]-8*scale))});return
   }
-  if(!showSkeleton.value||!samples.value.length)return
-  drawSkeleton(ctx,sampleAtTime({...analysisMeta,pose_samples:samples.value},v.currentTime),canvas.width,canvas.height)
+  if(!samples.value.length)return
+  // Human playback remains the actual video layer; the overlay shares the same
+  // compositor as export and draws the selected wall only when human is hidden.
+  drawReplayScene(ctx,{analysis:{...analysisMeta,pose_samples:samples.value,wall_scene:wallScene.value},time:v.currentTime,width:canvas.width,height:canvas.height,includeHuman:showHuman.value,includeSkeleton:showSkeleton.value,backgroundMode:backgroundMode.value,background:wallImage})
 }
 function clearExport(){if(exportUrl.value)URL.revokeObjectURL(exportUrl.value);exportUrl.value='';exportName.value='';exportStatus.value='';exportError.value=''}
-watch([showHuman,showSkeleton],()=>{if(!exporting.value)clearExport()})
+watch([showHuman,showSkeleton,backgroundMode],()=>{if(!exporting.value)clearExport();draw()})
+function clearWall(){wallController?.abort(new DOMException('画面已更换','AbortError'));wallImage?.close();wallImage=null;wallScene.value=null;backgroundMode.value='dark';wallError.value=''}
+function cancelWall(){wallController?.abort(new DOMException('已取消墙面准备','AbortError'));if(preparing.value){generation++;engine?.close();preparing.value=false;ready.value=false}}
+async function prepareWall(manualTime){
+  if(busy.value||saving.value||!completed.value)return
+  clearExport();wallPreparing.value=true;wallError.value='';wallMessage.value='正在准备无人墙面检查…';wallController=new AbortController()
+  const signal=wallController.signal
+  video.value.pause();draw()
+  try{
+    if(!ready.value){await prepare();signal.throwIfAborted();if(!ready.value)throw new Error(error.value||'请先准备人物模型。')}
+    const scene=await prepareWallScene({file:currentFile,analysis:analysisPayload(),engine,manualTime,signal,onProgress:s=>wallMessage.value=s.message})
+    signal.throwIfAborted()
+    const bitmap=await createImageBitmap(scene.image)
+    if(signal.aborted||destroyed){bitmap.close();signal.throwIfAborted();return}
+    wallImage?.close();wallImage=bitmap;wallScene.value=scene;backgroundMode.value='wall';draw();await saveLocal()
+  }catch(e){if(!destroyed)wallError.value=e.name==='AbortError'?'已停止，已有骨架和背景保留。':e.message}
+  finally{wallPreparing.value=false;wallController=null}
+}
 function cancelExport(){exportController?.abort(new DOMException('已取消导出','AbortError'))}
 async function exportVideo(){
   if(busy.value||saving.value||!completed.value)return
   clearExport();exporting.value=true;exportProgress.value=0;exportError.value='';exportStatus.value='正在准备本机视频编码…';exportController=new AbortController();video.value.pause()
   const includeHuman=showHuman.value,includeSkeleton=showSkeleton.value
   try{
-    const result=await exportReplayVideo({file:currentFile,analysis:analysisPayload(),includeHuman,includeSkeleton,signal:exportController.signal,onProgress:state=>{exportProgress.value=state.progress;exportStatus.value=state.stage==='finalizing'?'正在完成视频文件…':state.stage==='encoding'?`正在导出 ${Math.round(state.progress*100)}%`:'正在准备本机视频编码…'}})
+    const result=await exportReplayVideo({file:currentFile,analysis:analysisPayload(),includeHuman,includeSkeleton,backgroundMode:backgroundMode.value,signal:exportController.signal,onProgress:state=>{exportProgress.value=state.progress;exportStatus.value=state.stage==='finalizing'?'正在完成视频文件…':state.stage==='encoding'?`正在导出 ${Math.round(state.progress*100)}%`:'正在准备本机视频编码…'}})
     if(destroyed)return
     if(exportUrl.value)URL.revokeObjectURL(exportUrl.value)
     exportUrl.value=URL.createObjectURL(result.blob);exportExtension.value=result.extension
-    const label=includeHuman?(includeSkeleton?'真人与骨架':'真人'):'纯骨架',base=fileName.value.replace(/\.[^.]+$/,'').replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,100)||'攀岩复盘'
+    const label=includeHuman?(includeSkeleton?'真人与骨架':'真人'):(backgroundMode.value==='wall'?'真实墙面纯骨架':'纯骨架'),base=fileName.value.replace(/\.[^.]+$/,'').replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,100)||'攀岩复盘'
     exportName.value=`${base}-${label}.${result.extension}`
     exportStatus.value=`视频已生成（${result.extension.toUpperCase()}），如果未自动下载，请点击下方链接。`
     const link=document.createElement('a');link.href=exportUrl.value;link.download=exportName.value;link.click()
@@ -217,14 +251,15 @@ async function exportVideo(){
 function exportData(){
   if(!completed.value)return
   const payload=analysisPayload()
+  if(payload.wall_scene){const {image,...metadata}=payload.wall_scene;payload.wall_scene={...metadata,image_saved_in_local_history:true}}
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'})),link=document.createElement('a')
   link.href=url;link.download='climbing-local-skeleton.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
 }
-function analysisPayload(){return {...analysisMeta,video:{width:video.value.videoWidth,height:video.value.videoHeight,duration_seconds:video.value.duration},pose_samples:JSON.parse(JSON.stringify(samples.value))}}
+function analysisPayload(){return {...analysisMeta,wall_scene:wallScene.value||undefined,video:{width:video.value.videoWidth,height:video.value.videoHeight,duration_seconds:video.value.duration},pose_samples:JSON.parse(JSON.stringify(samples.value))}}
 async function saveLocal(){
   if(!completed.value||!currentFile)return
   saving.value=true;saveError.value=''
-  try{const result=await saveReplay(LOCAL_HISTORY_OWNER,{id:savedRecordId,name:fileName.value,video:currentFile,analysis:analysisPayload()});savedRecordId=result.id;saved.value=true;emit('saved',result)}
+  try{const result=await saveReplay(savedOwner,{id:savedRecordId,name:fileName.value,video:currentFile,analysis:analysisPayload()});savedRecordId=result.id;saved.value=true;emit('saved',result)}
   catch(e){saved.value=false;saveError.value=e.message}
   finally{saving.value=false}
 }
@@ -233,11 +268,15 @@ function tick(){if(destroyed)return;if(video.value&&!video.value.paused)draw();a
 onMounted(()=>{
   if(props.record){
     const record=props.record,analysis=record.analysis
-    currentFile=record.video;savedRecordId=record.id;sourceUrl.value=URL.createObjectURL(record.video);fileName.value=record.name
-    analysisMeta={...analysis};delete analysisMeta.pose_samples;delete analysisMeta.video
+    currentFile=record.video;savedRecordId=record.id;savedOwner=record.owner;sourceUrl.value=URL.createObjectURL(record.video);fileName.value=record.name
+    analysisMeta={...analysis};delete analysisMeta.pose_samples;delete analysisMeta.video;delete analysisMeta.wall_scene
+    if(validWallScene(analysis.wall_scene)){
+      wallScene.value=analysis.wall_scene;backgroundMode.value='wall'
+      createImageBitmap(analysis.wall_scene.image).then(bitmap=>{if(destroyed){bitmap.close();return}wallImage=bitmap;draw()}).catch(()=>{wallError.value='无人背景读取失败，可重新寻找。';backgroundMode.value='dark'})
+    }
     targetTime.value=analysis.start_seconds;sampleFps.value=analysis.sample_fps;samples.value=analysis.pose_samples;completed.value=true;saved.value=true;status.value='正在读取本机记录…'
   }else prepare()
   tick()
 })
-onBeforeUnmount(()=>{destroyed=true;generation++;controller?.abort();cancelExport();clearExport();engine?.close();cancelAnimationFrame(animation);decoder?.pause();decoder?.removeAttribute('src');decoder?.load();if(sourceUrl.value)URL.revokeObjectURL(sourceUrl.value)})
+onBeforeUnmount(()=>{destroyed=true;generation++;controller?.abort();clearWall();cancelExport();clearExport();engine?.close();cancelAnimationFrame(animation);decoder?.pause();decoder?.removeAttribute('src');decoder?.load();if(sourceUrl.value)URL.revokeObjectURL(sourceUrl.value)})
 </script>

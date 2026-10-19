@@ -1,5 +1,6 @@
 import {waitForVideo} from './localEngine.js'
-import {drawSkeleton,sampleAtTime} from './replayDrawing.js'
+import {drawReplayScene} from './replayDrawing.js'
+import {validWallScene} from './wallGeometry.js'
 
 const FPS=30,MAX_OUTPUT_BYTES=96*1024*1024
 export function exportDimensions(width,height){
@@ -17,18 +18,20 @@ async function loadVideo(video,url,signal){
   })
 }
 
-export async function exportReplayVideo({file,analysis,includeHuman=true,includeSkeleton=true,signal=new AbortController().signal,onProgress=()=>{}}){
+export async function exportReplayVideo({file,analysis,includeHuman=true,includeSkeleton=true,backgroundMode='dark',signal=new AbortController().signal,onProgress=()=>{}}){
   signal.throwIfAborted()
   if(!includeHuman&&!includeSkeleton)throw new Error('请至少开启“真人”或“骨架”，再导出视频。')
   if(!(file instanceof Blob)||!file.size||!analysis?.complete||!analysis.pose_samples?.length)throw new Error('请先完成一次骨架分析，或打开已保存的记录。')
+  if(!includeHuman&&backgroundMode==='wall'&&!validWallScene(analysis.wall_scene))throw new Error('请先准备可用的无人墙面，或选择深色背景。')
   if(typeof VideoEncoder==='undefined'||typeof VideoFrame==='undefined')throw new Error('当前浏览器不支持本机视频导出，请使用新版电脑版 Chrome 或 Edge。')
   const {Output,Mp4OutputFormat,WebMOutputFormat,BufferTarget,CanvasSource,canEncodeVideo}=await import('mediabunny')
   signal.throwIfAborted()
   const video=document.createElement('video'),url=URL.createObjectURL(file),canvas=document.createElement('canvas')
   video.muted=true;video.playsInline=true;video.preload='auto'
-  let output,abortOutput,encodedBytes=0
+  let output,abortOutput,encodedBytes=0,background
   try{
     onProgress({stage:'preparing',progress:0});await loadVideo(video,url,signal)
+    if(!includeHuman&&backgroundMode==='wall')background=await createImageBitmap(analysis.wall_scene.image)
     const start=Number(analysis.start_seconds),end=Math.min(Number(analysis.end_seconds),video.duration)
     if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end-start>90.001)throw new Error('这条记录的分析时间范围无效，请重新分析后导出。')
     const size=exportDimensions(video.videoWidth,video.videoHeight),bitrate=Math.round(Math.max(1e6,Math.min(6e6,size.width*size.height*FPS*.12)))
@@ -48,9 +51,7 @@ export async function exportReplayVideo({file,analysis,includeHuman=true,include
       const relative=i/FPS,time=start+relative,frameDuration=Math.min(1/FPS,duration-relative)
       // The original video is decoded only for modes that contain the person.
       if(includeHuman)await waitForVideo(video,time,{signal})
-      ctx.fillStyle='#181a1b';ctx.fillRect(0,0,canvas.width,canvas.height)
-      if(includeHuman)ctx.drawImage(video,0,0,canvas.width,canvas.height)
-      if(includeSkeleton)drawSkeleton(ctx,sampleAtTime(analysis,time),canvas.width,canvas.height)
+      drawReplayScene(ctx,{analysis,time,width:canvas.width,height:canvas.height,includeHuman,includeSkeleton,video,backgroundMode,background})
       await source.add(relative,frameDuration);signal.throwIfAborted()
       onProgress({stage:'encoding',progress:(i+1)/total,extension:codec==='avc'?'mp4':'webm'})
       // Yield for cancellation and UI updates without encoding in real time.
@@ -60,5 +61,5 @@ export async function exportReplayVideo({file,analysis,includeHuman=true,include
     if(!target.buffer?.byteLength||target.buffer.byteLength>MAX_OUTPUT_BYTES)throw new Error('导出文件未能完整生成，请缩短片段后重试。')
     return {blob:new Blob([target.buffer],{type:format.mimeType}),extension:codec==='avc'?'mp4':'webm',duration,width:canvas.width,height:canvas.height,frames:total}
   }catch(error){await output?.cancel().catch(()=>{});if(signal.aborted)throw signal.reason;throw error}
-  finally{signal.removeEventListener('abort',abortOutput);video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(url);canvas.width=0;canvas.height=0}
+  finally{background?.close();signal.removeEventListener('abort',abortOutput);video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(url);canvas.width=0;canvas.height=0}
 }
