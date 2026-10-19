@@ -67,15 +67,13 @@ class Maintenance:
         current = self.current.resolve(strict=True)
         if current.parent != self.releases or not TAG.fullmatch(current.name):
             raise RuntimeError('Unexpected current release')
-        self.validate_release(current)
+        self.release_metadata(current)
         return current
 
-    def validate_release(self, release):
+    def release_metadata(self, release):
         self.secure(release, directory=True)
         if release.parent != self.releases or not TAG.fullmatch(release.name):
             raise RuntimeError('Unknown release; preserved')
-        if set(p.name for p in release.iterdir()) != {'backend', 'frontend', 'RELEASE_SHA', 'BROWSER_RELEASE.json'}:
-            raise RuntimeError('Unexpected release contents; preserved')
         for name in ('RELEASE_SHA', 'BROWSER_RELEASE.json'):
             self.secure(release/name)
         if not SHA.fullmatch((release/'RELEASE_SHA').read_text().strip()):
@@ -84,6 +82,13 @@ class Maintenance:
             raise RuntimeError('Only browser releases may be pruned')
         for name in ('backend', 'frontend', 'frontend/dist', 'backend/.venv'):
             self.secure(release/name, directory=True)
+        if not (release/'backend/.venv/bin/python').is_file() or not (release/'frontend/dist/index.html').is_file():
+            raise RuntimeError('Incomplete release; preserved')
+
+    def validate_release(self, release):
+        self.release_metadata(release)
+        if set(p.name for p in release.iterdir()) != {'backend', 'frontend', 'RELEASE_SHA', 'BROWSER_RELEASE.json'}:
+            raise RuntimeError('Unexpected release contents; preserved')
         if set(p.name for p in (release/'backend').iterdir()) - {
             'main.py', 'browser_web_app.py', 'requirements-browser.lock', 'test_browser_web_app.py', '.venv', '__pycache__'}:
             raise RuntimeError('Unexpected backend or user data; preserved')
@@ -92,8 +97,6 @@ class Maintenance:
         if set(p.name for p in (release/'frontend/dist').iterdir()) - {
             'assets', 'browser-fonts', 'browser-models', 'downloads', 'browser-replay.html', 'index.html'}:
             raise RuntimeError('Unexpected static contents; preserved')
-        if not (release/'backend/.venv/bin/python').is_file() or not (release/'frontend/dist/index.html').is_file():
-            raise RuntimeError('Incomplete release; preserved')
 
     def health(self, current):
         with urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5) as response:
@@ -116,11 +119,14 @@ class Maintenance:
         for release in self.releases.iterdir():
             if not TAG.fullmatch(release.name):
                 raise RuntimeError('Unknown or unfinished release exists; cleanup stopped')
-            self.validate_release(release)
+            self.release_metadata(release)
             releases.append(release)
         releases.sort(key=lambda path: tuple(map(int, TAG.fullmatch(path.name).groups())), reverse=True)
         keep = {current, *[p for p in releases if p != current][:2]}
-        return current, [p for p in releases if p in keep], [p for p in releases if p not in keep]
+        remove = [p for p in releases if p not in keep]
+        for release in remove:
+            self.validate_release(release)
+        return current, [p for p in releases if p in keep], remove
 
     def cleanup(self, execute=False):
         with self.locked():
@@ -194,9 +200,22 @@ class Maintenance:
 
     def status(self):
         current = self.active()
+        layouts = {'root':(current,{'backend','frontend','RELEASE_SHA','BROWSER_RELEASE.json'}),
+                   'backend':(current/'backend',{'main.py','browser_web_app.py','requirements-browser.lock','test_browser_web_app.py','.venv','__pycache__'}),
+                   'frontend':(current/'frontend',{'dist'})}
+        extras={}
+        for label,(folder,known) in layouts.items():
+            entries=[]
+            for entry in sorted(folder.iterdir(),key=lambda value:value.name):
+                if entry.name in known:continue
+                name=entry.name
+                if name in ('.local','.private','data') or name.startswith('.env') or not re.fullmatch(r'[A-Za-z0-9_.-]{1,120}',name):
+                    name='[protected or unrecognized entry]'
+                entries.append({'name':name,'kind':'symlink' if entry.is_symlink() else ('directory' if entry.is_dir() else 'file')})
+            extras[label]=entries
         return {'current':str(current), 'health':self.health(current),
                 'free_bytes':shutil.disk_usage(self.releases).free,
-                'downloads':self.downloads(),
+                'downloads':self.downloads(), 'release_extra_entries':extras,
                 'nginx':subprocess.run(['/usr/bin/systemctl','is-active','nginx'],capture_output=True,text=True,timeout=5).stdout.strip()}
 
 

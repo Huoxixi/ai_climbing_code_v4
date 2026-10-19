@@ -85,6 +85,7 @@ class MaintenanceTests(unittest.TestCase):
     def test_cleanup_refuses_user_data_legacy_unknown_or_incomplete_releases_before_any_deletion(self):
         current=self.release(4);self.active(current)
         old=self.release(1)
+        self.release(2);self.release(3)
         scenarios=[(old/'backend/data/private.sqlite3',b'private'),
                    (old/'BROWSER_RELEASE.json',b'{"mode":"legacy"}'),
                    (self.worker.releases/'.pilot-v2026.10.19-rc5.building/private',b'staging')]
@@ -106,6 +107,22 @@ class MaintenanceTests(unittest.TestCase):
         self.worker.health.side_effect=RuntimeError('unhealthy')
         with self.assertRaises(RuntimeError):self.worker.cleanup(execute=True)
         self.assertTrue(current.exists());self.assertTrue(old.exists())
+
+    def test_current_extra_content_is_reported_without_reading_or_deleting_it(self):
+        current=self.release(4)
+        self.patches.enter_context(patch.object(self.worker.current.__class__,'resolve',autospec=True,side_effect=self.resolver(current)))
+        self.patches.enter_context(patch.object(self.worker.current.__class__,'is_symlink',autospec=True,side_effect=lambda path: path==self.worker.current))
+        private=self.file(current/'.env',b'never read or delete this protected example')
+        empty=current/'runtime-state';empty.mkdir(mode=0o700)
+        self.release(1);self.release(2);self.release(3)
+        with patch.object(ops.subprocess,'run',return_value=Mock(stdout='active\n')):
+            status=self.worker.status()
+        self.assertIn({'name':'[protected or unrecognized entry]','kind':'file'},status['release_extra_entries']['root'])
+        self.assertIn({'name':'runtime-state','kind':'directory'},status['release_extra_entries']['root'])
+        self.assertNotIn('never read',json.dumps(status))
+        result=self.worker.cleanup(execute=True)
+        self.assertEqual([entry['tag'] for entry in result['remove']],['pilot-v2026.10.19-rc1'])
+        self.assertTrue(private.exists());self.assertTrue(empty.exists())
 
     def test_secure_path_refuses_writable_symlink_or_nonroot_objects(self):
         path=Mock();path.resolve.return_value=path;path.is_symlink.return_value=False
@@ -132,7 +149,8 @@ class MaintenanceTests(unittest.TestCase):
     def test_tools_only_bootstrap_is_explicit_and_never_changes_other_release_tags(self):
         manifest=json.loads((HERE/'bootstrap_tags.json').read_text())
         self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc1',manifest),'ssh-maintenance')
-        for tag in ['pilot-v2026.10.18-rc3','pilot-v2026.10.19-rc2','pilot-v2026.10.20-rc1']:
+        self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc2',manifest),'ssh-maintenance')
+        for tag in ['pilot-v2026.10.18-rc3','pilot-v2026.10.19-rc3','pilot-v2026.10.20-rc1']:
             self.assertEqual(bootstrap.mode(tag,manifest),'browser')
         for tag in ['pilot-v2026.10.19-rc1; id','--force','main']:
             with self.assertRaises(RuntimeError):bootstrap.mode(tag,manifest)
