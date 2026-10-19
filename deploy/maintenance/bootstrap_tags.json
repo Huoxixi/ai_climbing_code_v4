@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "tags": {
-    "pilot-v2026.10.19-rc1": "ssh-maintenance"
+    "pilot-v2026.10.19-rc1": "ssh-maintenance",
+    "pilot-v2026.10.19-rc2": "ssh-maintenance"
   }
 }
