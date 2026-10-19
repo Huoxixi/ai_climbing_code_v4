@@ -3,12 +3,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import threading
 import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 CHUNK_BYTES = 1024 * 1024
+CURRENT_PUBLIC_INSTALLER = Path('/opt/ai-climbing/current/frontend/dist/downloads/climbing-assistant-windows.exe')
 
 
 def verify(path, profile):
@@ -25,6 +27,26 @@ def download(profile, target):
         verify(target, profile)
         return target
     partial = target.with_suffix('.partial')
+    # The standard deployer holds the release lock. Reuse only the fixed public
+    # artifact from the active release; never inspect application data/config.
+    # A new installer version or a damaged cache falls back to the pinned URL.
+    try:
+        cached = CURRENT_PUBLIC_INSTALLER.resolve(strict=True)
+        if cached.stat().st_size != profile['bytes']:
+            cached = None
+        else:
+            verify(cached, profile)
+    except (OSError, RuntimeError):
+        cached = None
+    if cached is not None:
+        try:
+            shutil.copyfile(cached, partial)
+            verify(partial, profile)
+            partial.replace(target)
+            print('Active release public installer reused and SHA-256 verified.', flush=True)
+            return target
+        finally:
+            partial.unlink(missing_ok=True)
     cancelled = threading.Event()
     total = profile['bytes']
 

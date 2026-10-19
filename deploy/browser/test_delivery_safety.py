@@ -98,6 +98,38 @@ class DeliverySafetyTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):installer_download.download(profile,target)
             self.assertEqual(target.read_bytes(),b'keep this failed cache for diagnosis');fetch.assert_not_called()
 
+    def test_active_public_installer_is_copied_without_network_and_source_is_preserved(self):
+        body=b'fixed public installer';cached=self.file(self.root/'active/public.exe',body)
+        target=self.root/'new/installer.exe'
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        with patch.object(installer_download,'CURRENT_PUBLIC_INSTALLER',cached),patch.object(installer_download.urllib.request,'urlopen') as fetch:
+            with contextlib.redirect_stdout(io.StringIO()):installer_download.download(profile,target)
+        self.assertEqual(cached.read_bytes(),body);self.assertEqual(target.read_bytes(),body)
+        self.assertFalse(target.with_suffix('.partial').exists());fetch.assert_not_called()
+
+    def test_mismatched_active_installer_is_preserved_and_pinned_download_is_used(self):
+        body=b'fixed public installer'
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        for old in [b'older version',b'x'*len(body)]:
+            cached=self.file(self.root/'active/public.exe',old);target=self.root/('new-'+str(len(old))+'.exe')
+            def fetch(request,timeout):
+                self.assertEqual(request.full_url,profile['url'])
+                response=io.BytesIO(body);response.status=206
+                response.headers={'Content-Range':f'bytes 0-{len(body)-1}/{len(body)}'}
+                return response
+            with patch.object(installer_download,'CURRENT_PUBLIC_INSTALLER',cached),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch) as network:
+                with contextlib.redirect_stdout(io.StringIO()):installer_download.download(profile,target)
+            self.assertEqual(cached.read_bytes(),old);self.assertEqual(target.read_bytes(),body);network.assert_called_once()
+
+    def test_active_installer_copy_is_verified_again_before_publishing(self):
+        body=b'fixed public installer';cached=self.file(self.root/'active/public.exe',body);target=self.root/'new/installer.exe'
+        profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        def corrupt(source,destination):Path(destination).write_bytes(b'x'*len(body))
+        with patch.object(installer_download,'CURRENT_PUBLIC_INSTALLER',cached),patch.object(installer_download.shutil,'copyfile',side_effect=corrupt),patch.object(installer_download.urllib.request,'urlopen') as network:
+            with self.assertRaises(RuntimeError):installer_download.download(profile,target)
+        self.assertEqual(cached.read_bytes(),body);self.assertFalse(target.exists())
+        self.assertFalse(target.with_suffix('.partial').exists());network.assert_not_called()
+
     def test_fresh_model_install_accepts_verified_root_and_nested_archives(self):
         import hashlib
         models=self.root/'backend/model_assets/rtmw-l-384x288'
