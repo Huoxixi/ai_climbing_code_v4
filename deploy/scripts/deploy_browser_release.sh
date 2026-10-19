@@ -72,6 +72,9 @@ python3.12 -m venv "$building/backend/.venv"
 "$building/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "$building/backend/requirements-browser.lock"
 "$building/backend/.venv/bin/python" -m pip check
 (cd "$building/backend" && "$building/backend/.venv/bin/python" -m unittest test_browser_web_app -v)
+# Tests leave these empty parent directories; do not publish scratch paths.
+# rmdir refuses any unexpected retained contents instead of deleting files.
+rmdir -- "$building/.tmp/browser-static-tests" "$building/.tmp"
 printf '%s\n' "$sha" > "$building/RELEASE_SHA"
 chown -R root:ai-climbing "$building"
 chmod -R o-rwx,g+rX "$building"

@@ -52,6 +52,8 @@ class MaintenanceTests(unittest.TestCase):
         self.file(path/'backend/main.py')
         self.file(path/'backend/.venv/bin/python')
         self.file(path/'frontend/dist/index.html')
+        (path/'.tmp/browser-static-tests').mkdir(parents=True,mode=0o700)
+        (path/'.tmp').chmod(0o700)
         for directory in [path,path/'backend',path/'backend/.venv',path/'frontend',path/'frontend/dist']:
             directory.chmod(0o700)
         return path
@@ -88,6 +90,8 @@ class MaintenanceTests(unittest.TestCase):
         self.release(2);self.release(3)
         scenarios=[(old/'backend/data/private.sqlite3',b'private'),
                    (old/'BROWSER_RELEASE.json',b'{"mode":"legacy"}'),
+                   (old/'.tmp/browser-static-tests/private.sqlite3',b'private'),
+                   (old/'.tmp/unrecognized.data',b'private'),
                    (self.worker.releases/'.pilot-v2026.10.19-rc5.building/private',b'staging')]
         for path,body in scenarios:
             previous=path.read_bytes() if path.is_file() else None
@@ -150,7 +154,8 @@ class MaintenanceTests(unittest.TestCase):
         manifest=json.loads((HERE/'bootstrap_tags.json').read_text())
         self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc1',manifest),'ssh-maintenance')
         self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc2',manifest),'ssh-maintenance')
-        for tag in ['pilot-v2026.10.18-rc3','pilot-v2026.10.19-rc3','pilot-v2026.10.20-rc1']:
+        self.assertEqual(bootstrap.mode('pilot-v2026.10.19-rc3',manifest),'ssh-maintenance')
+        for tag in ['pilot-v2026.10.18-rc3','pilot-v2026.10.19-rc4','pilot-v2026.10.20-rc1']:
             self.assertEqual(bootstrap.mode(tag,manifest),'browser')
         for tag in ['pilot-v2026.10.19-rc1; id','--force','main']:
             with self.assertRaises(RuntimeError):bootstrap.mode(tag,manifest)
