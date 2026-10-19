@@ -48,6 +48,22 @@ async function run(model,input) {
   }finally{tensor.dispose()}
 }
 async function infer(message) {
+  if(message.type==='background'){
+    // Absence of pose is not evidence of an empty scene. Independently inspect
+    // the full frame and overlapping crops, including partial/edge people.
+    const image=message.image,views=[[0,0,1,1],[0,0,.65,.65],[.35,0,1,.65],[0,.35,.65,1],[.35,.35,1,1]]
+    let checked=0
+    for(const [x0,y0,x1,y1]of views){
+      const x=Math.floor(x0*image.width),y=Math.floor(y0*image.height),width=Math.floor(x1*image.width)-x,height=Math.floor(y1*image.height)-y
+      const data=new Uint8ClampedArray(width*height*4)
+      for(let row=0;row<height;row++)data.set(image.data.subarray(((y+row)*image.width+x)*4,((y+row)*image.width+x+width)*4),row*width*4)
+      const input=detectorInput({data,width,height}),outputs=await run('detector',input)
+      if(!outputs[0].data.every(Number.isFinite))throw new Error('人物检测结果不确定，无法确认无人背景。')
+      const boxes=decodeDetector(outputs[0],input.ratio,width,height,.2);checked++
+      if(boxes.length)return {empty:false,checked}
+    }
+    return {empty:true,checked}
+  }
   if(message.type==='detect'){
     const input=detectorInput(message.image),outputs=await run('detector',input)
     return decodeDetector(outputs[0],input.ratio,message.image.width,message.image.height)

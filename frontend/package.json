@@ -11,6 +11,7 @@
     "test:browser-portal": "node --test browser-tests/browser-portal.test.mjs",
     "test:browser-compiled": "node --test browser-tests/browser-compiled.test.mjs",
     "test:browser-export": "node --test browser-tests/browser-video-export.test.mjs",
+    "test:browser-wall": "node --test test/browser-wall-scene.test.mjs browser-tests/browser-wall-registration.test.mjs browser-tests/browser-wall-scene.test.mjs browser-tests/browser-wall-restoration.test.mjs browser-tests/browser-wall-history.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -21,7 +22,7 @@
     "test:preview": "node --test browser-tests/replay-preview.test.mjs",
     "test:release-browser": "node --test browser-tests/replay-actions.test.mjs browser-tests/replay-coaching.test.mjs browser-tests/replay-template.test.mjs browser-tests/photo-workflow.test.mjs browser-tests/replay-restoration.test.mjs browser-tests/replay-preview.test.mjs browser-tests/replay-paid-gate.test.mjs",
     "test:all": "npm test && npm run test:e2e",
-    "test:browser-unit": "node --test test/browser-local-pose.test.mjs"
+    "test:browser-unit": "node --test test/browser-local-pose.test.mjs test/browser-wall-scene.test.mjs test/replay-head-geometry.test.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -29,7 +30,8 @@
     "element-plus": "^2.14.0",
     "mediabunny": "1.61.6",
     "onnxruntime-web": "1.30.0",
-    "vue": "^3.5.44"
+    "vue": "^3.5.44",
+    "@techstark/opencv-js": "5.0.0-release.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

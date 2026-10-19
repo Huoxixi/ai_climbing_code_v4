@@ -7,9 +7,11 @@ import {MODEL_FILES,MODEL_VERSION} from './src/browser-replay/modelManifest.js'
 
 const source=fileURLToPath(new URL('../backend/model_assets/rtmw-l-384x288/',import.meta.url))
 const notice=`Climbing Assistant browser-local pose validation\n\nModels (unchanged bytes, see manifest.json):\nRTMW-L 384x288, COCO WholeBody 133 keypoints, OpenMMLab MMPose\nhttps://github.com/open-mmlab/mmpose/tree/main/projects/rtmw\nYOLOX-S HumanArt detector, distributed by OpenMMLab\nhttps://github.com/Megvii-BaseDetection/YOLOX\nOriginal downloads and archive hashes: backend/scripts/install_replay_rtmw.py\n\nPreprocessing and decoding ported from the attributed rtmlib helpers (Apache-2.0):\nhttps://github.com/Tau-J/rtmlib\nLocal changes: browser BGR sampling, tensor layout, bounds checks, typed-array decoders.\nFull license: rtmlib-LICENSE.txt\n\nONNX Runtime Web 1.30.0 (MIT), Microsoft\nhttps://github.com/microsoft/onnxruntime\nFull license: onnxruntime-LICENSE.txt\n\nThis validation page does not implement the desktop clip-level person tracker,\nwall registration, bounded-context observation provider, holds or contacts.\n`
+const wallNotice='\nBrowser empty-wall alignment: OpenCV.js 5.0.0, @techstark/opencv-js 5.0.0-release.1 (Apache-2.0).\nhttps://github.com/TechStark/opencv-js\nhttps://opencv.org/license/\nFull license: opencv-LICENSE.txt\n'
 const textAssets=new Map([
   ['/browser-models/NOTICE.txt',()=>Promise.resolve(notice+'\nVideo export: Mediabunny 1.61.6, Vanilagy and contributors (MPL-2.0).\nUnmodified source: https://registry.npmjs.org/mediabunny/-/mediabunny-1.61.6.tgz\nhttps://github.com/Vanilagy/mediabunny\nFull license: mediabunny-LICENSE.txt\n')],
   ['/browser-models/mediabunny-LICENSE.txt',()=>readFile(new URL('./browser-licenses/mediabunny-LICENSE.txt',import.meta.url),'utf8')],
+  ['/browser-models/opencv-LICENSE.txt',()=>readFile(new URL('./browser-licenses/opencv-LICENSE.txt',import.meta.url),'utf8')],
   ['/browser-models/rtmlib-LICENSE.txt',()=>readFile(new URL('../backend/vendor/rtmlib/LICENSE',import.meta.url),'utf8')],
   ['/browser-models/onnxruntime-LICENSE.txt',()=>readFile(new URL('./browser-licenses/onnxruntime-LICENSE.txt',import.meta.url),'utf8')],
   ['/browser-models/model-Apache-2.0.txt',()=>readFile(new URL('../backend/vendor/rtmlib/LICENSE',import.meta.url),'utf8')],
@@ -17,6 +19,8 @@ const textAssets=new Map([
   ['/browser-fonts/NOTICE.txt',()=>readFile(new URL('./public/fonts/NOTICE.md',import.meta.url),'utf8')],
 ])
 const fontFile=fileURLToPath(new URL('./public/fonts/MiSans-Regular.woff2',import.meta.url))
+const originalModelNotice=textAssets.get('/browser-models/NOTICE.txt')
+textAssets.set('/browser-models/NOTICE.txt',async()=>(await originalModelNotice()).replace('wall registration,','desktop wall registration,')+wallNotice)
 export default function browserModelAssets({copy=false}={}) {
   let output,command
   return {
