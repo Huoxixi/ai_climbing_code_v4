@@ -40,7 +40,7 @@ class MaintenanceTests(unittest.TestCase):
     def file(self,path,body=b'test'):
         path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
         path.write_bytes(body);path.chmod(0o600);return path
-    def portable_secure(self,path,directory=False):
+    def portable_secure(self,path,directory=False,owner=None):
         if path.is_symlink() or path.resolve()!=path or not (path.is_dir() if directory else path.is_file()):
             raise RuntimeError('Unexpected path; preserved')
         return path
@@ -112,6 +112,9 @@ class MaintenanceTests(unittest.TestCase):
         for uid,mode,link in [(1000,stat.S_IFREG|0o600,False),(0,stat.S_IFREG|0o622,False),(0,stat.S_IFREG|0o600,True)]:
             path.lstat.return_value=Mock(st_uid=uid,st_mode=mode);path.is_symlink.return_value=link
             with self.assertRaises(RuntimeError):worker.secure(path)
+        path.is_symlink.return_value=False;path.lstat.return_value=Mock(st_uid=1000,st_mode=stat.S_IFREG|0o640)
+        worker.secure(path,owner=1000)
+        with self.assertRaises(RuntimeError):worker.secure(path,owner=1001)
 
     def test_cancel_matches_only_exact_root_download_identity(self):
         args=[b'python3.12',b'deploy/browser/download_installer.py'];cwd='/tmp/ai-climbing-release.Abc123/source'

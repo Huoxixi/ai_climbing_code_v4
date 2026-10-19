@@ -25,8 +25,9 @@ def download_identity(uid, args, cwd, cwd_uid):
 
 
 class Maintenance:
-    def __init__(self, root=Path('/'), owner=0):
+    def __init__(self, root=Path('/'), owner=0, backup_owner=None):
         self.root, self.owner = Path(root), owner
+        self.backup_owner = owner if backup_owner is None else backup_owner
         self.releases = self.path('/opt/ai-climbing/releases')
         self.current = self.path('/opt/ai-climbing/current')
         self.lock = self.path('/run/ai-climbing-deploy/release.lock')
@@ -34,9 +35,10 @@ class Maintenance:
     def path(self, absolute):
         return self.root / absolute.lstrip('/')
 
-    def secure(self, path, directory=False):
+    def secure(self, path, directory=False, owner=None):
         info = path.lstat()
-        if path.is_symlink() or path.resolve() != path or info.st_uid != self.owner or info.st_mode & 0o022:
+        expected_owner = self.owner if owner is None else owner
+        if path.is_symlink() or path.resolve() != path or info.st_uid != expected_owner or info.st_mode & 0o022:
             raise RuntimeError('Unexpected ownership, permissions or redirected path; preserved: ' + str(path))
         if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
             raise RuntimeError('Unexpected file type; preserved')
@@ -104,7 +106,9 @@ class Maintenance:
         current = self.active()
         self.health(current)
         backup = self.path('/var/lib/ai-climbing/ops/last-backup.env')
-        self.secure(backup)
+        # The existing root backup script intentionally gives this status file
+        # to the ai-climbing service account. It is not a root-owned tool file.
+        self.secure(backup,owner=self.backup_owner)
         fields = dict(line.split('=', 1) for line in backup.read_text().splitlines() if '=' in line)
         if fields.get('RESULT') != 'success' or fields.get('REMOTE_VERIFIED') != 'true':
             raise RuntimeError('Verified remote backup required before pruning')
@@ -203,7 +207,8 @@ def main(args):
         raise RuntimeError('Use the restricted sudo maintenance entry point')
     action = args[0]
     subprocess.run(['/usr/bin/logger','-t','ai-climbing-maintenance','--','action='+action],check=True)
-    worker = Maintenance()
+    import pwd
+    worker = Maintenance(backup_owner=pwd.getpwnam('ai-climbing').pw_uid)
     if action == 'maintenance-tools':
         result = {'source_sha':(Path(__file__).parent/'SOURCE_SHA').read_text().strip(), 'actions':ACTIONS}
     elif action == 'maintenance-status': result = worker.status()
