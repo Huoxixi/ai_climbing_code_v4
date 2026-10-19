@@ -125,6 +125,34 @@ class MaintenanceTests(unittest.TestCase):
         for args in [[],['maintenance-status','/etc/passwd'],['maintenance-cleanup; id'],['shell'],['maintenance-cleanup','--force']]:
             with self.assertRaises(RuntimeError):ops.main(args)
 
+    def test_cancel_rechecks_identity_after_opening_stable_process_handle(self):
+        current=self.release(4);self.active(current)
+        @contextlib.contextmanager
+        def busy():
+            raise BlockingIOError('deployment lock held')
+            yield
+        class Cwd:
+            def __str__(self):return '/tmp/ai-climbing-release.Abc123/source'
+            def resolve(self,**kwargs):return self
+            def stat(self):return Mock(st_uid=0)
+        for changed in [False,True]:
+            cmd=Mock();cmd.read_bytes.side_effect=[b'python3.12\0deploy/browser/download_installer.py\0',
+                b'other-program\0' if changed else b'python3.12\0deploy/browser/download_installer.py\0']
+            process=Mock();process.name='12345';process.stat.return_value=Mock(st_uid=0)
+            class Process:
+                name='12345'
+                def __truediv__(self,name):return cmd if name=='cmdline' else Cwd()
+                def stat(self):return Mock(st_uid=0)
+            proc=Mock();proc.iterdir.return_value=[Process()]
+            with patch.object(self.worker,'locked',busy),patch.object(self.worker,'path',return_value=proc),\
+                 patch.object(ops.os,'pidfd_open',return_value=123,create=True),patch.object(ops.os,'close') as close,\
+                 patch.object(ops.signal,'pidfd_send_signal',create=True) as send:
+                result=self.worker.cancel_download()
+                self.assertEqual(result['cancelled_downloads'],[] if changed else [12345])
+                if changed:send.assert_not_called()
+                else:send.assert_called_once_with(123,ops.signal.SIGTERM)
+                close.assert_called_once_with(123)
+
 
 @unittest.skipIf(os.name=='nt','POSIX installer integration runs in the Linux release gate')
 class InstallerTests(unittest.TestCase):
@@ -153,7 +181,7 @@ class InstallerTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command,0,stdout=json.dumps({'source_sha':sha}))
             with patch.object(installer,'secure'):
                 installer.install_files(source,sha,root,run);installer.install_files(source,sha,root,run)
-            self.assertEqual((root/'usr/local/lib/ai-climbing/maintenance-base/ssh-dispatch').read_bytes(),original)
+            self.assertEqual((root/'usr/local/sbin/ai-climbing-legacy-ssh-dispatch').read_bytes(),original)
             text=(root/'etc/sudoers.d/ai-climbing-maintenance').read_text()
             self.assertNotIn('*',text);self.assertNotIn('ALL=(ALL)',text)
             for action in ops.ACTIONS:self.assertIn('/usr/local/sbin/ai-climbing-maintenance '+action,text)
@@ -164,7 +192,7 @@ class InstallerTests(unittest.TestCase):
             fake_sudo.write_text('#!/bin/bash\nprintf "SUDO:%s\\n" "$*"\n');fake_sudo.chmod(0o700)
             fake_legacy.write_text('#!/bin/bash\nprintf "LEGACY:%s\\n" "$SSH_ORIGINAL_COMMAND"\n');fake_legacy.chmod(0o700)
             check=root/'dispatch-test'
-            check.write_text(wrapper.replace('/usr/bin/sudo',str(fake_sudo)).replace('/usr/local/lib/ai-climbing/maintenance-base/ssh-dispatch',str(fake_legacy)))
+            check.write_text(wrapper.replace('/usr/bin/sudo',str(fake_sudo)).replace('/usr/local/sbin/ai-climbing-legacy-ssh-dispatch',str(fake_legacy)))
             for action in ops.ACTIONS:
                 output=subprocess.run(['/bin/bash',str(check)],env={**os.environ,'SSH_ORIGINAL_COMMAND':action},capture_output=True,text=True)
                 self.assertEqual(output.returncode,0);self.assertIn('SUDO:-n /usr/local/sbin/ai-climbing-maintenance '+action,output.stdout)

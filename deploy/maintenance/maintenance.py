@@ -222,6 +222,8 @@ def main(args):
             except Exception as error:
                 # Never print signed redirect URLs, tokens or headers.
                 result.append({'host':urllib.parse.urlparse(url).hostname,'error_type':type(error).__name__})
+    targets=','.join(map(str,result.get('cancelled_downloads',[]))) if isinstance(result,dict) else ''
+    subprocess.run(['/usr/bin/logger','-t','ai-climbing-maintenance','--','action='+action+' result=success target='+targets],check=True)
     print(json.dumps(result,ensure_ascii=False))
 
 

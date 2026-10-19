@@ -50,7 +50,7 @@ def install_files(source, sha, root=Path('/'), run=subprocess.run):
     dispatcher=p('/usr/local/sbin/codex-ssh-dispatch')
     launcher=p('/usr/local/sbin/ai-climbing-maintenance')
     sudoers=p('/etc/sudoers.d/ai-climbing-maintenance')
-    base=p('/usr/local/lib/ai-climbing/maintenance-base/ssh-dispatch')
+    base=p('/usr/local/sbin/ai-climbing-legacy-ssh-dispatch')
     version=p('/usr/local/lib/ai-climbing/maintenance')/sha
     backups=p('/var/backups/ai-climbing/maintenance-tools')
     for folder,mode in [(dispatcher.parent,0o755),(sudoers.parent,0o750),(base.parent,0o755),(version,0o755),(backups,0o700)]:
@@ -80,7 +80,7 @@ def install_files(source, sha, root=Path('/'), run=subprocess.run):
         'original="${SSH_ORIGINAL_COMMAND:-}"\ncase "$original" in\n  '+ '|'.join(ACTIONS)+')\n'
         '    exec /usr/bin/sudo -n /usr/local/sbin/ai-climbing-maintenance "$original" ;;\n'
         '  maintenance-*) echo "Invalid fixed maintenance action." >&2; exit 64 ;;\n'
-        '  *) exec /usr/local/lib/ai-climbing/maintenance-base/ssh-dispatch ;;\nesac\n').encode()
+        '  *) exec /usr/local/sbin/ai-climbing-legacy-ssh-dispatch ;;\nesac\n').encode()
     launcher_body=("#!/bin/bash\nset -Eeuo pipefail\n"
         "exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 "
         f"/usr/bin/python3.12 -I /usr/local/lib/ai-climbing/maintenance/{sha}/maintenance.py \"$@\"\n").encode()
