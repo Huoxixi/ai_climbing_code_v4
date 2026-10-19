@@ -87,8 +87,19 @@ class Maintenance:
 
     def validate_release(self, release):
         self.release_metadata(release)
-        if set(p.name for p in release.iterdir()) != {'backend', 'frontend', 'RELEASE_SHA', 'BROWSER_RELEASE.json'}:
+        if set(p.name for p in release.iterdir()) - {'backend', 'frontend', 'RELEASE_SHA', 'BROWSER_RELEASE.json', '.tmp'}:
             raise RuntimeError('Unexpected release contents; preserved')
+        # test_browser_web_app leaves only this empty directory hierarchy after
+        # its TemporaryDirectory fixtures are cleaned. Never accept its files.
+        scratch=release/'.tmp'
+        if scratch.exists() or scratch.is_symlink():
+            self.secure(scratch,directory=True)
+            children=list(scratch.iterdir())
+            if any(path.name!='browser-static-tests' for path in children):
+                raise RuntimeError('Unexpected scratch contents; preserved')
+            for path in children:
+                self.secure(path,directory=True)
+                if any(path.iterdir()):raise RuntimeError('Nonempty test scratch; preserved')
         if set(p.name for p in (release/'backend').iterdir()) - {
             'main.py', 'browser_web_app.py', 'requirements-browser.lock', 'test_browser_web_app.py', '.venv', '__pycache__'}:
             raise RuntimeError('Unexpected backend or user data; preserved')
