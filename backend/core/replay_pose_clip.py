@@ -32,7 +32,7 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
     pose_model = RTMW_MODEL
     pose_processing_notice = '岩点、人物轨迹与骨架均在本机分析，原视频不上传。'
 
-    def __init__(self, *, observation_model=None, **kwargs):
+    def __init__(self, *, observation_model=None, temporal_display=True, image_refinement=True, **kwargs):
         self._heatmap_comparison = observation_model is not None
         kwargs.setdefault('context_retry', not self._heatmap_comparison)
         super().__init__(**kwargs)
@@ -41,6 +41,9 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
         self._observation_provider = None
         self._clip_tracks = None
         self._clip_alignments = {}
+        self.temporal_display=bool(temporal_display) and not self._heatmap_comparison
+        self._temporal_display_window=None
+        self.image_refinement=bool(image_refinement) and not self._heatmap_comparison
 
     def _load_observation_provider(self):
         if self._observation_provider is None:
@@ -67,6 +70,9 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
         super()._prepare_pose_run(confirmed_holds)
         self._clip_tracks = None
         self._clip_alignments = {}
+        if self.temporal_display:
+            from .replay_pose_temporal import TemporalDisplayWindow
+            self._temporal_display_window=TemporalDisplayWindow()
         if self._heatmap_comparison:
             self._load_observation_provider()
 
@@ -194,6 +200,7 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
             self.last_pose_failure='target_not_observed_in_source_frame'
             self.last_pose_cache_hit=True
             self.failure_counts[self.last_pose_failure]=self.failure_counts.get(self.last_pose_failure,0)+1
+            if self._temporal_display_window is not None:self._temporal_display_window.clear()
             return None
         box=np.asarray(observation['box_xyxy_px'])
         if not self._heatmap_comparison:
@@ -217,8 +224,29 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
             self._previous_pose={'source_frame_id':source_frame_id,'kpts_xy':record['kpts_xy'],
                 'kpts_score':np.where(record['joint_eligibility'],np.clip(raw[:17],0,1),0).tolist(),
                 'box_xyxy_px':box.tolist()}
+            if self.image_refinement:
+                # Keep primary crop/context decisions independent of the extra
+                # image view. Cache its native outputs, never a selected result.
+                from .replay_pose_image_refinement import observe_rotated,select_observations,VERSION,ANGLE
+                effective_box=revision['candidate_boxes'][0] if revision and revision.get('status')=='accepted_experimental' else box.tolist()
+                key=json.dumps([RTMW_MODEL,VERSION,ANGLE,np.asarray(effective_box).round(6).tolist()])
+                views=self._active_frame_cache.setdefault('rotated_observations',{})
+                started=time.perf_counter()
+                if key not in views:
+                    candidate,response,proof=observe_rotated(self._load_models()[0],frame,effective_box)
+                    views[key]={'xy':np.where(np.isfinite(candidate),candidate,0).tolist(),
+                                'response':np.where(np.isfinite(response),response,0).tolist(),'evidence':proof}
+                    self.inference_counts['pose_image_refinement']=self.inference_counts.get('pose_image_refinement',0)+1
+                    self.last_pose_cache_hit=False
+                view=views[key]
+                record=select_observations(record,view['xy'],view['response'],view['evidence'])
+                self.stage_timings['image_refinement']=self.stage_timings.get('image_refinement',0)+time.perf_counter()-started
             self._cache_dirty+=1
             if self._cache_dirty>=20:self.flush_pose_cache()
+            if self._temporal_display_window is not None:
+                started=time.perf_counter()
+                self._temporal_display_window.push(frame,record,self._source_fps)
+                self.stage_timings['temporal_display']=self.stage_timings.get('temporal_display',0)+time.perf_counter()-started
             return record
         key=MODEL_SHA256+':'+OBSERVATION_VERSION+':'+json.dumps(box.round(6).tolist())
         poses=self._active_frame_cache.setdefault('observations',{})
@@ -254,6 +282,13 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
         result['target_selection']=self._clip_tracks.selection if self._clip_tracks is not None else None
         result['observation_model']=self.pose_model
         result['independent_hand_observation']='not_accepted'
+        from .replay_pose_image_refinement import VERSION as IMAGE_VERSION
+        result['image_observation_refinement']={'enabled':self.image_refinement,'version':IMAGE_VERSION,
+            'basis':'same_source_image_native_predictions_with_inverse_input_transform',
+            'primary_raw_preserved':True,'independent_accuracy':'not_established'}
+        result['temporal_display']={'enabled':self.temporal_display,
+            'updated_frames':self._temporal_display_window.updated_frames if self._temporal_display_window else 0,
+            'contact_inputs':'selected_current_image_model_observations' if self.image_refinement else 'original_model_observations'}
         if self._observation_provider is not None:
             result['observation_model']=MODEL
             result['observation_providers']=self._observation_provider.session.get_providers()
@@ -267,6 +302,9 @@ class LocalClipReplayAnalyzer(LocalRTMWReplayAnalyzer):
         result['algorithms']['person_selection']=TRACK_VERSION
         result['algorithms']['person_detection']=DETECTION_VERSION
         result['algorithms']['pose_observation']=OBSERVATION_VERSION
+        if self.image_refinement:
+            from .replay_pose_image_refinement import VERSION as IMAGE_VERSION
+            result['algorithms']['pose_image_refinement']=IMAGE_VERSION
         result['provider']['name']='local-clip-pose'
         result['provider']['service']=self.pose_model+' + clip person tracks'
         return result

@@ -1,6 +1,7 @@
 import { centerOfMass } from './replayCenterOfMass.js'
 import { drawHead, headGeometry, projectHead } from './replayHeadGeometry.js'
-export const VISUAL_VERSION = 'registered-observation-limb-labels-v14'
+import { temporalDisplaySample } from './replayTemporalDisplay.js'
+export const VISUAL_VERSION = 'registered-image-temporal-display-v15'
 
 export function currentVisualization(saved, raw, trajectory) {
   if (saved?.version === VISUAL_VERSION) return saved
@@ -93,6 +94,7 @@ export function registeredDisplayPoses(result) {
   const {width,height} = result?.video || {}
   if (!(width>0 && height>0)) return []
   return (result?.pose_samples || []).map(sample => {
+    sample=temporalDisplaySample(sample)
     const m=sample.wall_reference_transform, diagnostics=sample.wall_alignment_diagnostics || sample.motion_registration || {}
     const determinant=m?.length===3 && m.every(r=>r?.length===3) ? m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])-m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])+m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]) : 0
     const valid=sample.observed && ['aligned','reference'].includes(sample.wall_alignment)
@@ -113,6 +115,7 @@ export function registeredDisplayPoses(result) {
       points.push(okay ? [p[0]/p[2]/width,p[1]/p[2]/height] : [0,0]); scores.push(okay?(hasFlags?1:score):0)
     }
     return {source_frame_id:sample.source_frame_id,time_seconds:sample.time_seconds,observed:Boolean(valid),kpts_xy:points,kpts_score:scores,
+      ...(sample.display_basis?{display_basis:sample.display_basis}:{}),
       source_kpts_xy:sample.kpts_xy,
       source_feet:registeredFeet(sample,[[1,0,0],[0,1,0],[0,0,1]],width,height,valid,sample.kpts_xy,scores),
       feet:registeredFeet(sample,m,width,height,valid,points,scores)}

@@ -23,7 +23,7 @@ export class LocalPoseEngine {
     })
   }
   initialize(){return this.request('initialize')}
-  infer(type,image,box){return this.request(type,{image,box},[image.data.buffer])}
+  infer(type,image,box,metadata){return this.request(type,{image,box,metadata},[image.data.buffer])}
   close(reason=new DOMException('已停止本机计算','AbortError')) {
     this.closed=true;this.worker.terminate()
     for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(reason)}

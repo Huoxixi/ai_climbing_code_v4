@@ -8,7 +8,9 @@ export async function startFixtureServer(port, externalUrl, options={}) {
   const base = `http://127.0.0.1:${port}`
   const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(port), '--strictPort',...(options.args||[])], {
     cwd: fileURLToPath(new URL('../../', import.meta.url)), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-    env:{...process.env,...options.env},
+    // Concurrent fixture servers must not overwrite one another's Vite
+    // optimizer metadata and reload pages during an export/worker assertion.
+    env:{...process.env,CLIMB_VITE_CACHE_KEY:String(port),...options.env},
   })
   let output = '', failure
   const capture = chunk => { output = (output + chunk.toString()).slice(-8000) }

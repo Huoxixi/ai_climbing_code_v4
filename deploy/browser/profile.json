@@ -2,9 +2,9 @@
   "mode": "browser-only",
   "entry": "browser-replay.html",
   "installer": {
-    "file": "ClimbingAssistant-Setup-0.1.18-local.20261018.exe",
-    "url": "https://github.com/Huoxixi/climbing-assistant-local/releases/download/v0.1.18-local.20261018/ClimbingAssistant-Setup-0.1.18-local.20261018.exe",
-    "bytes": 59119616,
-    "sha256": "e2edd947e406f76b11a907d01fa84853bfb4410107d1437e4211ee32f0a76d88"
+    "file": "ClimbingAssistant-Setup-0.1.19-local.20261023.exe",
+    "url": "https://github.com/Huoxixi/climbing-assistant-local/releases/download/v0.1.19-local.20261023/ClimbingAssistant-Setup-0.1.19-local.20261023.exe",
+    "bytes": 59137024,
+    "sha256": "46219c52ee7187abcca6e764865a86d7abbf79f14e3ddb46b672a022af1d8695"
   }
 }
