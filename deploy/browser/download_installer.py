@@ -3,14 +3,47 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import threading
 import time
 import urllib.request
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[2]
 CHUNK_BYTES = 1024 * 1024
 CURRENT_PUBLIC_INSTALLER = Path('/opt/ai-climbing/current/frontend/dist/downloads/climbing-assistant-windows.exe')
+
+
+def asset_source(profile):
+    """Resolve the pinned public asset once, avoiding GitHub redirects per range."""
+    api = profile.get('asset_api_url')
+    if not api:
+        return profile['url']
+    if not re.fullmatch(r'https://api\.github\.com/repos/Huoxixi/climbing-assistant-local/releases/assets/[0-9]+', api):
+        raise RuntimeError('Unexpected public installer API endpoint')
+    for attempt in range(3):
+        try:
+            request = urllib.request.Request(api, headers={
+                'Accept': 'application/octet-stream', 'Range': 'bytes=0-0',
+                'Accept-Encoding': 'identity', 'User-Agent': 'ClimbingAssistant-release/1',
+            })
+            with urllib.request.urlopen(request, timeout=30) as response:
+                source = response.geturl()
+                location = urllib.parse.urlsplit(source)
+                if (location.scheme != 'https' or location.hostname != 'release-assets.githubusercontent.com'
+                        or location.username or location.password or location.port not in (None, 443)):
+                    raise RuntimeError('Unexpected public installer asset host')
+                if (response.status != 206
+                        or response.headers.get('Content-Range') != f'bytes 0-0/{profile["bytes"]}'
+                        or len(response.read(2)) != 1):
+                    raise RuntimeError('Public installer API did not honor the verification range')
+                return source
+        except (OSError, TimeoutError):
+            if attempt == 2:
+                # The fixed public URL remains an independent official route.
+                return profile['url']
+            time.sleep(attempt + 1)
 
 
 def verify(path, profile):
@@ -49,13 +82,14 @@ def download(profile, target):
             partial.unlink(missing_ok=True)
     cancelled = threading.Event()
     total = profile['bytes']
+    source = asset_source(profile)
 
     def part(start):
         end = min(start + CHUNK_BYTES, total) - 1
         for attempt in range(3):
             try:
                 deadline = time.monotonic() + 120
-                request = urllib.request.Request(profile['url'], headers={
+                request = urllib.request.Request(source, headers={
                     'Range': f'bytes={start}-{end}', 'Accept-Encoding': 'identity',
                     'User-Agent': 'ClimbingAssistant-release/1',
                 })

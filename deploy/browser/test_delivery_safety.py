@@ -75,6 +75,49 @@ class DeliverySafetyTests(unittest.TestCase):
         self.assertEqual(sorted(calls),[(start,min(start+128,len(body))-1) for start in range(0,len(body),128)])
         self.assertFalse(target.with_suffix('.partial').exists())
 
+    def test_asset_api_is_resolved_once_before_parallel_verified_ranges(self):
+        body=b'fixed public installer'*150
+        api='https://api.github.com/repos/Huoxixi/climbing-assistant-local/releases/assets/667783015'
+        resolved='https://release-assets.githubusercontent.com/fixed-test-asset?signature=test'
+        profile={'url':'https://github.com/fixed.exe','asset_api_url':api,
+                 'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+        calls=[]
+        def fetch(request,timeout):
+            calls.append(request.full_url)
+            first,last=map(int,request.get_header('Range').split('=')[1].split('-'))
+            if request.full_url==api:
+                self.assertEqual(request.get_header('Accept'),'application/octet-stream')
+                self.assertEqual((first,last),(0,0))
+            else:self.assertEqual(request.full_url,resolved)
+            response=io.BytesIO(body[first:last+1]);response.status=206
+            response.headers={'Content-Range':f'bytes {first}-{last}/{len(body)}'}
+            response.geturl=lambda:resolved
+            return response
+        target=self.root/'api.exe'
+        with patch.object(installer_download,'CHUNK_BYTES',128),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch):
+            with contextlib.redirect_stdout(io.StringIO()):installer_download.download(profile,target)
+        self.assertEqual(target.read_bytes(),body)
+        self.assertEqual(calls.count(api),1)
+        self.assertEqual(calls.count(resolved),(len(body)+127)//128)
+
+    def test_asset_api_rejects_unexpected_endpoint_host_or_range(self):
+        api='https://api.github.com/repos/Huoxixi/climbing-assistant-local/releases/assets/667783015'
+        profile={'url':'https://github.com/fixed.exe','asset_api_url':api,'bytes':42}
+        for kind in ['endpoint','host','range','body']:
+            candidate={**profile,'asset_api_url':'https://example.test/asset'} if kind=='endpoint' else profile
+            response=io.BytesIO(b'xx' if kind=='body' else b'M');response.status=206
+            response.headers={'Content-Range':'bytes 0-0/43' if kind=='range' else 'bytes 0-0/42'}
+            response.geturl=lambda:'https://example.test/asset' if kind=='host' else 'https://release-assets.githubusercontent.com/fixed'
+            with self.subTest(kind=kind),patch.object(installer_download.urllib.request,'urlopen',return_value=response),self.assertRaises(RuntimeError):
+                installer_download.asset_source(candidate)
+
+    def test_asset_api_network_failure_falls_back_to_pinned_public_url(self):
+        profile={'url':'https://github.com/fixed.exe','asset_api_url':
+                 'https://api.github.com/repos/Huoxixi/climbing-assistant-local/releases/assets/667783015','bytes':42}
+        with patch.object(installer_download.urllib.request,'urlopen',side_effect=OSError('network unavailable')) as fetch,patch.object(installer_download.time,'sleep'):
+            self.assertEqual(installer_download.asset_source(profile),profile['url'])
+            self.assertEqual(fetch.call_count,3)
+
     def test_installer_rejects_ignored_ranges_truncation_and_wrong_digest(self):
         body=b'expected installer'
         profile={'url':'https://example.test/fixed.exe','bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
