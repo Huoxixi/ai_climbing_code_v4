@@ -12,6 +12,9 @@ import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[2]
 CHUNK_BYTES = 1024 * 1024
+# The 59 MB fixed installer can take slightly over ten minutes on the ECS link.
+# Keep a bounded total deadline while allowing 64 KiB/s plus per-range retries.
+DOWNLOAD_TIMEOUT_SECONDS = 1200
 CURRENT_PUBLIC_INSTALLER = Path('/opt/ai-climbing/current/frontend/dist/downloads/climbing-assistant-windows.exe')
 
 
@@ -121,7 +124,7 @@ def download(profile, target):
             futures = [pool.submit(part, start) for start in range(0, total, CHUNK_BYTES)]
             received = 0
             try:
-                for future in as_completed(futures, timeout=600):
+                for future in as_completed(futures, timeout=DOWNLOAD_TIMEOUT_SECONDS):
                     start, body = future.result()
                     outgoing.seek(start)
                     outgoing.write(body)
