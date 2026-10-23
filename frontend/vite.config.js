@@ -9,6 +9,8 @@ const backendTarget = process.env.CLIMB_PREVIEW_BACKEND_TARGET || 'http://127.0.
 // https://vite.dev/config/
 export default defineConfig(({mode}) => ({
   root,
+  cacheDir:process.env.CLIMB_VITE_CACHE_KEY?`node_modules/.vite-test-${process.env.CLIMB_VITE_CACHE_KEY}`:undefined,
+  optimizeDeps:{include:['@techstark/opencv-js','onnxruntime-web/webgpu']},
   define: mode==='boulder-local'?{'import.meta.env.VITE_LOCAL_BOULDER_ONLY':JSON.stringify('true')}:undefined,
   envDir: process.env.CLIMB_DESKTOP_BUILD === '1' ? false : undefined,
   plugins: [vue(), browserModelAssets(), {name:'photo-preview-redirect',configureServer(server) {server.middlewares.use((req,res,next)=>{if(req.url?.split('?')[0]==='/e2e/harness.html'){res.statusCode=302;res.setHeader('Location','http://127.0.0.1:4176/#/photo-routes');res.end()}else next()})}}],

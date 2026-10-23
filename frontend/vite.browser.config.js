@@ -6,6 +6,8 @@ const assetFileNames=asset=>(asset.names||[asset.name]).some(name=>name?.endsWit
 export default defineConfig({
   root:fileURLToPath(new URL('.',import.meta.url)),
   publicDir:false,
+  cacheDir:process.env.CLIMB_VITE_CACHE_KEY?`node_modules/.vite-browser-test-${process.env.CLIMB_VITE_CACHE_KEY}`:'node_modules/.vite-browser',
+  optimizeDeps:{include:['@techstark/opencv-js','onnxruntime-web/webgpu']},
   plugins:[vue(),browserModelAssets({copy:true})],
   worker:{format:'es',rollupOptions:{output:{assetFileNames}}},
   build:{outDir:'dist-browser',rollupOptions:{input:fileURLToPath(new URL('./browser-replay.html',import.meta.url)),output:{
