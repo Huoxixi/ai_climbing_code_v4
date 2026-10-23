@@ -165,9 +165,10 @@ async function analyze(){
   const start=targetTime.value,end=Math.min(video.value.duration,start+90),fps=sampleFps.value,total=Math.ceil((end-start)*fps)
   if(total<1){error.value='请在视频结束前选择人物。';analyzing.value=false;return}
   let previous=target.value.slice(),lastSeen=start
-  analysisMeta={version:'browser-pose-validation-v1',model:MODEL_VERSION,start_seconds:start,end_seconds:end,sample_fps:fps,tracking:'manual-anchor-conservative-source-iou-v1',complete:false,video_uploaded:false}
+  analysisMeta={version:'browser-pose-accepted-19.2-v1',algorithm_baseline:'0.1.17-local.20261019.2',image_observation_refinement:'rotated-source-observation-v3',temporal_display:'bidirectional-image-pose-consensus-v3',model:MODEL_VERSION,start_seconds:start,end_seconds:end,sample_fps:fps,tracking:'manual-anchor-conservative-source-iou-v1',complete:false,video_uploaded:false}
   try{
     await decoderReady(controller.signal)
+    await engine.request('reset-sequence')
     for(let i=0;i<total;i++){
       controller.signal.throwIfAborted()
       const time=start+i/fps;await waitForVideo(decoder,time,{signal:controller.signal})
@@ -175,14 +176,16 @@ async function analyze(){
       if(i>0&&time-lastSeen<=.6){
         detections=await engine.infer('detect',readVideoFrame(decoder,scratch));box=continueTarget(detections,previous)?.box
       }
-      const sample={time_seconds:time,observed:false}
+      const sample={time_seconds:time,source_frame_id:i,observed:false}
       if(box){
-        const pose=await engine.infer('pose',readVideoFrame(decoder,scratch),box)
+        const pose=await engine.infer('pose',readVideoFrame(decoder,scratch),box,{time,index:i,track:1})
+        if(pose.previous_display){const prior=samples.value[pose.previous_display.index];if(prior?.observed)prior.temporal_display=pose.previous_display.payload}
+        sample.primary_native=pose.primary_native;sample.image_observation_refinement=pose.image_observation_refinement
         sample.observed=true;sample.box=box;sample.kpts_xy=pose.points.slice(0,17);sample.kpts_score=pose.scores.slice(0,17);sample.joint_eligibility=pose.eligible.slice(0,17)
         sample.wholebody={schema:'coco-wholebody-133',coordinates:'source_image_normalized',kpts_xy:pose.points,kpts_score:pose.scores,joint_eligibility:pose.eligible}
         sample.scene_exclusions=(detections.length?detections.map(d=>d.box):[box]).map(b=>b.map((v,j)=>v/(j%2?decoder.videoHeight:decoder.videoWidth)))
         previous=box;lastSeen=time
-      }else sample.missing_reason=time-lastSeen>.6?'target_lost_requires_new_anchor':'missing_or_ambiguous_detection'
+      }else{sample.missing_reason=time-lastSeen>.6?'target_lost_requires_new_anchor':'missing_or_ambiguous_detection';await engine.request('missing')}
       if(token!==generation)return
       samples.value.push(sample);analysisProgress.value=(i+1)/total;provider.value=engine.provider
       status.value=`正在本机分析 ${i+1} / ${total} · ${time.toFixed(1)} 秒${box?'':' · 当前人物不确定，留空'}`
@@ -191,7 +194,7 @@ async function analyze(){
     await saveLocal()
     await waitForVideo(video.value,start,{signal:controller.signal});draw()
   }catch(e){if(token===generation)error.value=e.message}
-  finally{if(token===generation)analyzing.value=false;decoder?.pause();decoder?.removeAttribute('src');decoder?.load()}
+  finally{if(token===generation){analyzing.value=false;if(!engine?.closed)await engine?.request('reset-sequence')}decoder?.pause();decoder?.removeAttribute('src');decoder?.load()}
   if(completed.value&&token===generation)await prepareWall()
 }
 function stop(){

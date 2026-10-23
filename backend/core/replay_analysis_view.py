@@ -9,9 +9,10 @@ from .replay_torso_trajectory import center_of_mass_trajectory, WINDOW_BASIS
 from .replay_center_of_mass import center_of_mass_point, VERSION as MASS_VERSION
 from .replay_foot_points import registered_feet, interpolate_feet, EDGES as FOOT_EDGES
 from .replay_head_geometry import draw_head, head_geometry, project_head
+from .replay_pose_temporal import display_sample
 
 LAYOUT = 'split_analysis_right_v11'
-VISUAL_VERSION = 'registered-observation-limb-labels-v14'
+VISUAL_VERSION = 'registered-image-temporal-display-v15'
 EDGES = ((5,6),(5,7),(7,9),(6,8),(8,10),(5,11),(6,12),(11,12),(11,13),(13,15),(12,14),(14,16))
 COLORS = {'left_hand':(235,196,80),'right_hand':(193,92,237),
           'left_foot':(106,179,255),'right_foot':(87,222,143)}
@@ -54,18 +55,20 @@ def visual_evidence(result):
             frame = round(time*fps)
         if frame<0:
             continue
-        mapped = registered_points(sample, video)
-        original = deepcopy(sample)
+        display=display_sample(sample)
+        mapped = registered_points(display, video)
+        original = deepcopy(display)
         original['wall_reference_transform'] = np.eye(3).tolist()
         original['wall_alignment'] = 'reference'
         original['wall_alignment_diagnostics'] = {}
         if mapped is not None:
             original['joint_eligibility'] = mapped[1].tolist()
         poses.append({'source_frame_id':frame,
-            'feet':registered_feet(sample,video),
-            'source_kpts_xy': deepcopy(sample.get('kpts_xy')) if mapped is not None else [[0.,0.]]*17,
+            'feet':registered_feet(display,video),
+            'source_kpts_xy': deepcopy(display.get('kpts_xy')) if mapped is not None else [[0.,0.]]*17,
             'source_feet': registered_feet(original,video) if mapped is not None else None,
             'time_seconds':sample.get('time_seconds'), 'observed':mapped is not None,
+            **({'display_basis':deepcopy(display['display_basis'])} if display.get('display_basis') else {}),
             'kpts_xy':mapped[0].round(6).tolist() if mapped is not None else [[0.,0.]]*17,
             'kpts_score':[(1. if sample.get('joint_eligibility') is not None else float(s)) if valid else 0. for s,valid in zip(sample['kpts_score'],mapped[1])] if mapped is not None else [0.]*17})
     poses.sort(key=lambda s:s['source_frame_id'])

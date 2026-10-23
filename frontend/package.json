@@ -22,7 +22,7 @@
     "test:preview": "node --test browser-tests/replay-preview.test.mjs",
     "test:release-browser": "node --test browser-tests/replay-actions.test.mjs browser-tests/replay-coaching.test.mjs browser-tests/replay-template.test.mjs browser-tests/photo-workflow.test.mjs browser-tests/replay-restoration.test.mjs browser-tests/replay-preview.test.mjs browser-tests/replay-paid-gate.test.mjs",
     "test:all": "npm test && npm run test:e2e",
-    "test:browser-unit": "node --test test/browser-local-pose.test.mjs test/browser-wall-scene.test.mjs test/replay-head-geometry.test.mjs"
+    "test:browser-unit": "node --test test/browser-local-pose.test.mjs test/browser-wall-scene.test.mjs test/replay-head-geometry.test.mjs test/browser-accepted-pose.test.mjs test/replay-temporal-display.test.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

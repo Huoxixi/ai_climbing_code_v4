@@ -53,7 +53,7 @@ test('actual native model: automatic initialization, cache reuse, local video an
     }
     const inputs={pose:await compare('pose-input.f32',poseInput(frame(),native.box).data),detector:await compare('detector-input.f32',detectorInput(frame()).data)}
     const engine=new LocalPoseEngine();await engine.request('initialize',{forceCpu:true})
-    const started=performance.now(),detections=await engine.infer('detect',frame()),pose=await engine.infer('pose',frame(),native.box),seconds=(performance.now()-started)/1000
+    const started=performance.now(),detections=await engine.infer('detect',frame()),pose=await engine.infer('pose-primary',frame(),native.box),seconds=(performance.now()-started)/1000
     engine.close();return {inputs,detections,pose,seconds}
   },native)
   const differences=parity.pose.points.map((p,i)=>Math.hypot((p[0]-native.points[i][0])*native.width,(p[1]-native.points[i][1])*native.height))

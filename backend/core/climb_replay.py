@@ -525,6 +525,8 @@ def build_pose_samples(records: list[dict], video_info: VideoInfo) -> list[dict]
             **({"wholebody": copy.deepcopy(record["wholebody"])} if record.get("wholebody") else {}),
             **({"pose_evidence": copy.deepcopy(record["pose_evidence"])} if record.get("pose_evidence") else {}),
             **({"joint_observations": copy.deepcopy(record["joint_observations"])} if record.get("joint_observations") else {}),
+            **({"image_observation_refinement": copy.deepcopy(record["image_observation_refinement"])} if record.get("image_observation_refinement") else {}),
+            **({"temporal_display": copy.deepcopy(record["temporal_display"])} if record.get("temporal_display") else {}),
             **({"joint_eligibility": copy.deepcopy(record["joint_eligibility"])} if record.get("joint_eligibility") is not None else {}),
             **({"initial_wholebody_observation": copy.deepcopy(record["initial_wholebody_observation"]),
                 "pose_revision": copy.deepcopy(record["pose_revision"])} if record.get("pose_revision") else {}),
@@ -3979,8 +3981,8 @@ class ReplayAnalyzerBase:
                 if item.get('contact_registration_reason'):
                     reason = item['contact_registration_reason']
                 elif (observed is False or item.get('interpolated') or item.get('render_mode') in {'interpolated','edge_hold'}
-                        or item.get('observation_kind') == 'display_interpolation'
-                        or (item.get('pose_evidence') or {}).get('observation_kind') == 'display_interpolation'):
+                        or item.get('observation_kind') in {'display_interpolation','image_supported_temporal_inference'}
+                        or (item.get('pose_evidence') or {}).get('observation_kind') in {'display_interpolation','image_supported_temporal_inference'}):
                     reason = 'not_model_observation'
                 elif index >= len(points) or len(points[index] or []) != 2:
                     reason = 'missing_joint'

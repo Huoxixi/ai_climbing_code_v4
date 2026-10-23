@@ -4,15 +4,23 @@ import wasmModuleUrl from 'onnxruntime-web/ort-wasm-simd-threaded.jsep.mjs?url'
 import {MODEL_FILES,MODEL_VERSION} from './modelManifest.js'
 import {loadModel} from './modelCache.js'
 import {detectorInput,decodeDetector,poseInput,decodePose} from './poseMath.js'
+import {nativePoseInput,rotateInput,undoRotation,selectImageObservation,ImageDisplayWindow} from './acceptedPose.js'
+import cvModule from '@techstark/opencv-js'
 
 ort.env.wasm.numThreads=1 // Works without cross-origin isolation, including static hosting.
 ort.env.wasm.wasmPaths={wasm:wasmUrl,mjs:wasmModuleUrl}
 ort.env.logLevel='error'
 let sessions={},provider='wasm'
 let currentRequest
+let displayWindow
+async function imageWindow(){
+  if(!displayWindow)displayWindow=new ImageDisplayWindow(await cvModule)
+  return displayWindow
+}
 const progress=data=>self.postMessage({id:currentRequest,type:'progress',...data})
 
 async function release() {
+  displayWindow?.clear();displayWindow=undefined
   for(const session of Object.values(sessions))await session.release().catch(()=>{})
   sessions={}
 }
@@ -48,6 +56,8 @@ async function run(model,input) {
   }finally{tensor.dispose()}
 }
 async function infer(message) {
+  if(message.type==='reset-sequence'){displayWindow?.clear();return {}}
+  if(message.type==='missing'){displayWindow?.clear();return {}}
   if(message.type==='background'){
     // Absence of pose is not evidence of an empty scene. Independently inspect
     // the full frame and overlapping crops, including partial/edge people.
@@ -68,8 +78,14 @@ async function infer(message) {
     const input=detectorInput(message.image),outputs=await run('detector',input)
     return decodeDetector(outputs[0],input.ratio,message.image.width,message.image.height)
   }
-  const input=poseInput(message.image,message.box),outputs=await run('pose',input)
-  return decodePose(outputs[0],outputs[1],input.center,input.scale,message.image.width,message.image.height)
+  const image=message.image,window=await imageWindow(),input=nativePoseInput(image,message.box,window.cv),outputs=await run('pose',input)
+  const primary=decodePose(outputs[0],outputs[1],input.center,input.scale,image.width,image.height)
+  if(message.type==='pose-primary')return primary
+  const rotated=await run('pose',rotateInput(input,window.cv))
+  const candidate=undoRotation(decodePose(rotated[0],rotated[1],input.center,input.scale,image.width,image.height),input,[image.width,image.height])
+  const result=selectImageObservation(primary,candidate,[image.width,image.height])
+  if(message.metadata)result.previous_display=await (await imageWindow()).push(image,result,message.metadata)
+  return result
 }
 // Client sends one request at a time. Keep this queue as a second guard against
 // concurrent session runs / lifecycle operations from other callers.

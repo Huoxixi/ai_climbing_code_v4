@@ -3,7 +3,7 @@
     <header class="web-header">
       <button class="web-brand" type="button" @click="navigate('replay')">攀岩助手<span>网页版</span></button>
       <nav aria-label="主导航"><button v-for="item in tabs" :key="item.id" type="button" :aria-current="page===item.id?'page':undefined" @click="navigate(item.id)"><component :is="item.icon"/><span>{{item.label}}</span></button></nav>
-      <div class="web-tools"><a href="/downloads/climbing-assistant-windows.exe" download="ClimbingAssistant-Setup-0.1.18-local.20261018.exe"><Download/><span>下载桌面版</span></a><button type="button" aria-label="本机存储" @click="navigate('storage')"><Setting/></button></div>
+      <div class="web-tools"><a href="/downloads/climbing-assistant-windows.exe" download="ClimbingAssistant-Setup-0.1.19-local.20261023.exe"><Download/><span>下载桌面版</span></a><button type="button" aria-label="本机存储" @click="navigate('storage')"><Setting/></button></div>
     </header>
     <div class="web-main">
       <BrowserReplay v-show="page==='replay'" :key="opened?opened.owner+':'+opened.id:'new:'+newSequence" :record="opened" embedded @busy="working=$event" @saved="historyChanged" @back="navigate('history')" />
@@ -18,7 +18,7 @@
       <section v-if="page==='storage'" class="web-page settings-page" aria-labelledby="storage-title">
         <div class="web-page-heading"><h1 id="storage-title">本机存储</h1></div>
         <section><h2>当前浏览器</h2><p>当前网站使用约 {{formatBytes(storage.usage)}}<span v-if="storage.quota">，浏览器存储额度约 {{formatBytes(storage.quota)}}</span>。包含模型缓存和本机记录。</p><p class="muted">{{storage.persisted?'浏览器已允许持久存储。主动清除网站数据仍会删除本机记录。':'可申请保留本机数据，减少浏览器自动清理；是否允许由浏览器决定。'}} 换浏览器或换电脑不会同步视频和历史记录。</p><button v-if="!storage.persisted" type="button" class="web-secondary" @click="persistStorage">申请保留本机数据</button></section>
-        <section><h2>桌面版</h2><a class="desktop-link" href="/downloads/climbing-assistant-windows.exe" download="ClimbingAssistant-Setup-0.1.18-local.20261018.exe"><Download/>下载 Windows 安装包</a><p class="muted">0.1.18 · 2026.10.18 安装包</p><a class="desktop-link" href="/browser-models/NOTICE.txt" target="_blank" rel="noopener">开源许可</a></section>
+        <section><h2>桌面版</h2><a class="desktop-link" href="/downloads/climbing-assistant-windows.exe" download="ClimbingAssistant-Setup-0.1.19-local.20261023.exe"><Download/>下载 Windows 安装包</a><p class="muted">0.1.19 · 2026.10.23 安装包</p><a class="desktop-link" href="/browser-models/NOTICE.txt" target="_blank" rel="noopener">开源许可</a></section>
         <p v-if="storageMessage" role="status">{{storageMessage}}</p><p v-if="storageError" class="web-error" role="alert">{{storageError}}</p>
       </section>
     </div>

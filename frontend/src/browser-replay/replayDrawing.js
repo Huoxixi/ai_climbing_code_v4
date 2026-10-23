@@ -1,5 +1,6 @@
 import {drawHead} from '../services/replayHeadGeometry.js'
 import {projectWallPoint,wallTransformAt} from './wallGeometry.js'
+import {temporalDisplaySample} from '../services/replayTemporalDisplay.js'
 const links=[[5,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16]]
 
 export function sampleAtTime(analysis,time){
@@ -9,6 +10,7 @@ export function sampleAtTime(analysis,time){
 
 export function drawSkeleton(ctx,sample,width,height,matrix=null){
   if(!sample?.observed)return
+  sample=temporalDisplaySample(sample)
   const project=p=>{const q=matrix?projectWallPoint(p,matrix):p;return q&&q.every(Number.isFinite)?[q[0]*width,q[1]*height]:null}
   const p=sample.kpts_xy,good=i=>sample.joint_eligibility?.[i]&&p?.[i]?.every(Number.isFinite)&&!!project(p[i]),xy=i=>project(p[i]),scale=Math.max(1,width/700)
   ctx.save();ctx.lineCap='round'
