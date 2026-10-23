@@ -4,6 +4,7 @@
   "installer": {
     "file": "ClimbingAssistant-Setup-0.1.19-local.20261023.exe",
     "url": "https://github.com/Huoxixi/climbing-assistant-local/releases/download/v0.1.19-local.20261023/ClimbingAssistant-Setup-0.1.19-local.20261023.exe",
+    "asset_api_url": "https://api.github.com/repos/Huoxixi/climbing-assistant-local/releases/assets/667783015",
     "bytes": 59137024,
     "sha256": "46219c52ee7187abcca6e764865a86d7abbf79f14e3ddb46b672a022af1d8695"
   }
