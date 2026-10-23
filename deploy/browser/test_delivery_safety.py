@@ -69,8 +69,9 @@ class DeliverySafetyTests(unittest.TestCase):
             response=io.BytesIO(body[first:last+1]);response.status=206
             response.headers={'Content-Range':f'bytes {first}-{last}/{len(body)}'}
             return response
-        with patch.object(installer_download,'CHUNK_BYTES',128),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch):
+        with patch.object(installer_download,'CHUNK_BYTES',128),patch.object(installer_download.urllib.request,'urlopen',side_effect=fetch),patch.object(installer_download,'as_completed',wraps=installer_download.as_completed) as completed:
             with contextlib.redirect_stdout(io.StringIO()):installer_download.download(profile,target)
+        self.assertEqual(completed.call_args.kwargs['timeout'],1200)
         self.assertEqual(target.read_bytes(),body)
         self.assertEqual(sorted(calls),[(start,min(start+128,len(body))-1) for start in range(0,len(body),128)])
         self.assertFalse(target.with_suffix('.partial').exists())
