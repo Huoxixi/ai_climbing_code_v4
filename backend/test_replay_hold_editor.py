@@ -117,7 +117,10 @@ class HoldEditorTests(unittest.TestCase):
             mask = np.zeros(image.shape[:2], np.uint8)
             cv2.rectangle(mask, (7, 7), (16, 15), 255, -1)
             return [([mask], [.93])], "fixture-native"
-        with patch("core.photo_route_analysis._climbing_model_masks_batch", side_effect=inference):
+        # This model is synthetic; host memory pressure must not choose its result.
+        with patch("core.photo_route_analysis._climbing_model_masks_batch", side_effect=inference), \
+             patch("core.replay_resources.psutil", SimpleNamespace(
+                 virtual_memory=lambda: SimpleNamespace(available=4 * 1024**3))):
             result = editor_preview(self.store, self.job["id"], "alice", EditorPreviewRequest(
                 frame_token=self.frame["frame_token"], mode="model", region_xyxy=[.2, .2, .4, .4]))
         self.assertTrue(seen and seen[0][1] < 128)
@@ -162,12 +165,26 @@ class HoldEditorTests(unittest.TestCase):
             mask=np.zeros(images[0].shape[:2],np.uint8)
             mask[7:16,7:17]=255
             return [([mask]*100,[.99-i*.001 for i in range(100)])],"fixture-many"
-        with patch("core.photo_route_analysis._climbing_model_masks_batch",side_effect=inference):
+        with patch("core.photo_route_analysis._climbing_model_masks_batch",side_effect=inference), \
+             patch("core.replay_resources.psutil", SimpleNamespace(
+                 virtual_memory=lambda: SimpleNamespace(available=4 * 1024**3))):
             preview=editor_preview(self.store,self.job["id"],"alice",EditorPreviewRequest(
                 frame_token=self.frame["frame_token"],mode="model",region_xyxy=[.2,.2,.4,.4]))
         self.assertEqual(len(preview["candidates"]),12)
         changed=editor_commit(self.store,self.job["id"],"alice",preview["candidates"][0]["proposal_id"])
         self.assertEqual(changed["hold_draft"]["holds"][0]["contour_evidence"]["model_version"],"fixture-many")
+
+    def test_low_memory_rejects_before_model_and_keeps_original_draft(self):
+        before = copy.deepcopy(self.store.get(self.job['id'], private=True))
+        with patch("core.replay_resources.psutil", SimpleNamespace(
+                virtual_memory=lambda: SimpleNamespace(available=1024))), \
+             patch("core.photo_route_analysis._climbing_model_masks_batch") as inference:
+            with self.assertRaisesRegex(RuntimeError, '当前可用内存不足'):
+                editor_preview(self.store, self.job['id'], 'alice', EditorPreviewRequest(
+                    frame_token=self.frame['frame_token'], mode='model',
+                    region_xyxy=[.2,.2,.4,.4]))
+            inference.assert_not_called()
+        self.assertEqual(self.store.get(self.job['id'], private=True), before)
 
     def test_model_guided_candidate_remains_read_only_and_preserves_its_origin(self):
         candidate={"bbox":[.2,.2,.15,.15],"polygon":self.polygon,

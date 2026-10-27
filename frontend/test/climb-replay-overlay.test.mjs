@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { replayPageState } from './fixtures/replayPageState.mjs'
 
 const page = readFileSync(new URL('../src/components/ClimbReplayPage.vue', import.meta.url), 'utf8')
 const service = readFileSync(new URL('../src/services/climbReplayService.js', import.meta.url), 'utf8')
@@ -63,24 +64,36 @@ test('原视频清理后回退到私密叠加视频且支持单独删除', () =>
 
 test('复盘记录默认优先播放复盘视频并保留原视频切换', () => {
   assert.match(page, /const preferredPlaybackKind = ref\('overlay'\)/)
-  assert.match(page, /preferredPlaybackKind\.value === 'overlay' && replayVideoAvailable\.value/)
-  assert.match(page, /playbackKind\.value === 'overlay'.*replayVideoUrl\.value/)
+  const { state, preferredPlaybackKind } = replayPageState({ id: 'saved', media: { source_video: { status: 'available' }, overlay_video: { status: 'available' } } })
+  assert.equal(state.playbackKind.value, 'overlay')
+  assert.equal(state.playbackUrl.value, 'saved/overlay-video')
+  preferredPlaybackKind.value = 'source'
+  assert.equal(state.playbackKind.value, 'source')
+  assert.equal(state.playbackUrl.value, 'saved/source-video')
   assert.match(page, />复盘视频<\/button>/)
   assert.match(page, />原视频<\/button>/)
 })
 
 test('只有一种视频时按可用版本播放', () => {
-  assert.match(page, /if \(replayVideoAvailable\.value\) return 'overlay'/)
-  assert.match(page, /if \(sourcePlayable\.value\) return 'source'/)
+  const { state, activeJob } = replayPageState({ id: 'saved', media: { overlay_video: { status: 'available' } } })
+  assert.equal(state.playbackKind.value, 'overlay')
+  assert.equal(state.playbackUrl.value, 'saved/overlay-video')
+  activeJob.value.media = { source_video: { status: 'available' } }
+  assert.equal(state.playbackKind.value, 'source')
+  assert.equal(state.playbackUrl.value, 'saved/source-video')
   assert.match(page, /:disabled="!replayVideoAvailable"/)
   assert.match(page, /:disabled="!sourcePlayable"/)
 })
 
 test('本地案例记录优先使用已生成的最新对照版成片', () => {
-  assert.match(page, /item\.comparison_available/)
-  assert.match(page, /item\.comparison_route_color === activeJob\.value\?\.route_color/)
-  assert.match(page, /Number\(item\.comparison_action_count\) === actionEvents\.value\.length/)
-  assert.match(page, /climbReplayService\.comparisonVideoUrl\(comparisonCase\.value\.id\)/)
+  const { state, activeJob, testVideoCases, actionEvents } = replayPageState({ id: 'saved', status: 'succeeded', original_name: 'wall.mp4', route_color: '黄色', media: { overlay_video: { status: 'available' } } })
+  actionEvents.value = [{ id: 'action' }]
+  testVideoCases.value = [{ id: 'case', comparison_available: true, filename: 'wall.mp4', comparison_route_color: '黄色', comparison_action_count: 1 }]
+  assert.equal(state.replayVideoUrl.value, 'case/comparison')
+  assert.equal(state.replayDownloadUrl.value, 'case/comparison?download')
+  activeJob.value.route_color = '红色'
+  assert.equal(state.comparisonCase.value, null)
+  assert.equal(state.replayVideoUrl.value, 'saved/overlay-video')
   assert.match(service, /test-videos\/\$\{encodeURIComponent\(caseId\)\}\/comparison/)
 })
 

@@ -15,7 +15,7 @@ from packaging.utils import canonicalize_name
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 sys.path.insert(0, str(PROJECT / 'backend'))
-from desktop.package_scope import assert_local_frontend, local_core_modules
+from desktop.package_scope import assert_local_frontend, assert_local_package, copy_desktop_runtime, local_core_modules
 SKIP = {"__pycache__", "tests", "test", ".git", ".local", ".private"}
 ROOT_DEPENDENCIES = ["fastapi", "uvicorn", "numpy", "opencv-python-headless", "pillow",
     "pillow-heif", "python-dotenv", "python-multipart", "pydantic-settings", "openai",
@@ -124,9 +124,7 @@ def build(args):
     shutil.copy2(PROJECT / "backend/vendor/__init__.py", destination / "backend/vendor/__init__.py")
     copy_tree(PROJECT / "backend/vendor/rtmlib", destination / "backend/vendor/rtmlib")
     copy_tree(PROJECT / "docs/bouldering-knowledge", destination / "docs/bouldering-knowledge")
-    (destination / "desktop").mkdir()
-    for name in ("__init__.py", "paths.py", "credentials.py", "server.py", "launcher.py", "window_check.py", "verify_package.py"):
-        shutil.copy2(PROJECT / "desktop" / name, destination / "desktop" / name)
+    copy_desktop_runtime(PROJECT / 'desktop', destination / 'desktop')
     copy_tree(PROJECT / "frontend/dist", destination / "frontend/dist")
     index = destination / "frontend/dist/index.html"
     index.write_text(index.read_text(encoding="utf-8").replace("<head>", "<head><script>window.__AI_CLIMBING_DESKTOP__=true;</script>"), encoding="utf-8")
@@ -142,6 +140,7 @@ def build(args):
     subprocess.run([str(compiler), "/nologo", "/target:winexe", "/platform:x64",
                     "/reference:System.Windows.Forms.dll", "/out:" + str(destination / "AiClimbing.exe"),
                     str(PROJECT / "desktop/AiClimbing.cs")], check=True)
+    assert_local_package(destination)
     inventory.append({"name": "CPython", "version": sys.version.split()[0], "source": "CPython Windows runtime", "license": "PSF"})
     inventory.append({"name": "Detectron2", "version": "0.6+a2f4a877/windows-cp312-cpu", "source": "Existing compiled source", "license": "Apache-2.0"})
     (destination / "dependencies.json").write_text(json.dumps(inventory, ensure_ascii=False, indent=2), encoding="utf-8")

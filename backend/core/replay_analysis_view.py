@@ -10,6 +10,7 @@ from .replay_center_of_mass import center_of_mass_point, VERSION as MASS_VERSION
 from .replay_foot_points import registered_feet, interpolate_feet, EDGES as FOOT_EDGES
 from .replay_head_geometry import draw_head, head_geometry, project_head
 from .replay_pose_temporal import display_sample
+from .replay_render_primitives import build_pose_render_timeline, draw_cjk_labels
 
 LAYOUT = 'split_analysis_right_v11'
 VISUAL_VERSION = 'registered-image-temporal-display-v15'
@@ -90,7 +91,6 @@ def visual_evidence(result):
 
 class AnalysisView:
     def __init__(self, result):
-        from .climb_replay import build_pose_render_timeline
         self.video = result['video']
         evidence = visual_evidence(result)
         self.timeline = build_pose_render_timeline(evidence['pose_samples'], self.video['frame_count'])
@@ -243,7 +243,6 @@ class AnalysisView:
             center = center_of_mass_point(sample)
             if center is not None:
                 cv2.circle(right,point(center),max(3,stroke+2),(255,255,255),-1,cv2.LINE_AA)
-            from .climb_replay import draw_cjk_labels
             labels = []
             for badge in limb_badges(sample,w,h):
                 anchor = (round(x+badge['anchor'][0]),round(y+badge['anchor'][1]))
