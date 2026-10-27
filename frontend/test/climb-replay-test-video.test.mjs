@@ -1,16 +1,21 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { parse } from 'vue/compiler-sfc'
+import { replayPageState } from './fixtures/replayPageState.mjs'
 
 const page = readFileSync(new URL('../src/components/ClimbReplayPage.vue', import.meta.url), 'utf8')
 const service = readFileSync(new URL('../src/services/climbReplayService.js', import.meta.url), 'utf8')
 
-test('本机存在三个测试案例时在 AI 复盘旁显示选择入口', () => {
+test('测试素材入口退出用户模板，历史对照视频服务仍保持兼容', () => {
+  // 2026-10-09《AI复盘_模块修正与验收》明确移除测试素材入口。
+  const template = parse(page).descriptor.template.content
   assert.match(service, /\/api\/climb-replay\/test-videos/)
-  assert.match(page, /testVideoCases\.length/)
-  assert.match(page, /v-for="item in testVideoCases\.slice\(samplePage\*4,\(samplePage\+1\)\*4\)"/)
-  assert.match(page, /本地测试案例/)
-  assert.match(page, /不会随生产发布/)
+  assert.doesNotMatch(template, /testVideoCases|useTestVideo|本地测试案例|samplesOpen/)
+  const { state, testVideoCases } = replayPageState({ id: 'saved', status: 'succeeded', original_name: 'wall.mp4', route_color: '黄色' })
+  testVideoCases.value = [{ id: 'case', comparison_available: true, filename: 'wall.mp4', comparison_route_color: '黄色', comparison_action_count: 0 }]
+  assert.equal(state.replayVideoUrl.value, 'case/comparison')
+  assert.match(service, /test-videos\/\$\{encodeURIComponent\(caseId\)\}\/comparison/)
 })
 
 test('测试视频复用正式上传校验且不自动同意第三方处理', () => {

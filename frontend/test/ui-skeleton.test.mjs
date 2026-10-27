@@ -4,14 +4,22 @@ import test from 'node:test'
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
 
-test('骨架确认后由真实页面接管并保留静态页面连接', async () => {
-  const [main, app] = await Promise.all([
+test('本地与完整应用分别加载各自样式入口，真实页面继续接管', async () => {
+  const [main, app, localStyle, fullStyle] = await Promise.all([
     read('../src/main.js'),
     read('../src/App.vue'),
+    read('../src/styles/local-app.css'),
+    read('../src/styles/full-app.css'),
   ])
-  assert.match(main, /\.\/style\.css/)
-  assert.match(main, /styles\/redesign\.css/)
-  assert.doesNotMatch(main, /styles\/skeleton\.css/)
+  assert.match(main, /VITE_LOCAL_BOULDER_ONLY === 'true'/)
+  assert.match(main, /import\('\.\/styles\/local-app\.css'\)/)
+  assert.match(main, /import\('\.\/styles\/full-app\.css'\)/)
+  assert.match(main, /import LocalRoot from '\.\/LocalRoot\.vue'/)
+  assert.match(fullStyle, /@import '\.\.\/style\.css'/)
+  assert.match(fullStyle, /@import '\.\/redesign\.css'/)
+  assert.match(localStyle, /@import '\.\/boulder-workspace\.css'/)
+  assert.doesNotMatch(localStyle, /redesign\.css|\.\.\/style\.css/)
+  assert.doesNotMatch(main + localStyle + fullStyle, /styles\/skeleton\.css/)
   assert.doesNotMatch(app, /uiSkeletonCheckpoint|UiSkeletonPage/)
   for (const component of ['DashboardPage', 'StudioPage', 'HoldLibraryPage', 'BoardsPage', 'StandardBoardPage', 'AILabPage']) {
     assert.match(app, new RegExp(`import ${component}`))

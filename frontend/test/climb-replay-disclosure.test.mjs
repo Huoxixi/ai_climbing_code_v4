@@ -20,12 +20,13 @@ const findClass = name => elements.find(({ node }) => hasClass(node, name))
 test('精简后的复盘模板可以编译，低频内容使用默认关闭的原生折叠', () => {
   assert.deepEqual(errors, [])
   assert.deepEqual(compileTemplate({ source: descriptor.template.content, filename: 'ClimbReplayPage.vue', id: 'replay-test' }).errors, [])
-  for (const name of ['result-details', 'media-retention', 'analysis-evidence']) {
+  for (const name of ['result-details', 'media-retention']) {
     const { node } = findClass(name)
     assert.equal(node.tag, 'details', name)
     assert.equal(node.props.some(prop => (prop.type === 6 && prop.name === 'open') || (prop.type === 7 && prop.arg?.content === 'open')), false, name)
     assert.equal(node.children.find(child => child.type === 1)?.tag, 'summary', name)
   }
+  assert.equal(findClass('analysis-evidence'), undefined)
 })
 
 test('视频、当前动作、动作顺序、状态和上传入口不会被折叠隐藏', () => {
@@ -65,12 +66,19 @@ test('历史以常驻入口打开分页面板，不挤走当前视频', () => {
   assert.match(source, /v-for="job in pageJobs"/)
   assert.equal(directive(findClass('replay-detail-sections').node, 'bind', 'key'), 'activeJob.id')
   assert.equal(directive(findClass('result-details').node, 'bind', 'key'), 'activeJob.id')
-  assert.match(source, /confirmedSegmentCount = computed/)
-  assert.match(source, /segment\.source === 'user_confirmed'/)
+  const row = elements.find(({ node, ancestors }) => directive(node, 'for') === 'job in pageJobs' && ancestors.includes(history.node))
+  assert.ok(row)
+  assert.equal(directive(row.node, 'bind', 'key'), 'job.id')
+  assert.equal(directive(row.node, 'on', 'click'), 'selectJob(job);historyOpen=false')
+  const pagination = elements.find(({ node, ancestors }) => attribute(node, 'aria-label') === '分析历史分页' && ancestors.includes(history.node))
+  assert.ok(pagination)
+  assert.ok(elements.some(({ node, ancestors }) => directive(node, 'on', 'click') === 'historyPage--' && directive(node, 'bind', 'disabled') === 'historyPage===0' && ancestors.includes(pagination.node)))
+  assert.ok(elements.some(({ node, ancestors }) => directive(node, 'on', 'click') === 'historyPage++' && directive(node, 'bind', 'disabled') === '(historyPage+1)*5>=recentJobs.length' && ancestors.includes(pagination.node)))
 })
 
-test('详细计量不重复常显，折叠标题支持键盘焦点与移动端换行', () => {
-  assert.equal(directive(findClass('run-summary').node, 'if'), 'isBusy && analysisEvidence')
+test('处理诊断退出用户页面，保留折叠标题的键盘焦点与移动端换行', () => {
+  assert.equal(findClass('run-summary'), undefined)
+  assert.equal(findClass('analysis-evidence'), undefined)
   assert.match(source, /:is\(button,input,select,a,summary\):focus-visible/)
   assert.match(source, /\.disclosure-meta\{[^}]*overflow-wrap:anywhere/)
   assert.match(source, /@media\(max-width:520px\).*\.replay-disclosure>summary/)

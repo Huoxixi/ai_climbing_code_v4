@@ -1,0 +1,5140 @@
+{
+  "routes": [
+    {
+      "path": "/api/climb-replay/coaching-policy",
+      "methods": [
+        "GET"
+      ],
+      "name": "policy",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "policy_api_climb_replay_coaching_policy_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching",
+      "methods": [
+        "POST"
+      ],
+      "name": "create",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "create_api_climb_replay_jobs__job_id__coaching_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching/preflight",
+      "methods": [
+        "GET"
+      ],
+      "name": "preflight",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "preflight_api_climb_replay_jobs__job_id__coaching_preflight_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching",
+      "methods": [
+        "GET"
+      ],
+      "name": "get",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_api_climb_replay_jobs__job_id__coaching_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_api_climb_replay_jobs__job_id__coaching_cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching/consent/withdraw",
+      "methods": [
+        "POST"
+      ],
+      "name": "withdraw",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "withdraw_api_climb_replay_jobs__job_id__coaching_consent_withdraw_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/coaching/feedback",
+      "methods": [
+        "POST"
+      ],
+      "name": "feedback",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "feedback_api_climb_replay_jobs__job_id__coaching_feedback_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/template-video",
+      "methods": [
+        "POST"
+      ],
+      "name": "create",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "create_api_climb_replay_jobs__job_id__template_video_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/template-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_api_climb_replay_jobs__job_id__template_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/template-video/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_api_climb_replay_jobs__job_id__template_video_cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/template-video/media",
+      "methods": [
+        "GET"
+      ],
+      "name": "media",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "media_api_climb_replay_jobs__job_id__template_video_media_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions",
+      "methods": [
+        "GET"
+      ],
+      "name": "get",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_api_climb_replay_jobs__job_id__actions_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/background",
+      "methods": [
+        "POST"
+      ],
+      "name": "prepare_background",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "prepare_background_api_climb_replay_jobs__job_id__actions_background_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/background",
+      "methods": [
+        "GET"
+      ],
+      "name": "background",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "background_api_climb_replay_jobs__job_id__actions_background_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions",
+      "methods": [
+        "POST"
+      ],
+      "name": "create",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "create_api_climb_replay_jobs__job_id__actions_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_api_climb_replay_jobs__job_id__actions_cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/trajectory-start",
+      "methods": [
+        "PUT"
+      ],
+      "name": "trajectory_start",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "trajectory_start_api_climb_replay_jobs__job_id__actions_trajectory_start_put",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/review",
+      "methods": [
+        "POST"
+      ],
+      "name": "review",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "review_api_climb_replay_jobs__job_id__actions_review_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/review/undo",
+      "methods": [
+        "POST"
+      ],
+      "name": "undo",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "undo_api_climb_replay_jobs__job_id__actions_review_undo_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/export",
+      "methods": [
+        "POST"
+      ],
+      "name": "export",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "export_api_climb_replay_jobs__job_id__actions_export_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/export/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel_export",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_export_api_climb_replay_jobs__job_id__actions_export_cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/media",
+      "methods": [
+        "GET"
+      ],
+      "name": "media",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "media_api_climb_replay_jobs__job_id__actions_media_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/actions/package",
+      "methods": [
+        "GET"
+      ],
+      "name": "package",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "package_api_climb_replay_jobs__job_id__actions_package_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/preview-capability",
+      "methods": [
+        "GET"
+      ],
+      "name": "capability",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "capability_api_climb_replay_preview_capability_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/preview-video",
+      "methods": [
+        "POST"
+      ],
+      "name": "preview",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "preview_api_climb_replay_preview_video_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/preview-video/{key}",
+      "methods": [
+        "DELETE"
+      ],
+      "name": "discard_preview",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "discard_preview_api_climb_replay_preview_video__key__delete",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/prepared-videos/{key}/start",
+      "methods": [
+        "POST"
+      ],
+      "name": "start_prepared_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "start_prepared_video_api_climb_replay_prepared_videos__key__start_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/consent-policy",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_consent_policy",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_consent_policy_api_climb_replay_consent_policy_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/test-video-info",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_test_video_info",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_test_video_info_api_climb_replay_test_video_info_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/test-videos",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_test_videos",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "list_test_videos_api_climb_replay_test_videos_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/test-videos/{case_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_test_video_case",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_test_video_case_api_climb_replay_test_videos__case_id__get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/test-videos/{case_id}/comparison",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_test_video_comparison",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_test_video_comparison_api_climb_replay_test_videos__case_id__comparison_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/test-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_test_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_test_video_api_climb_replay_test_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_job",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "create_job_api_climb_replay_jobs_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/uploads",
+      "methods": [
+        "POST"
+      ],
+      "name": "create_upload",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "create_upload_api_climb_replay_uploads_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/uploads/{upload_id}",
+      "methods": [
+        "PUT"
+      ],
+      "name": "append_upload",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "append_upload_api_climb_replay_uploads__upload_id__put",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/uploads/{upload_id}/complete",
+      "methods": [
+        "POST"
+      ],
+      "name": "complete_upload",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "complete_upload_api_climb_replay_uploads__upload_id__complete_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs",
+      "methods": [
+        "GET"
+      ],
+      "name": "list_jobs",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "list_jobs_api_climb_replay_jobs_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/comparisons",
+      "methods": [
+        "POST"
+      ],
+      "name": "compare_replay_jobs",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "compare_replay_jobs_api_climb_replay_comparisons_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/segments/{segment_id}/review",
+      "methods": [
+        "PUT"
+      ],
+      "name": "review_replay_segment",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "review_replay_segment_api_climb_replay_jobs__job_id__segments__segment_id__review_put",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/segments/{segment_id}/review/revert",
+      "methods": [
+        "POST"
+      ],
+      "name": "revert_replay_segment",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "revert_replay_segment_api_climb_replay_jobs__job_id__segments__segment_id__review_revert_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_job",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_job_api_climb_replay_jobs__job_id__get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/candidates/{candidate_index}/promote",
+      "methods": [
+        "POST"
+      ],
+      "name": "promote_hold_candidate",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "promote_hold_candidate_api_climb_replay_jobs__job_id__holds_candidates__candidate_index__promote_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/point",
+      "methods": [
+        "POST"
+      ],
+      "name": "add_hold_at_point",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "add_hold_at_point_api_climb_replay_jobs__job_id__holds_point_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/point/preview",
+      "methods": [
+        "POST"
+      ],
+      "name": "preview_hold_at_point",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "preview_hold_at_point_api_climb_replay_jobs__job_id__holds_point_preview_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/editor/frame",
+      "methods": [
+        "POST"
+      ],
+      "name": "read_editor_frame",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "read_editor_frame_api_climb_replay_jobs__job_id__holds_editor_frame_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/editor/preview",
+      "methods": [
+        "POST"
+      ],
+      "name": "preview_editor_contour",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "preview_editor_contour_api_climb_replay_jobs__job_id__holds_editor_preview_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/editor/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel_editor_inference",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_editor_inference_api_climb_replay_jobs__job_id__holds_editor_cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/editor/confirm",
+      "methods": [
+        "POST"
+      ],
+      "name": "confirm_editor_contour",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "confirm_editor_contour_api_climb_replay_jobs__job_id__holds_editor_confirm_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/{hold_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "name": "remove_replay_hold",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "remove_replay_hold_api_climb_replay_jobs__job_id__holds__hold_id__delete",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/confirm-all",
+      "methods": [
+        "POST"
+      ],
+      "name": "confirm_replay_holds",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "confirm_replay_holds_api_climb_replay_jobs__job_id__holds_confirm_all_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/route-map/refresh",
+      "methods": [
+        "POST"
+      ],
+      "name": "refresh_route_map",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "refresh_route_map_api_climb_replay_jobs__job_id__route_map_refresh_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/analysis/start",
+      "methods": [
+        "POST"
+      ],
+      "name": "start_replay_analysis",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "start_replay_analysis_api_climb_replay_jobs__job_id__analysis_start_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/point/undo",
+      "methods": [
+        "POST"
+      ],
+      "name": "undo_last_clicked_hold",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "undo_last_clicked_hold_api_climb_replay_jobs__job_id__holds_point_undo_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/point/{review_version}/undo",
+      "methods": [
+        "POST"
+      ],
+      "name": "undo_clicked_hold",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "undo_clicked_hold_api_climb_replay_jobs__job_id__holds_point__review_version__undo_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/holds/refine-sampled-route",
+      "methods": [
+        "POST"
+      ],
+      "name": "refine_sampled_route_holds",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "refine_sampled_route_holds_api_climb_replay_jobs__job_id__holds_refine_sampled_route_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/source-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_source_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_source_video_api_climb_replay_jobs__job_id__media_source_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/original-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_original_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_original_video_api_climb_replay_jobs__job_id__media_original_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/overlay-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_overlay_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_overlay_video_api_climb_replay_jobs__job_id__media_overlay_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/reviewed-overlay-video",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_reviewed_overlay_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_reviewed_overlay_video_api_climb_replay_jobs__job_id__media_reviewed_overlay_video_get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/source-video",
+      "methods": [
+        "DELETE"
+      ],
+      "name": "delete_source_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "delete_source_video_api_climb_replay_jobs__job_id__media_source_video_delete",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/media/overlay-video",
+      "methods": [
+        "DELETE"
+      ],
+      "name": "delete_overlay_video",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "delete_overlay_video_api_climb_replay_jobs__job_id__media_overlay_video_delete",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "name": "delete_job",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "delete_job_api_climb_replay_jobs__job_id__delete",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/deletions/{job_id}",
+      "methods": [
+        "GET"
+      ],
+      "name": "get_deletion",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "get_deletion_api_climb_replay_deletions__job_id__get",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "name": "cancel_job",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "cancel_job_api_climb_replay_jobs__job_id__cancel_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/retry",
+      "methods": [
+        "POST"
+      ],
+      "name": "retry_job",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "retry_job_api_climb_replay_jobs__job_id__retry_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/visual-replay/retry",
+      "methods": [
+        "POST"
+      ],
+      "name": "retry_visual_replay",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": 202,
+      "operation_id": null,
+      "unique_id": "retry_visual_replay_api_climb_replay_jobs__job_id__visual_replay_retry_post",
+      "include_in_schema": true
+    },
+    {
+      "path": "/api/climb-replay/jobs/{job_id}/consent/withdraw",
+      "methods": [
+        "POST"
+      ],
+      "name": "withdraw_job_consent",
+      "tags": [
+        "climb-replay"
+      ],
+      "status_code": null,
+      "operation_id": null,
+      "unique_id": "withdraw_job_consent_api_climb_replay_jobs__job_id__consent_withdraw_post",
+      "include_in_schema": true
+    }
+  ],
+  "openapi": {
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Replay router contracts",
+      "version": "fixture"
+    },
+    "paths": {
+      "/api/climb-replay/coaching-policy": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Policy",
+          "operationId": "policy_api_climb_replay_coaching_policy_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/coaching": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Create",
+          "operationId": "create_api_climb_replay_jobs__job_id__coaching_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachingCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get",
+          "operationId": "get_api_climb_replay_jobs__job_id__coaching_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/coaching/preflight": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Preflight",
+          "operationId": "preflight_api_climb_replay_jobs__job_id__coaching_preflight_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/coaching/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel",
+          "operationId": "cancel_api_climb_replay_jobs__job_id__coaching_cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/coaching/consent/withdraw": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Withdraw",
+          "operationId": "withdraw_api_climb_replay_jobs__job_id__coaching_consent_withdraw_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/coaching/feedback": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Feedback",
+          "operationId": "feedback_api_climb_replay_jobs__job_id__coaching_feedback_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachingFeedback"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/template-video": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Create",
+          "operationId": "create_api_climb_replay_jobs__job_id__template_video_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachingCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get",
+          "operationId": "get_api_climb_replay_jobs__job_id__template_video_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/template-video/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel",
+          "operationId": "cancel_api_climb_replay_jobs__job_id__template_video_cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/template-video/media": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Media",
+          "operationId": "media_api_climb_replay_jobs__job_id__template_video_media_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get",
+          "operationId": "get_api_climb_replay_jobs__job_id__actions_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Create",
+          "operationId": "create_api_climb_replay_jobs__job_id__actions_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/background": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Prepare Background",
+          "operationId": "prepare_background_api_climb_replay_jobs__job_id__actions_background_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Background",
+          "operationId": "background_api_climb_replay_jobs__job_id__actions_background_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "version",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Version"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel",
+          "operationId": "cancel_api_climb_replay_jobs__job_id__actions_cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/trajectory-start": {
+        "put": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Trajectory Start",
+          "operationId": "trajectory_start_api_climb_replay_jobs__job_id__actions_trajectory_start_put",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrajectoryStart"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/review": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Review",
+          "operationId": "review_api_climb_replay_jobs__job_id__actions_review_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRevision"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/review/undo": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Undo",
+          "operationId": "undo_api_climb_replay_jobs__job_id__actions_review_undo_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionUndo"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/export": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Export",
+          "operationId": "export_api_climb_replay_jobs__job_id__actions_export_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionExport"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/export/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel Export",
+          "operationId": "cancel_export_api_climb_replay_jobs__job_id__actions_export_cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/media": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Media",
+          "operationId": "media_api_climb_replay_jobs__job_id__actions_media_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "version",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Version"
+              }
+            },
+            {
+              "name": "exported",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Exported"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/actions/package": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Package",
+          "operationId": "package_api_climb_replay_jobs__job_id__actions_package_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "version",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Version"
+              }
+            },
+            {
+              "name": "exported",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Exported"
+              }
+            },
+            {
+              "name": "data_only",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Data Only"
+              }
+            },
+            {
+              "name": "export_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Export Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/preview-capability": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Capability",
+          "operationId": "capability_api_climb_replay_preview_capability_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/preview-video": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Preview",
+          "operationId": "preview_api_climb_replay_preview_video_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_preview_api_climb_replay_preview_video_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/preview-video/{key}": {
+        "delete": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Discard Preview",
+          "operationId": "discard_preview_api_climb_replay_preview_video__key__delete",
+          "parameters": [
+            {
+              "name": "key",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Key"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/prepared-videos/{key}/start": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Start Prepared Video",
+          "operationId": "start_prepared_video_api_climb_replay_prepared_videos__key__start_post",
+          "parameters": [
+            {
+              "name": "key",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Key"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayUploadCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/consent-policy": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Consent Policy",
+          "operationId": "get_consent_policy_api_climb_replay_consent_policy_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/test-video-info": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Test Video Info",
+          "operationId": "get_test_video_info_api_climb_replay_test_video_info_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/test-videos": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "List Test Videos",
+          "operationId": "list_test_videos_api_climb_replay_test_videos_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/test-videos/{case_id}": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Test Video Case",
+          "operationId": "get_test_video_case_api_climb_replay_test_videos__case_id__get",
+          "parameters": [
+            {
+              "name": "case_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Case Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/test-videos/{case_id}/comparison": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Test Video Comparison",
+          "operationId": "get_test_video_comparison_api_climb_replay_test_videos__case_id__comparison_get",
+          "parameters": [
+            {
+              "name": "case_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Case Id"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/test-video": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Test Video",
+          "operationId": "get_test_video_api_climb_replay_test_video_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "List Jobs",
+          "operationId": "list_jobs_api_climb_replay_jobs_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Create Job",
+          "operationId": "create_job_api_climb_replay_jobs_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_create_job_api_climb_replay_jobs_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/uploads": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Create Upload",
+          "operationId": "create_upload_api_climb_replay_uploads_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayUploadCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/uploads/{upload_id}": {
+        "put": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Append Upload",
+          "operationId": "append_upload_api_climb_replay_uploads__upload_id__put",
+          "parameters": [
+            {
+              "name": "upload_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Upload Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/uploads/{upload_id}/complete": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Complete Upload",
+          "operationId": "complete_upload_api_climb_replay_uploads__upload_id__complete_post",
+          "parameters": [
+            {
+              "name": "upload_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Upload Id"
+              }
+            }
+          ],
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/comparisons": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Compare Replay Jobs",
+          "operationId": "compare_replay_jobs_api_climb_replay_comparisons_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayComparisonCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/segments/{segment_id}/review": {
+        "put": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Review Replay Segment",
+          "operationId": "review_replay_segment_api_climb_replay_jobs__job_id__segments__segment_id__review_put",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "segment_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Segment Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaySegmentReview"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/segments/{segment_id}/review/revert": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Revert Replay Segment",
+          "operationId": "revert_replay_segment_api_climb_replay_jobs__job_id__segments__segment_id__review_revert_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "segment_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Segment Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Job",
+          "operationId": "get_job_api_climb_replay_jobs__job_id__get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Delete Job",
+          "operationId": "delete_job_api_climb_replay_jobs__job_id__delete",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/candidates/{candidate_index}/promote": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Promote Hold Candidate",
+          "operationId": "promote_hold_candidate_api_climb_replay_jobs__job_id__holds_candidates__candidate_index__promote_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "candidate_index",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Candidate Index"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/point": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Add Hold At Point",
+          "operationId": "add_hold_at_point_api_climb_replay_jobs__job_id__holds_point_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayHoldPoint"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/point/preview": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Preview Hold At Point",
+          "operationId": "preview_hold_at_point_api_climb_replay_jobs__job_id__holds_point_preview_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayHoldPoint"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/editor/frame": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Read Editor Frame",
+          "operationId": "read_editor_frame_api_climb_replay_jobs__job_id__holds_editor_frame_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorFrameRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/editor/preview": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Preview Editor Contour",
+          "operationId": "preview_editor_contour_api_climb_replay_jobs__job_id__holds_editor_preview_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorPreviewRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/editor/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel Editor Inference",
+          "operationId": "cancel_editor_inference_api_climb_replay_jobs__job_id__holds_editor_cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorCancelRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/editor/confirm": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Confirm Editor Contour",
+          "operationId": "confirm_editor_contour_api_climb_replay_jobs__job_id__holds_editor_confirm_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorCommitRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/{hold_id}": {
+        "delete": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Remove Replay Hold",
+          "operationId": "remove_replay_hold_api_climb_replay_jobs__job_id__holds__hold_id__delete",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "hold_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Hold Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/confirm-all": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Confirm Replay Holds",
+          "operationId": "confirm_replay_holds_api_climb_replay_jobs__job_id__holds_confirm_all_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayHoldsConfirmation"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/route-map/refresh": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Refresh Route Map",
+          "operationId": "refresh_route_map_api_climb_replay_jobs__job_id__route_map_refresh_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/analysis/start": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Start Replay Analysis",
+          "operationId": "start_replay_analysis_api_climb_replay_jobs__job_id__analysis_start_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayRetryCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/point/undo": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Undo Last Clicked Hold",
+          "operationId": "undo_last_clicked_hold_api_climb_replay_jobs__job_id__holds_point_undo_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/point/{review_version}/undo": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Undo Clicked Hold",
+          "operationId": "undo_clicked_hold_api_climb_replay_jobs__job_id__holds_point__review_version__undo_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "review_version",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Review Version"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/holds/refine-sampled-route": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Refine Sampled Route Holds",
+          "operationId": "refine_sampled_route_holds_api_climb_replay_jobs__job_id__holds_refine_sampled_route_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/media/source-video": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Source Video",
+          "operationId": "get_source_video_api_climb_replay_jobs__job_id__media_source_video_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Delete Source Video",
+          "operationId": "delete_source_video_api_climb_replay_jobs__job_id__media_source_video_delete",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/media/original-video": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Original Video",
+          "operationId": "get_original_video_api_climb_replay_jobs__job_id__media_original_video_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/media/overlay-video": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Overlay Video",
+          "operationId": "get_overlay_video_api_climb_replay_jobs__job_id__media_overlay_video_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Delete Overlay Video",
+          "operationId": "delete_overlay_video_api_climb_replay_jobs__job_id__media_overlay_video_delete",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/media/reviewed-overlay-video": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Reviewed Overlay Video",
+          "operationId": "get_reviewed_overlay_video_api_climb_replay_jobs__job_id__media_reviewed_overlay_video_get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            },
+            {
+              "name": "download",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "default": false,
+                "title": "Download"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/deletions/{job_id}": {
+        "get": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Get Deletion",
+          "operationId": "get_deletion_api_climb_replay_deletions__job_id__get",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/cancel": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Cancel Job",
+          "operationId": "cancel_job_api_climb_replay_jobs__job_id__cancel_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/retry": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Retry Job",
+          "operationId": "retry_job_api_climb_replay_jobs__job_id__retry_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayRetryCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/visual-replay/retry": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Retry Visual Replay",
+          "operationId": "retry_visual_replay_api_climb_replay_jobs__job_id__visual_replay_retry_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "202": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/climb-replay/jobs/{job_id}/consent/withdraw": {
+        "post": {
+          "tags": [
+            "climb-replay"
+          ],
+          "summary": "Withdraw Job Consent",
+          "operationId": "withdraw_job_consent_api_climb_replay_jobs__job_id__consent_withdraw_post",
+          "parameters": [
+            {
+              "name": "job_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Job Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "ActionCreate": {
+          "properties": {
+            "cloud_consent": {
+              "type": "boolean",
+              "title": "Cloud Consent",
+              "default": false
+            },
+            "consent_version": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Consent Version"
+            },
+            "budget_confirmed": {
+              "type": "boolean",
+              "title": "Budget Confirmed",
+              "default": false
+            },
+            "reuse_saved_commentary": {
+              "type": "boolean",
+              "title": "Reuse Saved Commentary",
+              "default": false
+            },
+            "retry_saved_response": {
+              "type": "boolean",
+              "title": "Retry Saved Response",
+              "default": false
+            },
+            "replace_legacy_return": {
+              "type": "boolean",
+              "title": "Replace Legacy Return",
+              "default": false
+            },
+            "budget_cny": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 100.0,
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Cny"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "title": "ActionCreate"
+        },
+        "ActionExport": {
+          "properties": {
+            "result_version": {
+              "type": "string",
+              "title": "Result Version"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "full",
+                "group"
+              ],
+              "title": "Scope",
+              "default": "full"
+            },
+            "group_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            },
+            "segment_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Segment Id"
+            },
+            "speed": {
+              "enum": [
+                0.5,
+                0.75,
+                1
+              ],
+              "title": "Speed",
+              "default": 0.75
+            },
+            "show_skeleton": {
+              "type": "boolean",
+              "title": "Show Skeleton",
+              "default": false
+            },
+            "show_human": {
+              "type": "boolean",
+              "title": "Show Human",
+              "default": true
+            },
+            "show_diagram": {
+              "type": "boolean",
+              "title": "Show Diagram",
+              "default": true
+            },
+            "include_data": {
+              "type": "boolean",
+              "title": "Include Data",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "result_version"
+          ],
+          "title": "ActionExport"
+        },
+        "ActionRevision": {
+          "properties": {
+            "result_version": {
+              "type": "string",
+              "title": "Result Version"
+            },
+            "group_id": {
+              "type": "string",
+              "title": "Group Id"
+            },
+            "event_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Id"
+            },
+            "limb": {
+              "type": "string",
+              "enum": [
+                "left_hand",
+                "right_hand",
+                "left_foot",
+                "right_foot"
+              ],
+              "title": "Limb"
+            },
+            "action": {
+              "type": "string",
+              "maxLength": 32,
+              "title": "Action"
+            },
+            "start_seconds": {
+              "type": "number",
+              "title": "Start Seconds"
+            },
+            "end_seconds": {
+              "type": "number",
+              "title": "End Seconds"
+            },
+            "source_hold_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Hold Id"
+            },
+            "target_hold_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Hold Id"
+            },
+            "contact_seconds": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Contact Seconds"
+            },
+            "direction": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "up",
+                    "down",
+                    "left",
+                    "right"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Direction"
+            },
+            "technique_codes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "maxItems": 8,
+              "title": "Technique Codes"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "result_version",
+            "group_id",
+            "limb",
+            "action",
+            "start_seconds",
+            "end_seconds"
+          ],
+          "title": "ActionRevision"
+        },
+        "ActionUndo": {
+          "properties": {
+            "result_version": {
+              "type": "string",
+              "title": "Result Version"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "result_version"
+          ],
+          "title": "ActionUndo"
+        },
+        "AttemptContext": {
+          "properties": {
+            "goal": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal"
+            },
+            "focus_start_seconds": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus Start Seconds"
+            },
+            "focus_end_seconds": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Focus End Seconds"
+            },
+            "fatigue": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fatigue"
+            },
+            "discomfort": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Discomfort"
+            },
+            "movement_limitations": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Movement Limitations"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "title": "AttemptContext"
+        },
+        "Body_create_job_api_climb_replay_jobs_post": {
+          "properties": {
+            "video": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream",
+              "title": "Video"
+            },
+            "route_id": {
+              "type": "string",
+              "title": "Route Id",
+              "default": ""
+            },
+            "route_color": {
+              "type": "string",
+              "title": "Route Color",
+              "default": ""
+            },
+            "consent_version": {
+              "type": "string",
+              "title": "Consent Version",
+              "default": ""
+            },
+            "consent_granted": {
+              "type": "boolean",
+              "title": "Consent Granted",
+              "default": false
+            },
+            "retention_mode": {
+              "type": "string",
+              "title": "Retention Mode",
+              "default": "keep_private_original"
+            },
+            "trim_start_seconds": {
+              "type": "number",
+              "title": "Trim Start Seconds",
+              "default": 0
+            },
+            "trim_end_seconds": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trim End Seconds"
+            },
+            "route_color_sample": {
+              "type": "string",
+              "title": "Route Color Sample",
+              "default": ""
+            },
+            "skip_holds": {
+              "type": "boolean",
+              "title": "Skip Holds",
+              "default": false
+            }
+          },
+          "type": "object",
+          "required": [
+            "video"
+          ],
+          "title": "Body_create_job_api_climb_replay_jobs_post"
+        },
+        "Body_preview_api_climb_replay_preview_video_post": {
+          "properties": {
+            "video": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream",
+              "title": "Video"
+            }
+          },
+          "type": "object",
+          "required": [
+            "video"
+          ],
+          "title": "Body_preview_api_climb_replay_preview_video_post"
+        },
+        "CoachingCreate": {
+          "properties": {
+            "consent_version": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Consent Version"
+            },
+            "consent_granted": {
+              "type": "boolean",
+              "title": "Consent Granted"
+            },
+            "adult_confirmed": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Adult Confirmed"
+            },
+            "indoor_bouldering_confirmed": {
+              "type": "boolean",
+              "title": "Indoor Bouldering Confirmed",
+              "default": false
+            },
+            "observation_only_accepted": {
+              "type": "boolean",
+              "title": "Observation Only Accepted",
+              "default": false
+            },
+            "budget_accepted": {
+              "type": "boolean",
+              "title": "Budget Accepted",
+              "default": false
+            },
+            "personal": {
+              "$ref": "#/components/schemas/PersonalContext"
+            },
+            "context": {
+              "$ref": "#/components/schemas/AttemptContext"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "consent_version",
+            "consent_granted"
+          ],
+          "title": "CoachingCreate"
+        },
+        "CoachingFeedback": {
+          "properties": {
+            "report_id": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Report Id"
+            },
+            "item_id": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Item Id"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "helpful",
+                "inaccurate",
+                "not_applicable"
+              ],
+              "title": "Kind"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "body_part",
+                    "time",
+                    "knowledge",
+                    "conditions",
+                    "wording",
+                    "priority"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "report_id",
+            "item_id",
+            "kind"
+          ],
+          "title": "CoachingFeedback"
+        },
+        "EditorCancelRequest": {
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "maxLength": 32,
+              "minLength": 32,
+              "title": "Request Id"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "request_id"
+          ],
+          "title": "EditorCancelRequest"
+        },
+        "EditorCommitRequest": {
+          "properties": {
+            "proposal_id": {
+              "type": "string",
+              "maxLength": 32,
+              "minLength": 32,
+              "title": "Proposal Id"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "proposal_id"
+          ],
+          "title": "EditorCommitRequest"
+        },
+        "EditorFrameRequest": {
+          "properties": {
+            "time_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "title": "Time Seconds",
+              "default": 0
+            },
+            "frame_index": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Frame Index"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "title": "EditorFrameRequest"
+        },
+        "EditorPreviewRequest": {
+          "properties": {
+            "frame_token": {
+              "type": "string",
+              "maxLength": 32,
+              "minLength": 32,
+              "title": "Frame Token"
+            },
+            "mode": {
+              "type": "string",
+              "pattern": "^(manual|model|candidate|region)$",
+              "title": "Mode"
+            },
+            "polygon": {
+              "anyOf": [
+                {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array",
+                  "maxItems": 512,
+                  "minItems": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Polygon"
+            },
+            "region_xyxy": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array",
+                  "maxItems": 4,
+                  "minItems": 4
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Region Xyxy"
+            },
+            "hold_id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hold Id"
+            },
+            "request_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32,
+                  "minLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Request Id"
+            },
+            "candidate_index": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Candidate Index"
+            },
+            "context_ratio": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Context Ratio",
+              "default": 0.25
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "frame_token",
+            "mode"
+          ],
+          "title": "EditorPreviewRequest"
+        },
+        "FocusWindow": {
+          "properties": {
+            "start_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "title": "Start Seconds"
+            },
+            "end_seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "title": "End Seconds"
+            },
+            "fps": {
+              "type": "integer",
+              "enum": [
+                15,
+                20
+              ],
+              "title": "Fps",
+              "default": 20
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "start_seconds",
+            "end_seconds"
+          ],
+          "title": "FocusWindow"
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "PersonalContext": {
+          "properties": {
+            "height_cm": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 300.0,
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Height Cm"
+            },
+            "arm_span_cm": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 350.0,
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Arm Span Cm"
+            },
+            "weight_kg": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 500.0,
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Weight Kg"
+            },
+            "climbing_years": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 100.0,
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Climbing Years"
+            },
+            "usual_grade": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Usual Grade"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "title": "PersonalContext"
+        },
+        "ReplayColorSample": {
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "palette",
+                "video"
+              ],
+              "title": "Source"
+            },
+            "hex": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "title": "Hex"
+            },
+            "rgb": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array",
+              "maxItems": 3,
+              "minItems": 3,
+              "title": "Rgb"
+            },
+            "time_seconds": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Time Seconds"
+            },
+            "point_xy": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array",
+                  "maxItems": 2,
+                  "minItems": 2
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Point Xy"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "source",
+            "hex",
+            "rgb"
+          ],
+          "title": "ReplayColorSample"
+        },
+        "ReplayComparisonCreate": {
+          "properties": {
+            "first_job_id": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "First Job Id"
+            },
+            "second_job_id": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Second Job Id"
+            },
+            "same_climber_confirmed": {
+              "type": "boolean",
+              "title": "Same Climber Confirmed",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "first_job_id",
+            "second_job_id"
+          ],
+          "title": "ReplayComparisonCreate"
+        },
+        "ReplayHoldPoint": {
+          "properties": {
+            "point_xy": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2,
+              "title": "Point Xy"
+            },
+            "time_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "title": "Time Seconds"
+            },
+            "region_xyxy": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array",
+                  "maxItems": 4,
+                  "minItems": 4
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Region Xyxy"
+            },
+            "proposal_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32,
+                  "minLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Proposal Id"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "point_xy",
+            "time_seconds"
+          ],
+          "title": "ReplayHoldPoint"
+        },
+        "ReplayHoldsConfirmation": {
+          "properties": {
+            "revision": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Revision"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "revision"
+          ],
+          "title": "ReplayHoldsConfirmation"
+        },
+        "ReplayRetryCreate": {
+          "properties": {
+            "skip_holds": {
+              "type": "boolean",
+              "title": "Skip Holds",
+              "default": false
+            },
+            "consent_version": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Consent Version"
+            },
+            "consent_granted": {
+              "type": "boolean",
+              "title": "Consent Granted"
+            },
+            "pose_fps": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "enum": [
+                    4,
+                    10,
+                    15,
+                    20
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pose Fps"
+            },
+            "focus_windows": {
+              "items": {
+                "$ref": "#/components/schemas/FocusWindow"
+              },
+              "type": "array",
+              "maxItems": 20,
+              "title": "Focus Windows"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "consent_version",
+            "consent_granted"
+          ],
+          "title": "ReplayRetryCreate"
+        },
+        "ReplaySegmentReview": {
+          "properties": {
+            "limb": {
+              "type": "string",
+              "enum": [
+                "left_hand",
+                "right_hand",
+                "left_foot",
+                "right_foot"
+              ],
+              "title": "Limb"
+            },
+            "source_route_hold_id": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Source Route Hold Id"
+            },
+            "target_route_hold_id": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Target Route Hold Id"
+            },
+            "start_time_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "title": "Start Time Seconds"
+            },
+            "end_time_seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "title": "End Time Seconds"
+            },
+            "technique_label": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "高抬脚",
+                    "锁臂",
+                    "旗式",
+                    "脚上方重心转移",
+                    "动态点",
+                    "跳跃",
+                    "主动摆荡换点",
+                    "抓点后制摆",
+                    "开门摆动"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Technique Label"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "limb",
+            "source_route_hold_id",
+            "target_route_hold_id",
+            "start_time_seconds",
+            "end_time_seconds"
+          ],
+          "title": "ReplaySegmentReview"
+        },
+        "ReplayUploadCreate": {
+          "properties": {
+            "filename": {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Filename"
+            },
+            "content_type": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Content Type"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0,
+              "title": "Size Bytes"
+            },
+            "skip_holds": {
+              "type": "boolean",
+              "title": "Skip Holds",
+              "default": false
+            },
+            "route_id": {
+              "type": "string",
+              "maxLength": 64,
+              "title": "Route Id",
+              "default": ""
+            },
+            "route_color": {
+              "type": "string",
+              "maxLength": 40,
+              "title": "Route Color",
+              "default": ""
+            },
+            "consent_version": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Consent Version"
+            },
+            "consent_granted": {
+              "type": "boolean",
+              "title": "Consent Granted"
+            },
+            "retention_mode": {
+              "type": "string",
+              "enum": [
+                "delete_after_processing",
+                "keep_private_original"
+              ],
+              "title": "Retention Mode",
+              "default": "keep_private_original"
+            },
+            "trim_start_seconds": {
+              "type": "number",
+              "minimum": 0.0,
+              "title": "Trim Start Seconds",
+              "default": 0
+            },
+            "trim_end_seconds": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Trim End Seconds"
+            },
+            "route_color_sample": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReplayColorSample"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "filename",
+            "content_type",
+            "size_bytes",
+            "consent_version",
+            "consent_granted"
+          ],
+          "title": "ReplayUploadCreate"
+        },
+        "TrajectoryStart": {
+          "properties": {
+            "start_seconds": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Seconds"
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "title": "TrajectoryStart"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            },
+            "input": {
+              "title": "Input"
+            },
+            "ctx": {
+              "type": "object",
+              "title": "Context"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      }
+    }
+  },
+  "consent_policy": {
+    "version": "climb-replay-local-rtmw-hold-editor-v2-2026-10-07",
+    "provider": "本机 RTMW-L",
+    "service": "RTMW-L 384×288",
+    "region": "local",
+    "data_types": [
+      "降帧后的单张视频画面",
+      "画面中的人体姿态关键点"
+    ],
+    "execution": "local",
+    "requires_paid_consent": false,
+    "uploads_frames": false,
+    "keeps_high_resolution": true,
+    "model": "rtmw-l-384x288-cocktail14-20231122",
+    "purpose": "生成本次攀岩复盘所需的人体姿态关键点",
+    "full_video_sent": false
+  }
+}

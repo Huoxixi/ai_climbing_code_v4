@@ -80,7 +80,7 @@ def _get(cache, key, store, job_id, owner):
 
 
 def editor_context(store, job_id, owner):
-    from core.climb_replay import hold_review_input, holds_revision
+    from core.replay_contracts import hold_review_input, holds_revision
     job = store.get(job_id, owner, private=True)
     if job.get("status") not in {"awaiting_hold_review", "succeeded"} or (job.get("deletion") or {}).get("state") == "queued":
         raise HTTPException(409, "当前任务不能编辑岩点，请等待本地识别完成。")

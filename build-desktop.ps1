@@ -27,4 +27,6 @@ if ($WriteLock) { $taskBuildArgs += '--write-lock' }
 $env:PYTHONPATH = $SiteDirectories -join ';'
 & $PythonRuntime @taskBuildArgs
 if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed; partial output is preserved for diagnosis' }
+& $PythonRuntime (Join-Path $PSScriptRoot 'desktop/finalize.py') --package $OutputDirectory
+if ($LASTEXITCODE -ne 0) { throw 'Desktop finalization failed; partial output is preserved for diagnosis' }
 Write-Output "Desktop package: $OutputDirectory"

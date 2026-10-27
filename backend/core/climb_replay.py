@@ -30,10 +30,10 @@ import threading
 import time
 import uuid
 from collections import OrderedDict, defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Literal, Protocol
+from typing import Any, Callable
 
 import cv2
 import numpy as np
@@ -41,7 +41,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 from PIL import Image, ImageDraw, ImageFont
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import ValidationError
 
 from core.chunked_upload import ChunkUploadError, ChunkUploadStore
 from core.photo_route_analysis import _climbing_model_masks_batch
@@ -55,6 +55,27 @@ from core.replay_pose_display import TORSO_CENTER_STYLE, torso_center
 from core.replay_torso_trajectory import torso_trajectory
 from core.replay_sampling import FocusWindow
 from core.replay_resources import high_resource_slot, run_visual_worker, serialized_heavy_stage
+# Compatibility exports: callers keep their existing climb_replay imports.
+from core.replay_contracts import (
+    REPLAY_RETENTION_DELETE, REPLAY_RETENTION_KEEP, ReplayRetentionMode,
+    ReplayConfigurationError, ReplayCancelled, VideoLimits, VideoInfo, ReplayAnalyzer,
+    ReplayColorSample, ReplayUploadCreate, ReplayRetryCreate, ReplayHoldsConfirmation,
+    ReplayComparisonCreate, ReplaySegmentReview, ReplayHoldPoint, parse_color_sample,
+    hold_review_input, hold_geometry, holds_revision,
+)
+from core.replay_render_primitives import (
+    draw_cjk_labels, build_pose_render_timeline, _overlay_text,
+    _CJK_FONT_CANDIDATES, _CJK_FONT_PATH, _CJK_FONT_CACHE,
+)
+
+from core.replay_job_queue import ReplayJobQueue
+from core.replay_job_records import ReplayJobRecords
+from core.replay_test_videos import ReplayTestVideoCatalog
+from core.replay_media import (
+    REPLAY_VIDEO_MIME_TYPES, REPLAY_VIDEO_SUFFIXES,
+    probe_video, validate_video_upload_type, validate_video,
+)
+
 from core.replay_hold_editor import (EditorFrameRequest, EditorPreviewRequest, EditorCommitRequest, EditorCancelRequest,
     editor_frame, editor_preview, editor_commit, cancel_editor_request, clear_editor_cache, _put, _proposals, _binding)
 
@@ -74,251 +95,13 @@ REPLAY_CONSENT_DATA_TYPES = ["降帧后的单张视频画面", "画面中的人�
 REPLAY_PIPELINE_VERSION = "climb-replay-v3-local-rtmw-20261006"
 REPLAY_POSE_API_VERSION = "2019-12-30"
 DEFAULT_POSE_UNIT_PRICE_CNY = 0.0016
-REPLAY_RETENTION_DELETE = "delete_after_processing"
-REPLAY_RETENTION_KEEP = "keep_private_original"
-ReplayRetentionMode = Literal["delete_after_processing", "keep_private_original"]
 REPLAY_OVERLAY_FILENAME = "overlay.webm"
 REPLAY_OVERLAY_MEDIA_KIND = "overlay_video"
 REPLAY_REVIEWED_OVERLAY_MEDIA_KIND = "reviewed_overlay_video"
 REPLAY_REFERENCE_MEDIA_KIND = "wall_reference"
 REPLAY_REFERENCE_FILENAME = "replay-reference.png"
 REPLAY_COLOR_SAMPLE_MAX_LAB_DISTANCE = 60.0
-REPLAY_VIDEO_MIME_TYPES = frozenset({
-    "video/mp4", "video/quicktime", "video/x-m4v", "video/webm",
-    "video/3gpp", "video/3gpp2", "video/x-matroska", "video/x-msvideo", "video/avi",
-    "video/mpeg", "video/mp2t", "video/x-ms-wmv", "video/x-ms-asf", "video/x-flv",
-    "video/ogg", "application/mxf",
-})
-REPLAY_VIDEO_SUFFIXES = frozenset({".mp4", ".m4v", ".mov", ".webm", ".3gp", ".3g2", ".mkv",
-    ".avi", ".mpg", ".mpeg", ".mpe", ".ts", ".mts", ".m2ts", ".m2t", ".wmv", ".asf",
-    ".flv", ".f4v", ".vob", ".ogv", ".ogg", ".mxf", ".divx"})
-
-
-class ReplayConfigurationError(RuntimeError):
-    """Raised when the opt-in pose provider has no usable configuration."""
-
-
-class ReplayCancelled(RuntimeError):
-    """Raised between analysis stages after a user asks to cancel."""
-
-
-@dataclass(frozen=True)
-class VideoLimits:
-    max_bytes: int = 200 * 1024 * 1024
-    max_input_bytes: int = 500 * 1024 * 1024
-    max_duration_seconds: float = 90.0
-    max_width: int = 1280
-    max_height: int = 720
-    max_frames: int = 2700
-
-
-class ReplayColorSample(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    source: Literal["palette", "video"]
-    hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
-    rgb: list[int] = Field(min_length=3, max_length=3)
-    time_seconds: float | None = Field(default=None, ge=0)
-    point_xy: list[float] | None = Field(default=None, min_length=2, max_length=2)
-
-    @field_validator("rgb")
-    @classmethod
-    def validate_rgb(cls, value: list[int]) -> list[int]:
-        if any(channel < 0 or channel > 255 for channel in value):
-            raise ValueError("RGB 数值必须在 0 到 255 之间")
-        return value
-
-    @field_validator("point_xy")
-    @classmethod
-    def validate_point(cls, value: list[float] | None) -> list[float] | None:
-        if value is not None and (not all(math.isfinite(item) and 0 <= item <= 1 for item in value)):
-            raise ValueError("岩点坐标必须位于画面内")
-        return value
-
-    @model_validator(mode="after")
-    def validate_video_point(self):
-        if self.source == "video" and self.point_xy is not None and self.time_seconds is None:
-            raise ValueError("视频岩点样本需要对应的画面时间")
-        return self
-
-
 from core.replay_skeleton_mode import skeleton_draft, without_hold_data
-
-
-class ReplayUploadCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    filename: str = Field(min_length=1, max_length=255)
-    content_type: str = Field(min_length=1, max_length=100)
-    size_bytes: int = Field(gt=0)
-    skip_holds: bool = False
-    route_id: str = Field(default="", max_length=64)
-    route_color: str = Field(default="", max_length=40)
-    consent_version: str = Field(min_length=1, max_length=100)
-    consent_granted: bool
-    retention_mode: ReplayRetentionMode = REPLAY_RETENTION_KEEP
-    trim_start_seconds: float = Field(default=0, ge=0)
-    trim_end_seconds: float | None = Field(default=None, gt=0)
-    route_color_sample: ReplayColorSample | None = None
-
-
-class ReplayRetryCreate(BaseModel):
-    skip_holds: bool = False
-    model_config = ConfigDict(extra="forbid")
-    consent_version: str = Field(min_length=1, max_length=100)
-    consent_granted: bool
-    pose_fps: Literal[4, 10, 15, 20] | None = None
-    focus_windows: list[FocusWindow] = Field(default_factory=list, max_length=20)
-
-
-class ReplayHoldsConfirmation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    revision: str = Field(min_length=1, max_length=64)
-
-
-def hold_review_input(job: dict) -> dict:
-    return job.get("hold_edit_draft") or job.get("result") or job.get("hold_draft") or {}
-
-
-def hold_geometry(result: dict) -> dict:
-    return {key: copy.deepcopy(result[key]) for key in
-            ("holds", "hold_candidates", "hold_evidence", "models", "route", "hold_review_version", "hold_refinement")
-            if key in result}
-
-
-def holds_revision(result: dict) -> str:
-    """Bind global confirmation to the exact holds and wall reference reviewed."""
-    payload = {"holds": result.get("holds") or [],
-               "reference_frame": (result.get("hold_evidence") or {}).get("reference_frame"),
-               "version": result.get("hold_review_version") or 0}
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-
-
-class ReplayComparisonCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    first_job_id: str = Field(min_length=1, max_length=64)
-    second_job_id: str = Field(min_length=1, max_length=64)
-    same_climber_confirmed: bool = False
-
-
-class ReplaySegmentReview(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    limb: Literal["left_hand", "right_hand", "left_foot", "right_foot"]
-    source_route_hold_id: str = Field(min_length=1, max_length=100)
-    target_route_hold_id: str = Field(min_length=1, max_length=100)
-    start_time_seconds: float = Field(ge=0)
-    end_time_seconds: float = Field(gt=0)
-    technique_label: Literal["高抬脚", "锁臂", "旗式", "脚上方重心转移", "动态点", "跳跃", "主动摆荡换点", "抓点后制摆", "开门摆动"] | None = None
-
-
-class ReplayHoldPoint(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    point_xy: list[float] = Field(min_length=2, max_length=2)
-    time_seconds: float = Field(ge=0)
-    region_xyxy: list[float] | None = Field(default=None, min_length=4, max_length=4)
-    proposal_id: str | None = Field(default=None, min_length=32, max_length=32)
-
-    @field_validator("point_xy")
-    @classmethod
-    def validate_point(cls, value: list[float]) -> list[float]:
-        if not all(math.isfinite(item) and 0 <= item <= 1 for item in value):
-            raise ValueError("补点位置必须位于视频画面内")
-        return value
-
-    @field_validator("region_xyxy")
-    @classmethod
-    def validate_region(cls, value: list[float] | None) -> list[float] | None:
-        if value is None:
-            return None
-        x0, y0, x1, y1 = value
-        if (not all(math.isfinite(item) and 0 <= item <= 1 for item in value)
-                or x1 - x0 < .012 or y1 - y0 < .012
-                or x1 - x0 > .35 or y1 - y0 > .35):
-            raise ValueError("请框出画面中单个岩点的大概范围")
-        return value
-
-
-def parse_color_sample(value: str | dict | ReplayColorSample | None) -> dict | None:
-    if value in (None, ""):
-        return None
-    try:
-        if isinstance(value, ReplayColorSample):
-            sample = value
-        else:
-            payload = json.loads(value) if isinstance(value, str) else value
-            sample = ReplayColorSample.model_validate(payload)
-    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
-        raise ValueError("视频取色样本无效，请重新取色") from exc
-    return sample.model_dump()
-
-
-@dataclass(frozen=True)
-class VideoInfo:
-    width: int
-    height: int
-    fps: float
-    frame_count: int
-    duration_seconds: float
-    size_bytes: int
-
-
-def probe_video(path: Path) -> VideoInfo:
-    """Read enough metadata to reject unsafe or unsupported uploads."""
-    cap = cv2.VideoCapture(str(path))
-    orientation_auto = getattr(cv2, "CAP_PROP_ORIENTATION_AUTO", None)
-    if cap.isOpened() and orientation_auto is not None:
-        cap.set(orientation_auto, 1)
-    try:
-        ok, frame = cap.read() if cap.isOpened() else (False, None)
-        if ok and frame is not None:
-            height, width = frame.shape[:2]
-            fps = float(cap.get(cv2.CAP_PROP_FPS))
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        else:
-            width = height = frame_count = 0
-            fps = 0.0
-    finally:
-        cap.release()
-    if width <= 0 or height <= 0 or fps <= 0 or frame_count <= 0:
-        from imageio_ffmpeg import get_ffmpeg_exe
-        try:
-            result = subprocess.run(
-                [get_ffmpeg_exe(), "-hide_banner", "-i", str(path), "-t", "0", "-f", "null", "-"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=15,
-            )
-            duration_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
-            video_match = re.search(
-                r"Video:.*?(\d{2,5})x(\d{2,5}).*?(\d+(?:\.\d+)?) fps", result.stderr,
-            )
-            if not duration_match or not video_match:
-                raise ValueError("missing video stream metadata")
-            hours, minutes, seconds = duration_match.groups()
-            duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-            width, height = int(video_match.group(1)), int(video_match.group(2))
-            rotation = re.search(r"rotation of\s+(-?\d+(?:\.\d+)?) degrees", result.stderr)
-            if rotation and abs(float(rotation.group(1))) % 180 > 45:
-                width, height = height, width
-            fps = float(video_match.group(3))
-            frame_count = max(1, int(round(duration * fps)))
-        except (OSError, RuntimeError, ValueError, TypeError, subprocess.TimeoutExpired) as exc:
-            raise ValueError("服务器无法读取这个视频，可能是文件损坏或编码暂不支持；可更换视频重试，仍失败请联系管理员") from exc
-    if width <= 0 or height <= 0 or fps <= 0 or frame_count <= 0:
-        raise ValueError("视频缺少有效的尺寸、帧率或时长信息")
-    return VideoInfo(
-        width=width,
-        height=height,
-        fps=fps,
-        frame_count=frame_count,
-        duration_seconds=frame_count / fps,
-        size_bytes=path.stat().st_size,
-    )
-
-
-def validate_video_upload_type(filename: str, content_type: str) -> bool:
-    """Accept common mobile containers without trusting MIME metadata alone."""
-    suffix = Path(filename or "").suffix.lower()
-    mime = (content_type or "").split(";", 1)[0].strip().lower()
-    if not mime.startswith('video/') and mime not in REPLAY_VIDEO_MIME_TYPES and suffix not in REPLAY_VIDEO_SUFFIXES:
-        raise ValueError("请选择常见视频文件，如 MP4、MOV、MKV、AVI、WebM、MTS、MPEG 或 WMV。")
-    return suffix == ".mp4" and mime in {"", "application/octet-stream", "video/mp4"}
 
 
 @serialized_heavy_stage
@@ -434,20 +217,6 @@ def prepare_video_upload(
         raise
 
 
-def validate_video(info: VideoInfo, limits: VideoLimits, *, max_bytes: int | None = None) -> None:
-    byte_limit = limits.max_bytes if max_bytes is None else max_bytes
-    if info.size_bytes > byte_limit:
-        raise ValueError(f"视频不能超过 {byte_limit // (1024 * 1024)} MB")
-    if info.duration_seconds > limits.max_duration_seconds + 0.05:
-        raise ValueError(f"试用阶段仅支持 {limits.max_duration_seconds:g} 秒以内的视频")
-    allowed_long = max(limits.max_width, limits.max_height)
-    allowed_short = min(limits.max_width, limits.max_height)
-    if max(info.width, info.height) > allowed_long or min(info.width, info.height) > allowed_short:
-        raise ValueError(f"试用阶段最高支持 {limits.max_width}×{limits.max_height}（支持横竖屏）")
-    if info.frame_count > limits.max_frames:
-        raise ValueError(f"试用阶段最多处理 {limits.max_frames} 帧")
-
-
 def _atomic_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{uuid.uuid4().hex}.tmp")
@@ -474,46 +243,6 @@ POSE_EDGES = (
 LIMB_OVERLAY_NAMES = {
     "left_hand": "左手", "right_hand": "右手", "left_foot": "左脚", "right_foot": "右脚",
 }
-_CJK_FONT_CANDIDATES = (
-    Path("C:/Windows/Fonts/msyh.ttc"),
-    Path("C:/Windows/Fonts/simhei.ttf"),
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
-    Path(__file__).resolve().parents[1] / "vendor/NotoSansSC-VF.ttf",
-)
-_CJK_FONT_PATH = next((path for path in _CJK_FONT_CANDIDATES if path.is_file()), None)
-_CJK_FONT_CACHE: dict[int, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
-
-
-def draw_cjk_labels(frame: np.ndarray, labels: list[dict]) -> None:
-    """Draw all Chinese labels in one Pillow pass to keep video rendering fast."""
-    if not labels:
-        return
-    if _CJK_FONT_PATH is None:
-        for label in labels:
-            _overlay_text(
-                frame, str(label.get("fallback") or ""), tuple(label["origin"]),
-                scale=max(.18, float(label.get("size") or 12) / 28),
-                color=tuple(label.get("color") or (235, 239, 241)),
-            )
-        return
-    image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    drawer = ImageDraw.Draw(image)
-    for label in labels:
-        size = max(8, int(label.get("size") or 12))
-        font = _CJK_FONT_CACHE.get(size)
-        if font is None:
-            font = ImageFont.truetype(str(_CJK_FONT_PATH), size=size)
-            _CJK_FONT_CACHE[size] = font
-        bgr = tuple(int(value) for value in label.get("color") or (235, 239, 241))
-        drawer.text(
-            tuple(int(value) for value in label["origin"]),
-            str(label.get("text") or ""), font=font,
-            fill=(bgr[2], bgr[1], bgr[0]),
-        )
-    frame[:] = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
-
-
 def build_pose_samples(records: list[dict], video_info: VideoInfo) -> list[dict]:
     """Preserve exact sampled-frame evidence without inventing interpolated poses."""
     samples = []
@@ -711,91 +440,6 @@ def build_visible_action_markers(actions: list[dict], frame_index: int) -> dict[
     return markers
 
 
-def build_pose_render_timeline(pose_samples: list[dict], total_frames: int) -> dict[int, dict]:
-    """Locally smooth adjacent measured samples without creating new pose evidence."""
-    all_frames = sorted({
-        int(sample.get("source_frame_id") or 0)
-        for sample in pose_samples
-        if 0 <= int(sample.get("source_frame_id") or 0) < total_frames
-    })
-    gaps = [right - left for left, right in zip(all_frames, all_frames[1:]) if right > left]
-    nominal_gap = float(np.median(gaps)) if gaps else 1.0
-    maximum_gap = max(1, round(nominal_gap * 1.75))
-    observed = sorted(
-        (
-            sample for sample in pose_samples
-            if sample.get("observed")
-            and 0 <= int(sample.get("source_frame_id") or 0) < total_frames
-        ),
-        key=lambda sample: int(sample.get("source_frame_id") or 0),
-    )
-    timeline: dict[int, dict] = {}
-
-    def measured(sample: dict, mode: str) -> dict:
-        return {
-            "source_frame_id": int(sample.get("source_frame_id") or 0),
-            "kpts_xy": sample.get("kpts_xy") or [],
-            "kpts_score": sample.get("kpts_score") or [],
-            "render_mode": mode,
-        }
-
-    for sample in observed:
-        timeline[int(sample.get("source_frame_id") or 0)] = measured(sample, "measured")
-
-    for left, right in zip(observed, observed[1:]):
-        left_frame = int(left.get("source_frame_id") or 0)
-        right_frame = int(right.get("source_frame_id") or 0)
-        gap = right_frame - left_frame
-        if gap <= 1 or gap > maximum_gap:
-            continue
-        left_points, right_points = left.get("kpts_xy") or [], right.get("kpts_xy") or []
-        left_scores, right_scores = left.get("kpts_score") or [], right.get("kpts_score") or []
-        keypoint_count = min(len(left_points), len(right_points), len(left_scores), len(right_scores))
-        for frame_index in range(left_frame + 1, right_frame):
-            alpha = (frame_index - left_frame) / gap
-            points, scores = [], []
-            for keypoint in range(keypoint_count):
-                left_score, right_score = (
-                    float(left_scores[keypoint] or 0), float(right_scores[keypoint] or 0),
-                )
-                if left_score >= .15 and right_score >= .15:
-                    points.append([
-                        round(float(left_points[keypoint][0]) * (1 - alpha)
-                              + float(right_points[keypoint][0]) * alpha, 6),
-                        round(float(left_points[keypoint][1]) * (1 - alpha)
-                              + float(right_points[keypoint][1]) * alpha, 6),
-                    ])
-                    scores.append(round(left_score * (1 - alpha) + right_score * alpha, 6))
-                elif left_score >= .15:
-                    points.append(list(left_points[keypoint]))
-                    scores.append(round(left_score * max(0.0, 1 - alpha), 6))
-                elif right_score >= .15:
-                    points.append(list(right_points[keypoint]))
-                    scores.append(round(right_score * max(0.0, alpha), 6))
-                else:
-                    points.append([0.0, 0.0])
-                    scores.append(0.0)
-            timeline[frame_index] = {
-                "source_frame_id": frame_index,
-                "kpts_xy": points,
-                "kpts_score": scores,
-                "render_mode": "interpolated",
-                "left_sample_frame": left_frame,
-                "right_sample_frame": right_frame,
-            }
-
-    if observed:
-        first = observed[0]
-        first_frame = int(first.get("source_frame_id") or 0)
-        for frame_index in range(max(0, first_frame - maximum_gap), first_frame):
-            timeline[frame_index] = measured(first, "edge_hold")
-        last = observed[-1]
-        last_frame = int(last.get("source_frame_id") or 0)
-        for frame_index in range(last_frame + 1, min(total_frames, last_frame + maximum_gap + 1)):
-            timeline[frame_index] = measured(last, "edge_hold")
-    return timeline
-
-
 def _draw_overlay_label(frame: np.ndarray, text: str, origin: tuple[int, int],
                         *, background: tuple[int, int, int]) -> None:
     scale = max(0.42, min(frame.shape[:2]) / 900)
@@ -821,15 +465,6 @@ REPLAY_LIMB_COLORS = {
     "left_foot": (106, 179, 255),
     "right_foot": (87, 222, 143),
 }
-
-
-def _overlay_text(frame: np.ndarray, text: str, origin: tuple[int, int], *,
-                  scale: float, color: tuple[int, int, int] = (235, 239, 241),
-                  thickness: int = 1) -> None:
-    cv2.putText(
-        frame, text, origin, cv2.FONT_HERSHEY_SIMPLEX, scale,
-        color, thickness, cv2.LINE_AA,
-    )
 
 
 def _scaled_hold_box(hold: dict, *, x: int, y: int, width: int, height: int,
@@ -1605,29 +1240,7 @@ def _render_replay_overlay_video_body(
         'audio_included':False}
 
 
-class ReplayAnalyzer(Protocol):
-    def analysis_contract(self, video_info: VideoInfo) -> dict: ...
-
-    def detect_holds(self, video: Path, *, route_color: str, video_info: VideoInfo,
-                     route_color_sample: dict | None, saved_route_reference: dict | None,
-                     trim_start_seconds: float, progress: Callable[[str, int], None],
-                     cancelled: Callable[[], bool]) -> dict: ...
-
-    def analyze(
-        self,
-        video: Path,
-        *,
-        route_color: str,
-        route_color_sample: dict | None = None,
-        confirmed_holds: dict | None = None,
-        video_info: VideoInfo,
-        progress: Callable[[str, int], None],
-        cancelled: Callable[[], bool],
-        telemetry: Callable[[dict], None],
-    ) -> dict: ...
-
-
-class ClimbReplayStore:
+class ClimbReplayStore(ReplayJobRecords):
     """File-backed, owner-scoped jobs kept outside the photo-route database."""
 
     def __init__(self, root: Path):
@@ -1645,22 +1258,14 @@ class ClimbReplayStore:
         self._public_cache_entries = 32
         self.recover_interrupted()
 
-    def _path(self, job_id: str) -> Path:
-        if not job_id or not job_id.isalnum():
-            raise HTTPException(404, "未找到复盘任务")
-        return self.jobs / job_id / "job.json"
+    def _public_cache_context(self):
+        """Keep runtime projection flags in the legacy replacement namespace."""
+        return replay_visual_enabled()
 
-    def _deletion_path(self, job_id: str) -> Path:
-        if not job_id or not job_id.isalnum():
-            raise HTTPException(404, "未找到删除任务")
-        return self.deletions / f"{job_id}.json"
-
-    def _read(self, job_id: str) -> dict:
-        path = self._path(job_id)
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            raise HTTPException(404, "未找到复盘任务")
+    def _commit_record(self, job_id: str, job: dict) -> None:
+        """Keep the clock and atomic writer dynamic while the record lock is held."""
+        job["updated_at"] = utcnow()
+        _atomic_json(self._path(job_id), job)
 
     @staticmethod
     def _public(job: dict) -> dict:
@@ -1692,14 +1297,6 @@ class ClimbReplayStore:
         if job.get('skeleton_only'):
             public = without_hold_data(public)
         return public
-
-    @staticmethod
-    def _sha256(path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            while chunk := stream.read(1024 * 1024):
-                digest.update(chunk)
-        return digest.hexdigest()
 
     def create(
         self,
@@ -2392,77 +1989,6 @@ class ClimbReplayStore:
                               stage="视频已整理，准备分析", progress=12)
         return updated
 
-    def get(self, job_id: str, owner: str | None = None, *, private=False) -> dict:
-        with self._lock:
-            if not private:
-                return self._cached_public(job_id, owner)
-            job = self._read(job_id)
-        if owner is not None and job.get("owner") != owner:
-            raise HTTPException(404, "未找到复盘任务")
-        return job if private else self._public(job)
-
-    def _cached_public(self, job_id: str, owner: str | None) -> dict:
-        """Called under the store lock; atomic replacements invalidate snapshots."""
-        path = self._path(job_id)
-        def fingerprint():
-            stat = path.stat()
-            return (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino,
-                    replay_visual_enabled())
-        try:
-            version = fingerprint()
-        except OSError:
-            previous = self._public_cache.pop(job_id, None)
-            if previous:
-                self._public_cache_bytes -= len(previous[2])
-            raise HTTPException(404, "未找到复盘任务")
-        cached = self._public_cache.get(job_id)
-        if cached and cached[0] == version:
-            if owner is not None and cached[1] != owner:
-                raise HTTPException(404, "未找到复盘任务")
-            self._public_cache.move_to_end(job_id)
-            return json.loads(cached[2])
-        job = self._read(job_id)
-        if owner is not None and job.get("owner") != owner:
-            raise HTTPException(404, "未找到复盘任务")
-        public = self._public(job)
-        encoded = json.dumps(public, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-        previous = self._public_cache.pop(job_id, None)
-        if previous:
-            self._public_cache_bytes -= len(previous[2])
-        try:
-            unchanged = fingerprint() == version
-        except OSError:
-            unchanged = False
-        if unchanged and len(encoded) <= self._public_cache_limit:
-            self._public_cache[job_id] = (version, job.get("owner"), encoded)
-            self._public_cache_bytes += len(encoded)
-            while (self._public_cache_bytes > self._public_cache_limit
-                   or len(self._public_cache) > self._public_cache_entries):
-                _, removed = self._public_cache.popitem(last=False)
-                self._public_cache_bytes -= len(removed[2])
-        return public
-
-    def list(self, owner: str) -> list[dict]:
-        found = []
-        for path in self.jobs.glob("*/job.json"):
-            try:
-                job = self.get(path.parent.name, owner)
-            except HTTPException as exc:
-                if exc.status_code != 404:
-                    raise
-                continue
-            if job.get("owner") == owner:
-                found.append(job)
-        return sorted(found, key=lambda item: item["created_at"], reverse=True)
-
-    def update(self, job_id: str, **changes) -> dict:
-        with self._lock:
-            job = self._read(job_id)
-            job.update(changes)
-            job["updated_at"] = utcnow()
-            _atomic_json(self._path(job_id), job)
-        return job
-
     def _media_path(self, job_id: str, job: dict, media_kind: str) -> Path:
         directory = self._path(job_id).parent.resolve()
         if media_kind == "source_video":
@@ -2787,17 +2313,6 @@ class ClimbReplayStore:
             receipt.update(state="failed", error="删除未完成，请稍后重试")
             _atomic_json(receipt_path, receipt)
 
-    def queued(self) -> list[str]:
-        jobs = []
-        for path in self.jobs.glob("*/job.json"):
-            try:
-                item = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if item.get("status") == "queued":
-                jobs.append(item)
-        return [item["id"] for item in sorted(jobs, key=lambda item: item["created_at"])]
-
     def recover_interrupted(self) -> None:
         for path in self.jobs.glob("*/job.json"):
             try:
@@ -3020,7 +2535,7 @@ def active_consent(job: dict) -> bool:
                 and latest.get("version") == REPLAY_CONSENT_VERSION)
 
 
-class ClimbReplayManager:
+class ClimbReplayManager(ReplayJobQueue):
     """One-at-a-time worker so video analysis cannot overlap itself."""
 
     def __init__(self, store: ClimbReplayStore, analyzer: ReplayAnalyzer,
@@ -3044,107 +2559,35 @@ class ClimbReplayManager:
         for job_id in store.queued():
             self.enqueue(job_id)
 
-    def enqueue(self, job_id: str) -> None:
-        self._enqueue("analysis", job_id)
-
-    def enqueue_delete(self, job_id: str) -> None:
-        self._enqueue("delete", job_id)
-
-    def enqueue_visual(self, job_id: str) -> None:
-        self._enqueue("visual", job_id)
-
-    def _enqueue(self, action: str, job_id: str) -> None:
-        item = (action, job_id)
-        with self._queue_lock:
-            if item not in self._queued:
-                self._queued.add(item)
-                try:
-                    self._queue.put_nowait(item)
-                except queue.Full:
-                    # Durable job records remain the bounded recovery source.
-                    self._queued.discard(item)
-
-    def ensure_capacity(self) -> None:
-        pending = 0
-        for path in self.store.jobs.glob("*/job.json"):
+    def _handle_worker_failure(self, action: str, job_id: str, exc: Exception) -> None:
+        """Record safe failures using the legacy logger and clock namespace."""
+        frames = []
+        traceback = exc.__traceback__
+        while traceback is not None:
+            code = traceback.tb_frame.f_code
+            frames.append({"file": Path(code.co_filename).name,
+                           "function": code.co_name, "line": traceback.tb_lineno})
+            traceback = traceback.tb_next
+        diagnostic = {"exception_type": type(exc).__name__, "frames": frames[-8:]}
+        identifier = getattr(exc, "name", None)
+        if isinstance(identifier, str) and identifier.isidentifier():
+            diagnostic["identifier"] = identifier
+        # Exception text can contain provider credentials or private paths.
+        logging.getLogger(__name__).error("Replay worker stopped: %s", json.dumps(diagnostic))
+        if action == "delete":
+            self.store.fail_deletion(job_id)
+        else:
             try:
-                item = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if item.get("status") in {"queued", "running"} or (item.get("result") or {}).get("visual_replay", {}).get("status") in {"queued", "running"}:
-                pending += 1
-        if pending >= 8:
-            raise HTTPException(429, "复盘处理队列已满，请稍后再试")
-
-    def _refill_queue(self) -> None:
-        candidates = [("delete", job_id) for job_id in self.store.pending_deletions()]
-        candidates.extend(("analysis", job_id) for job_id in self.store.queued())
-        for path in self.store.jobs.glob("*/job.json"):
-            try:
-                item = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if (item.get("result") or {}).get("visual_replay", {}).get("status") == "queued":
-                candidates.append(("visual", item["id"]))
-        for action, job_id in candidates:
-            if self._queue.full():
-                break
-            self._enqueue(action, job_id)
-
-    def _run(self) -> None:
-        while not self._stop.is_set():
-            item = self._queue.get()
-            if item is None:
-                return
-            with self._queue_lock:
-                self._queued.discard(item)
-            action, job_id = item
-            try:
-                if action == "delete":
-                    self.store.process_delete(job_id)
-                elif action == "visual":
-                    self._execute_visual(job_id)
-                else:
-                    self._execute(job_id)
-            except Exception as exc:
-                frames = []
-                traceback = exc.__traceback__
-                while traceback is not None:
-                    code = traceback.tb_frame.f_code
-                    frames.append({"file": Path(code.co_filename).name,
-                                   "function": code.co_name, "line": traceback.tb_lineno})
-                    traceback = traceback.tb_next
-                diagnostic = {"exception_type": type(exc).__name__, "frames": frames[-8:]}
-                identifier = getattr(exc, "name", None)
-                if isinstance(identifier, str) and identifier.isidentifier():
-                    diagnostic["identifier"] = identifier
-                # Exception text can contain provider credentials or private paths.
-                logging.getLogger(__name__).error("Replay worker stopped: %s", json.dumps(diagnostic))
-                if action == "delete":
-                    self.store.fail_deletion(job_id)
-                else:
-                    try:
-                        job = self.store.get(job_id, private=True)
-                        if job.get("status") in {"queued", "running"}:
-                            self.store.schedule_source_cleanup(job_id, outcome="failed")
-                            self.store.update(
-                                job_id, status="failed", stage="分析失败", progress=0,
-                                error="分析任务意外停止，请稍后重试",
-                                error_code="worker_failed", worker_failure=diagnostic, finished_at=utcnow(),
-                            )
-                    except Exception:
-                        pass
-            finally:
-                self._queue.task_done()
-                self._refill_queue()
-
-    def _cleanup_loop(self) -> None:
-        while not self._stop.wait(self._cleanup_interval_seconds):
-            try:
-                self.store.cleanup_due_media()
+                job = self.store.get(job_id, private=True)
+                if job.get("status") in {"queued", "running"}:
+                    self.store.schedule_source_cleanup(job_id, outcome="failed")
+                    self.store.update(
+                        job_id, status="failed", stage="分析失败", progress=0,
+                        error="分析任务意外停止，请稍后重试",
+                        error_code="worker_failed", worker_failure=diagnostic, finished_at=utcnow(),
+                    )
             except Exception:
-                # One malformed legacy record must not stop future cleanup passes.
-                continue
+                pass
 
     def _execute_visual(self, job_id: str) -> None:
         """A separate local-only retry leaves the successful analysis and media intact."""
@@ -4550,58 +3993,12 @@ def create_climb_replay_router(
     actions = getattr(store, "action_manager", None) or ActionManager(store)
     router.include_router(action_router(actions))
     replay_uploads = ChunkUploadStore(store.root / ".chunk-uploads")
-    configured_test_videos: list[dict[str, Any]] = []
-    for index, item in enumerate(test_video_cases or []):
-        path_value = item.get("path")
-        case_id = str(item.get("id") or f"case-{index + 1}").strip()
-        if not path_value or not case_id or not all(
-                char.isalnum() or char in {"-", "_"} for char in case_id):
-            continue
-        configured_test_videos.append({
-            "id": case_id,
-            "label": str(item.get("label") or f"本地案例 {index + 1}").strip(),
-            "description": str(item.get("description") or "本地验收素材").strip(),
-            "path": Path(path_value).resolve(),
-            "comparison_path": (Path(item["comparison_path"]).resolve()
-                                if item.get("comparison_path") else None),
-            "comparison_route_color": str(item.get("comparison_route_color") or "").strip(),
-            "comparison_action_count": int(item.get("comparison_action_count") or 0),
-            "source_url": item.get("source_url"),
-        })
-    if not configured_test_videos and test_video_path:
-        configured_test_videos.append({
-            "id": "case-1",
-            "label": "本地案例 1",
-            "description": "本地验收素材",
-            "path": Path(test_video_path).resolve(),
-            "comparison_path": None,
-            "comparison_route_color": "",
-            "comparison_action_count": 0,
-            "source_url": test_video_source_url,
-        })
+    test_video_catalog = ReplayTestVideoCatalog(
+        test_video_cases, test_video_path, test_video_source_url)
 
-    def available_test_videos() -> list[dict[str, Any]]:
-        return [item for item in configured_test_videos
-                if item["path"].is_file() and item["path"].suffix.lower() == ".mp4"]
+    available_test_videos = test_video_catalog.available_test_videos
 
-    def public_test_video(item: dict[str, Any]) -> dict[str, Any]:
-        path = item["path"]
-        return {
-            "id": item["id"],
-            "label": item["label"],
-            "description": item["description"],
-            "filename": path.name,
-            "size_bytes": path.stat().st_size,
-            "comparison_available": bool(
-                item.get("comparison_path")
-                and item["comparison_path"].is_file()
-                and item["comparison_path"].suffix.lower() == ".webm"
-            ),
-            "comparison_route_color": item.get("comparison_route_color") or None,
-            "comparison_action_count": item.get("comparison_action_count") or None,
-            "source_url": item.get("source_url"),
-            "usage": "local_acceptance_only",
-        }
+    public_test_video = test_video_catalog.public_test_video
 
     def owner(request: Request) -> str:
         user = getattr(request.state, "pilot_user", None)
@@ -4712,31 +4109,9 @@ def create_climb_replay_router(
         owner(request)
         return {"items": [public_test_video(item) for item in available_test_videos()]}
 
-    def test_video_response(item: dict[str, Any]) -> FileResponse:
-        return FileResponse(
-            item["path"],
-            media_type="video/mp4",
-            filename=item["path"].name,
-            headers={
-                "Cache-Control": "private, no-store",
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
+    test_video_response = test_video_catalog.test_video_response
 
-    def comparison_video_response(item: dict[str, Any], *, download: bool) -> FileResponse:
-        path = item.get("comparison_path")
-        if not path or not path.is_file() or path.suffix.lower() != ".webm":
-            raise HTTPException(404, "最新对照版视频不存在")
-        return FileResponse(
-            path,
-            media_type="video/webm",
-            filename=path.name if download else None,
-            content_disposition_type="attachment" if download else "inline",
-            headers={
-                "Cache-Control": "private, no-store",
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
+    comparison_video_response = test_video_catalog.comparison_video_response
 
     @router.get("/test-videos/{case_id}")
     def get_test_video_case(case_id: str, request: Request):

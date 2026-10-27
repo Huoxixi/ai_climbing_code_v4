@@ -429,8 +429,11 @@ const isDesktop = Boolean(window.__AI_CLIMBING_DESKTOP__)
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { ArrowDown, ArrowLeft, ArrowRight, CircleCheck, Clock, Crop, Delete, Document, EditPen, FolderOpened, Hide, Loading, Plus, Rank, RefreshRight, VideoCamera, View, Warning } from '@element-plus/icons-vue'
 import climbReplayService from '../services/climbReplayService'
+import { inspectVideo } from '../services/replayVideoMetadata.js'
+import { useReplayJobState, useReplayPlaybackState } from '../composables/useReplayPageState.js'
+import { errorText, poseVersionLabel, formatClock, jobStatusLabel, dateLabel } from '../services/replayPageLabels.js'
 import { useSmoothNumber } from '../services/useSmoothNumber.js'
-import { analysisDuration, analysisSeekTime, visualReplayState } from '../services/visualReplayPresentation.js'
+import { analysisDuration, analysisSeekTime } from '../services/visualReplayPresentation.js'
 import { nearestRouteColor, rgbToHex } from '../constants/routeColors.js'
 import UnifiedReplayPlayer from './UnifiedReplayPlayer.vue'
 const aiAnalysisConsent = ref(false)
@@ -443,7 +446,6 @@ import WorkspaceSheet from './ui/WorkspaceSheet.vue'
 import EditorDialog from './ui/EditorDialog.vue'
 
 const limbNames = { left_hand: '左手', right_hand: '右手', left_foot: '左脚', right_foot: '右脚' }
-const manualTechniqueNames = ['高抬脚', '锁臂', '旗式', '脚上方重心转移', '动态点', '跳跃', '主动摆荡换点', '抓点后制摆', '开门摆动']
 const fileInput = ref(null)
 const reanalysisOpen=ref(false)
 const samplesOpen=ref(false), historyOpen=ref(false), samplePage=ref(0), historyPage=ref(0)
@@ -610,17 +612,6 @@ function activateHoldReview() {
 }
 const unifiedPlayer = ref(null)
 const holdRepairOpen = ref(false)
-const comparisonFirstVideo = ref(null)
-const comparisonSecondVideo = ref(null)
-const comparisonPartnerId = ref('')
-const sameClimberConfirmed = ref(false)
-const segmentComparison = ref(null)
-const comparisonError = ref('')
-const comparisonLoading = ref(false)
-const reviewingSegmentId = ref('')
-const segmentForm = ref({})
-const reviewSaving = ref(false)
-const reviewError = ref('')
 const selectedFile = ref(null)
 const previewUrl = ref('')
 const videoMeta = ref(null)
@@ -691,23 +682,22 @@ const poseEdges = [
   [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
 ]
 
-const isBusy = computed(() => ['queued', 'running'].includes(activeJob.value?.status))
-const isJobDeleting = computed(() => deletionReceipt.value
-  ? deletionReceipt.value.state === 'queued'
-  : activeJob.value?.deletion?.state === 'queued')
-const result = computed(() => activeJob.value?.result || null)
-const reviewResult = computed(() => activeJob.value?.hold_edit_draft || result.value || activeJob.value?.hold_draft || null)
+const replayJobState = useReplayJobState({ activeJob, deletionReceipt, uploadProgress, limbNames })
+const {
+  isBusy, isJobDeleting, result, reviewResult, allHoldsConfirmed,
+  visualState, manualHoldOperations, activeManualHoldCount, sourceMedia, sourceAvailable,
+  sourcePlayable, overlayMedia, overlayAvailable, reviewedOverlayAvailable, currentRun,
+  analysisEvidence, statusTitle, statusDetail, sourceRetentionLabel, overlayRetentionLabel,
+  elapsedLabel, limbRows,
+} = replayJobState
 const localHoldAnalysisRunning = ref(false)
 const selectedHoldId = ref('')
-const allHoldsConfirmed = computed(() => !!activeJob.value?.holds_revision
-  && activeJob.value.holds_confirmation?.revision === activeJob.value.holds_revision)
 const canStartSkeleton = computed(() => consentPolicy.value && sourcePlayable.value && !isBusy.value && !isSubmitting.value && !holdReviewSaving.value && !editorOpen.value && !isJobDeleting.value && ['succeeded','awaiting_hold_review','failed','cancelled'].includes(activeJob.value?.status))
 const canStartAnalysis = computed(() => allHoldsConfirmed.value
   && !editorOpen.value
   && consentPolicy.value && sourcePlayable.value && !isBusy.value && !isSubmitting.value
   && !holdReviewSaving.value && !holdPreviewLoading.value && !holdPreview.value && !isJobDeleting.value
   && ['succeeded', 'awaiting_hold_review'].includes(activeJob.value?.status))
-const visualState = computed(() => visualReplayState(activeJob.value))
 const isVisualPlayback = computed(() => playbackKind.value === 'overlay'
   && visualState.value.start !== null && playbackTime.value >= visualState.value.start)
 const canRefineSampledHolds = computed(() => activeJob.value?.status === 'succeeded'
@@ -721,170 +711,6 @@ const canAddHoldAtPoint = computed(() => !activeJob.value?.skeleton_only && ['su
   && sourcePlayable.value && !isSubmitting.value && !isJobDeleting.value && !activeJob.value?.segment_reviews?.length)
 const canUndoManualHold = computed(() => canAddHoldAtPoint.value
   && (reviewResult.value?.holds || []).some((hold) => ['user_confirmed_video_click', 'user_confirmed_video_candidate'].includes(hold.identity_source)))
-const manualHoldOperations = computed(() => {
-  const holds = reviewResult.value?.holds || []
-  const fps = Number(activeJob.value?.video?.fps)
-  let ordinal = 0
-  return (activeJob.value?.hold_review_history || [])
-    .filter((entry) => ['add_hold_at_point', 'promote_candidate', 'edit_hold_contour'].includes(entry.operation))
-    .map((entry) => {
-      ordinal += 1
-      const hold = holds.find((item) => ['user_confirmed_video_click', 'user_confirmed_video_candidate'].includes(item.identity_source)
-        && item.review_version === entry.version)
-      const box = entry.bbox || hold?.bbox
-      const pointXy = entry.point_xy || (box ? [box[0] + box[2] / 2, box[1] + box[3] / 2] : null)
-      const timeSeconds = entry.time_seconds != null ? Number(entry.time_seconds)
-        : (hold?.source_frame != null && Number.isFinite(fps) && fps > 0 ? Number(hold.source_frame) / fps : null)
-      return { ...entry, ordinal, active:Boolean(hold), point_xy:pointXy, time_seconds:timeSeconds }
-    })
-})
-const activeManualHoldCount = computed(() => manualHoldOperations.value.filter((entry) => entry.active).length)
-const confirmedSegmentCount = computed(() => (activeJob.value?.reviewed_segments || [])
-  .filter((segment) => segment.source === 'user_confirmed').length)
-const comparisonCandidates = computed(() => recentJobs.value.filter((job) => (
-  job.id !== activeJob.value?.id && job.status === 'succeeded'
-  && job.route_id && job.route_id === activeJob.value?.route_id
-  && job.route_version_id && job.route_version_id === activeJob.value?.route_version_id
-)))
-const comparisonPartner = computed(() => recentJobs.value.find((job) => job.id === comparisonPartnerId.value))
-function comparisonVideoUrl(job) {
-  if (!job?.id) return ''
-  if (job.media?.source_video?.status === 'available') return climbReplayService.mediaUrl(job.id, 'source-video')
-  if (job.media?.reviewed_overlay_video?.status === 'available') return climbReplayService.mediaUrl(job.id, 'reviewed-overlay-video')
-  if (job.media?.overlay_video?.status === 'available') return climbReplayService.mediaUrl(job.id, 'overlay-video')
-  return ''
-}
-async function runSegmentComparison() {
-  comparisonLoading.value = true
-  comparisonError.value = ''
-  segmentComparison.value = null
-  try {
-    segmentComparison.value = await climbReplayService.compare(activeJob.value.id, comparisonPartnerId.value, sameClimberConfirmed.value)
-  } catch (error) {
-    comparisonError.value = error.response?.data?.detail || '暂时无法完成对比'
-  } finally {
-    comparisonLoading.value = false
-  }
-}
-function comparisonReason(reason) {
-  return ({ unconfirmed_hold_identity: '岩点身份未确认', hold_match_weak: '照片与视频的岩点匹配证据不足', wall_alignment_insufficient: '镜头对齐不足',
-    timestamps_unavailable: '时间戳不足', matching_segment_missing: '没有相同手脚和起终岩点的动作段' })[reason] || '证据不足'
-}
-function comparisonStatus(pair) {
-  return ({ uncertain: '当前精度下无法确认变化', shorter: '第二次较短', longer: '第二次较长' })[pair.status] || '不可比'
-}
-function signedSeconds(value) { return `${value > 0 ? '+' : ''}${Number(value).toFixed(2)}` }
-function seekComparisonVideo(which, seconds) {
-  const player = which === 'first' ? comparisonFirstVideo.value : comparisonSecondVideo.value
-  const job = which === 'first' ? activeJob.value : comparisonPartner.value
-  if (player) { player.currentTime = analysisSeekTime(job, seconds); player.play().catch(() => {}) }
-}
-function limitComparisonPlayback(which) {
-  const player = which === 'first' ? comparisonFirstVideo.value : comparisonSecondVideo.value
-  const job = which === 'first' ? activeJob.value : comparisonPartner.value
-  const end = analysisDuration(job)
-  if (player && end !== null && player.currentTime >= end) {
-    player.pause()
-    player.currentTime = analysisSeekTime(job, end)
-  }
-}
-function routeHoldLabel(id) {
-  const hold = (result.value?.holds || []).find((item) => String(item.saved_object_id) === String(id))
-  return hold ? `岩点 ${hold.id}` : `线路岩点 ${String(id).slice(0, 8)}`
-}
-function segmentHoldLabel(segment, end) {
-  const routeId = segment?.[`${end}_route_hold_id`]
-  return routeId ? routeHoldLabel(routeId) : `岩点 ${segment?.[`${end}_hold_id`] || '?'}（未确认）`
-}
-function beginSegmentReview(segment) {
-  reviewError.value = ''
-  reviewingSegmentId.value = segment.id
-  segmentForm.value = {
-    limb: segment.limb,
-    source_route_hold_id: String(segment.source_route_hold_id || ''),
-    target_route_hold_id: String(segment.target_route_hold_id || ''),
-    start_time_seconds: segment.start_time_seconds,
-    end_time_seconds: segment.end_time_seconds,
-    technique_label: segment.technique_labels?.[0]?.name || '',
-  }
-}
-function seekReviewTime(seconds) {
-  if (videoElement.value && Number.isFinite(Number(seconds))) videoElement.value.currentTime = analysisSeekTime(activeJob.value, seconds)
-}
-async function saveSegmentReview() {
-  reviewSaving.value = true
-  reviewError.value = ''
-  try {
-    activeJob.value = await climbReplayService.reviewSegment(activeJob.value.id, reviewingSegmentId.value, {
-      ...segmentForm.value, technique_label: segmentForm.value.technique_label || null,
-    })
-    reviewingSegmentId.value = ''
-    segmentComparison.value = null
-    await loadJobs()
-  } catch (error) { reviewError.value = error.response?.data?.detail || '复核保存失败' }
-  finally { reviewSaving.value = false }
-}
-async function revertSegmentReview(segmentId) {
-  reviewError.value = ''
-  try {
-    activeJob.value = await climbReplayService.revertSegmentReview(activeJob.value.id, segmentId)
-    segmentComparison.value = null
-    reviewingSegmentId.value = ''
-    await loadJobs()
-  } catch (error) { reviewError.value = error.response?.data?.detail || '撤销失败' }
-}
-const sourceMedia = computed(() => activeJob.value?.media?.source_video || null)
-const sourceAvailable = computed(() => sourceMedia.value?.status === 'available')
-const sourcePlayable = computed(() => sourceAvailable.value &&
-  (!activeJob.value?.preparation || activeJob.value.preparation.status === 'completed'))
-const overlayMedia = computed(() => activeJob.value?.media?.overlay_video || null)
-const overlayAvailable = computed(() => overlayMedia.value?.status === 'available')
-const reviewedOverlayAvailable = computed(() => activeJob.value?.media?.reviewed_overlay_video?.status === 'available')
-const comparisonCase = computed(() => testVideoCases.value.find((item) => (
-  item.comparison_available
-  && !visualState.value.visible
-  && activeJob.value?.status === 'succeeded'
-  && item.filename === activeJob.value?.original_name
-  && item.comparison_route_color === activeJob.value?.route_color
-  && Number(item.comparison_action_count) === actionEvents.value.length
-)) || null)
-const replayVideoAvailable = computed(() => reviewedOverlayAvailable.value || Boolean(comparisonCase.value) || overlayAvailable.value)
-const replayVideoUrl = computed(() => {
-  if (activeJob.value?.id && reviewedOverlayAvailable.value) return climbReplayService.mediaUrl(activeJob.value.id, 'reviewed-overlay-video')
-  if (comparisonCase.value) return climbReplayService.comparisonVideoUrl(comparisonCase.value.id)
-  if (activeJob.value?.id && overlayAvailable.value) {
-    return climbReplayService.mediaUrl(activeJob.value.id, 'overlay-video')
-  }
-  return ''
-})
-const playbackKind = computed(() => {
-  if (previewUrl.value) return 'preview'
-  if (preferredPlaybackKind.value === 'overlay' && replayVideoAvailable.value) return 'overlay'
-  if (preferredPlaybackKind.value === 'source' && sourcePlayable.value) return 'source'
-  if (replayVideoAvailable.value) return 'overlay'
-  if (sourcePlayable.value) return 'source'
-  return 'none'
-})
-const playbackUrl = computed(() => {
-  if (previewUrl.value) return previewUrl.value
-  if (!activeJob.value?.id) return ''
-  if (playbackKind.value === 'overlay') return replayVideoUrl.value
-  if (playbackKind.value === 'source') return climbReplayService.mediaUrl(activeJob.value.id, 'source-video')
-  return ''
-})
-const playerMode = computed(() => {
-  if (['preview', 'source'].includes(playbackKind.value)) return 'interactive'
-  if (playbackKind.value === 'overlay') return 'rendered'
-  return 'none'
-})
-const storedOverlayDownloadUrl = computed(() => activeJob.value?.id && overlayAvailable.value
-  ? climbReplayService.mediaUrl(activeJob.value.id, 'overlay-video', true)
-  : '')
-const replayDownloadUrl = computed(() => {
-  if (activeJob.value?.id && reviewedOverlayAvailable.value) return climbReplayService.mediaUrl(activeJob.value.id, 'reviewed-overlay-video', true)
-  if (comparisonCase.value) return climbReplayService.comparisonVideoUrl(comparisonCase.value.id, true)
-  return storedOverlayDownloadUrl.value
-})
 const poseSamples = computed(() => (result.value?.pose_samples || []).filter((sample) => sample.observed))
 const contactEvents = computed(() => (result.value?.attempt?.contacts || [])
   .filter((event) => Number.isFinite(Number(event.start_time_seconds)))
@@ -938,6 +764,14 @@ const actionEvents = computed(() => {
     return namedEvent
   })
 })
+
+const {
+  comparisonCase, replayVideoAvailable, replayVideoUrl, playbackKind, playbackUrl,
+  playerMode, storedOverlayDownloadUrl, replayDownloadUrl,
+} = useReplayPlaybackState(
+  { activeJob, previewUrl, preferredPlaybackKind, testVideoCases, actionEvents },
+  replayJobState, climbReplayService,
+)
 const activeActionKey = computed(() => {
   if (isVisualPlayback.value) return ''
   let active = null
@@ -1000,18 +834,6 @@ const activeContactEvents = computed(() => contactEvents.value.filter((event) =>
   const end = Number.isFinite(Number(event.end_time_seconds)) ? Number(event.end_time_seconds) : Number(event.start_time_seconds)
   return playbackTime.value >= Number(event.start_time_seconds) && playbackTime.value <= end + .08
 }))
-const currentRun = computed(() => {
-  const attempt = activeJob.value?.attempt || 1
-  return [...(activeJob.value?.analysis_runs || [])].reverse().find((run) => run.attempt === attempt)
-})
-const analysisEvidence = computed(() => result.value?.analysis || currentRun.value?.analysis || null)
-function poseVersionLabel(value) {
-  const spec = value?.models?.pose || value?.analysis?.models?.pose?.name || ''
-  const model = typeof spec === 'string' ? spec : spec?.name || ''
-  if (model.startsWith('rtmw-l-384x288')) return 'RTMW-L · 本地骨架'
-  if (model.startsWith('aliyun-viapi')) return '阿里云骨架 · 历史版本'
-  return model ? '历史骨架版本' : '待使用 RTMW-L 分析'
-}
 const analysisUsage = computed(() => analysisEvidence.value?.usage || {})
 const analysisCost = computed(() => analysisEvidence.value?.cost || {})
 const analysisTimings = computed(() => analysisEvidence.value?.timings_ms || {})
@@ -1019,43 +841,6 @@ const trimDuration = computed(() => Math.max(0, Number(trimEndSeconds.value || 0
 const trimIsValid = computed(() => !videoMeta.value || (trimStartSeconds.value >= 0 && trimEndSeconds.value > trimStartSeconds.value && trimDuration.value <= MAX_VIDEO_SECONDS + .05 && trimEndSeconds.value <= videoMeta.value.duration + .05))
 const canSubmitSkeleton = computed(() => selectedFile.value && consentPolicy.value && trimIsValid.value && !isBusy.value && !isSubmitting.value && !isDeleting.value)
 const canSubmit = computed(() => selectedFile.value && routeColor.value && colorSample.value?.source === 'video' && consentPolicy.value && trimIsValid.value && !isBusy.value && !isSubmitting.value && !isDeleting.value)
-const statusTitle = computed(() => isJobDeleting.value ? '正在删除整次记录' : ({
-  queued: '任务正在排队', running: activeJob.value?.stage || '正在分析视频',
-  succeeded: '分析完成', failed: '分析未完成', cancelled: '任务已取消',
-  awaiting_hold_review: '等待全部岩点确认',
-}[activeJob.value?.status] || '准备中'))
-const statusDetail = computed(() => {
-  if (isJobDeleting.value) return '正在停止任务并删除原视频、复盘指标与派生文件。'
-  if (activeJob.value?.status === 'failed') return activeJob.value.error || '请检查视频和本地骨架模型后重试。'
-  if (activeJob.value?.status === 'cancelled') return sourceAvailable.value ? '原视频仍可用于重新分析。' : '原视频已删除，本次任务不能重新分析。'
-  if (activeJob.value?.status === 'succeeded') return '结果为机器估算，请结合原视频复核。'
-  if (activeJob.value?.status === 'awaiting_hold_review') return '检查岩点后点击“确认全部岩点”，再点击“开始复盘”。'
-  if (activeJob.value?.status === 'queued') return uploadProgress.value < 100 ? `视频上传 ${uploadProgress.value}%` : '前方任务完成后会自动开始。'
-  return '系统正在处理视频并识别动作；可以稍后在任务列表查看结果。'
-})
-const sourceRetentionLabel = computed(() => {
-  const source = sourceMedia.value
-  if (!source) return '未记录原视频保留状态'
-  if (source.status === 'deleted') return `已于 ${dateLabel(source.deleted_at)} 删除，复盘指标仍保留`
-  return '原片保留中，仅当前账号可见，可主动删除'
-})
-const overlayRetentionLabel = computed(() => {
-  const overlay = overlayMedia.value
-  if (!overlay) return '尚未生成'
-  if (overlay.status === 'available') return '私密保留，可单独导出或删除'
-  if (overlay.status === 'superseded') return '重新分析后旧叠加视频已替换'
-  if (overlay.status === 'deleted') return `已于 ${dateLabel(overlay.deleted_at)} 删除`
-  return '当前不可用'
-})
-const elapsedLabel = computed(() => {
-  const seconds = result.value?.attempt?.elapsed_seconds
-  return Number.isFinite(seconds) ? `${seconds.toFixed(1)} 秒` : '待复核'
-})
-const limbRows = computed(() => Object.entries(limbNames).map(([key, label]) => {
-  const value = result.value?.attempt?.per_limb?.[key]
-  return { key, label, seconds: `${Number(value?.contact_seconds || 0).toFixed(1)} 秒`,
-    holds: value?.holds?.length ? `岩点 ${value.holds.join('、')}` : '未确认接触' }
-}))
 
 function openPicker() { if (editorOpen.value && !window.confirm('更换视频会放弃尚未保存的轮廓，是否继续？')) return; editorOpen.value=false; fileInput.value?.click() }
 function applyColorSample(rgb, source, point = null) {
@@ -1134,29 +919,6 @@ function pickColorFromFrame(event) {
 }
 function cancelColorPicking() { colorPicking.value = false; sampledFrameRect = null }
 let selectedFileToken = 0
-async function inspectVideo(file) {
-  const url = URL.createObjectURL(file)
-  const probe = document.createElement('video')
-  let timer
-  try {
-    const metadata = await new Promise((resolve, reject) => {
-      timer = window.setTimeout(() => reject(new Error('视频信息读取超时')), 8000)
-      probe.preload = 'metadata'
-      probe.onloadedmetadata = () => { window.clearTimeout(timer); resolve({ width: probe.videoWidth, height: probe.videoHeight, duration: probe.duration }) }
-      probe.onerror = () => { window.clearTimeout(timer); reject(new Error('浏览器无法预览此视频编码')) }
-      probe.src = url
-    })
-    if (!metadata.width || !metadata.height || !Number.isFinite(metadata.duration)) throw new Error('无法读取视频尺寸或时长，请重新选择文件。')
-    return metadata
-  } finally {
-    window.clearTimeout(timer)
-    probe.onloadedmetadata = null
-    probe.onerror = null
-    probe.removeAttribute('src')
-    probe.load()
-    URL.revokeObjectURL(url)
-  }
-}
 async function useFile(file) {
   formError.value = ''
   formNotice.value = ''
@@ -1220,10 +982,6 @@ async function useTestVideo(testCase) {
       ? '本机测试视频不可用，请重新启动本地服务后再试。'
       : errorText(error)
   } finally { loadingTestCaseId.value = '' }
-}
-function errorText(error) {
-  if (error?.response?.status === 404) return '本地复盘服务尚未启用，请重新启动本地服务。'
-  return error?.response?.data?.detail || error?.message || '操作失败，请稍后重试。'
 }
 async function submit(skipHolds = false) {
   if (skipHolds ? !canSubmitSkeleton.value : !canSubmit.value) return
@@ -1439,12 +1197,6 @@ function selectJob(job) {
   holdReviewError.value = ''
   holdReviewNotice.value = ''
   inspectedHoldReviewVersion.value = null
-  reviewingSegmentId.value = ''
-  reviewError.value = ''
-  comparisonPartnerId.value = ''
-  sameClimberConfirmed.value = false
-  segmentComparison.value = null
-  comparisonError.value = ''
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   previewUrl.value = ''
   selectedFile.value = null
@@ -1938,11 +1690,6 @@ function inferSupplementaryActionName(event, sourceHoldId, activeSameHold, first
   if (Number(sourceHoldId) === holdId) return `原点调整 ${holdId}`
   return `换点 ${sourceHoldId}→${holdId}`
 }
-function formatClock(value) {
-  const seconds = Math.max(0, Number(value || 0))
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}.${Math.floor((seconds % 1) * 10)}`
-}
 function formatNumber(value) {
   return Number.isFinite(Number(value)) ? Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '—'
 }
@@ -1967,14 +1714,6 @@ function formatSeconds(value) {
   const seconds = Number(value)
   if (!Number.isFinite(seconds)) return '待计算'
   return `${seconds.toFixed(seconds < 10 ? 1 : 0)} 秒`
-}
-function jobStatusLabel(job) {
-  if (job.deletion?.state === 'queued') return '删除中'
-  return ({ queued: '排队中', running: '处理中', awaiting_hold_review: '待确认岩点', succeeded: '已完成', failed: '失败', cancelled: '已取消' })[job.status] || job.status
-}
-function dateLabel(value) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
 watch(() => activeJob.value?.id, () => { aiAnalysisConsent.value=false; reviewZoom.value=1;resetReviewZoom(1);reviewCenter.value={x:.5,y:.5};reviewPanning.value=false;reviewPanGesture=null;reviewTouches.clear();reviewTouchPan=null })

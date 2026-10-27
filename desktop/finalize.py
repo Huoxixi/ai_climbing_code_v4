@@ -10,7 +10,7 @@ import sys
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(PROJECT))
-from desktop.package_scope import assert_local_package
+from desktop.package_scope import assert_local_package, copy_desktop_runtime
 
 
 def digest(path):
@@ -27,16 +27,18 @@ def main():
     if not (package / 'runtime/python312._pth').is_file() or not (package / 'AiClimbing.exe').is_file():
         raise RuntimeError('Not an owned desktop build output')
     assert_local_package(package)
-    for source in (PROJECT / 'desktop').glob('*.py'):
-        if source.name in {'build.py', 'build_detectron.py', 'finalize.py', 'test_desktop.py'}:
-            continue
-        shutil.copy2(source, package / 'desktop' / source.name)
+    copy_desktop_runtime(PROJECT / 'desktop', package / 'desktop')
     for name in ('使用说明.md', 'THIRD_PARTY.md'):
         shutil.copy2(PROJECT / 'desktop' / name, package / ('licenses' if name == 'THIRD_PARTY.md' else '') / name)
     shutil.copy2(PROJECT / 'desktop/独立电脑验收.ps1', package / '独立电脑验收.ps1')
-    baseline = {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=PROJECT, text=True).strip(),
-                'working_tree_changes': subprocess.check_output(['git', '-c', 'core.quotepath=false', 'status', '--short'], cwd=PROJECT, text=True, encoding='utf-8').splitlines(),
-                'includes_uncommitted_features': True}
+    git_query = ['git', '-c', 'safe.directory=' + PROJECT.resolve().as_posix()]
+    runtime_sources = ['backend/boulder_local_app.py'] + sorted(
+        path.relative_to(package).as_posix()
+        for folder in ('backend/core', 'desktop') for path in (package / folder).glob('*.py'))
+    baseline = {'commit': subprocess.check_output([*git_query, 'rev-parse', 'HEAD'], cwd=PROJECT, text=True).strip(),
+                'working_tree_changes': subprocess.check_output([*git_query, '-c', 'core.quotepath=false', 'status', '--short'], cwd=PROJECT, text=True, encoding='utf-8').splitlines(),
+                'includes_uncommitted_features': True,
+                'runtime_source_manifest': {'file': 'file-manifest.json', 'paths': runtime_sources}}
     (package / 'source-baseline.json').write_text(json.dumps(baseline, ensure_ascii=False, indent=2), encoding='utf-8')
     records = []
     forbidden = {'.local', '.private', 'node_modules', '.git', 'accounts.sqlite3', 'photo-vision.env', '.env', 'cloud.dpapi', 'instance.json'}

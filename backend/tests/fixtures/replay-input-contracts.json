@@ -1,0 +1,482 @@
+{
+  "ReplayColorSample": {
+    "additionalProperties": false,
+    "properties": {
+      "source": {
+        "enum": [
+          "palette",
+          "video"
+        ],
+        "title": "Source",
+        "type": "string"
+      },
+      "hex": {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "title": "Hex",
+        "type": "string"
+      },
+      "rgb": {
+        "items": {
+          "type": "integer"
+        },
+        "maxItems": 3,
+        "minItems": 3,
+        "title": "Rgb",
+        "type": "array"
+      },
+      "time_seconds": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Time Seconds"
+      },
+      "point_xy": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Point Xy"
+      }
+    },
+    "required": [
+      "source",
+      "hex",
+      "rgb"
+    ],
+    "title": "ReplayColorSample",
+    "type": "object"
+  },
+  "ReplayUploadCreate": {
+    "$defs": {
+      "ReplayColorSample": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "enum": [
+              "palette",
+              "video"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "hex": {
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Hex",
+            "type": "string"
+          },
+          "rgb": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Rgb",
+            "type": "array"
+          },
+          "time_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Seconds"
+          },
+          "point_xy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Point Xy"
+          }
+        },
+        "required": [
+          "source",
+          "hex",
+          "rgb"
+        ],
+        "title": "ReplayColorSample",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "filename": {
+        "maxLength": 255,
+        "minLength": 1,
+        "title": "Filename",
+        "type": "string"
+      },
+      "content_type": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Content Type",
+        "type": "string"
+      },
+      "size_bytes": {
+        "exclusiveMinimum": 0,
+        "title": "Size Bytes",
+        "type": "integer"
+      },
+      "skip_holds": {
+        "default": false,
+        "title": "Skip Holds",
+        "type": "boolean"
+      },
+      "route_id": {
+        "default": "",
+        "maxLength": 64,
+        "title": "Route Id",
+        "type": "string"
+      },
+      "route_color": {
+        "default": "",
+        "maxLength": 40,
+        "title": "Route Color",
+        "type": "string"
+      },
+      "consent_version": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Consent Version",
+        "type": "string"
+      },
+      "consent_granted": {
+        "title": "Consent Granted",
+        "type": "boolean"
+      },
+      "retention_mode": {
+        "default": "keep_private_original",
+        "enum": [
+          "delete_after_processing",
+          "keep_private_original"
+        ],
+        "title": "Retention Mode",
+        "type": "string"
+      },
+      "trim_start_seconds": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Trim Start Seconds",
+        "type": "number"
+      },
+      "trim_end_seconds": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Trim End Seconds"
+      },
+      "route_color_sample": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ReplayColorSample"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "filename",
+      "content_type",
+      "size_bytes",
+      "consent_version",
+      "consent_granted"
+    ],
+    "title": "ReplayUploadCreate",
+    "type": "object"
+  },
+  "ReplayRetryCreate": {
+    "$defs": {
+      "FocusWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "start_seconds": {
+            "minimum": 0,
+            "title": "Start Seconds",
+            "type": "number"
+          },
+          "end_seconds": {
+            "exclusiveMinimum": 0,
+            "title": "End Seconds",
+            "type": "number"
+          },
+          "fps": {
+            "default": 20,
+            "enum": [
+              15,
+              20
+            ],
+            "title": "Fps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start_seconds",
+          "end_seconds"
+        ],
+        "title": "FocusWindow",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "skip_holds": {
+        "default": false,
+        "title": "Skip Holds",
+        "type": "boolean"
+      },
+      "consent_version": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Consent Version",
+        "type": "string"
+      },
+      "consent_granted": {
+        "title": "Consent Granted",
+        "type": "boolean"
+      },
+      "pose_fps": {
+        "anyOf": [
+          {
+            "enum": [
+              4,
+              10,
+              15,
+              20
+            ],
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Pose Fps"
+      },
+      "focus_windows": {
+        "items": {
+          "$ref": "#/$defs/FocusWindow"
+        },
+        "maxItems": 20,
+        "title": "Focus Windows",
+        "type": "array"
+      }
+    },
+    "required": [
+      "consent_version",
+      "consent_granted"
+    ],
+    "title": "ReplayRetryCreate",
+    "type": "object"
+  },
+  "ReplayHoldsConfirmation": {
+    "additionalProperties": false,
+    "properties": {
+      "revision": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Revision",
+        "type": "string"
+      }
+    },
+    "required": [
+      "revision"
+    ],
+    "title": "ReplayHoldsConfirmation",
+    "type": "object"
+  },
+  "ReplayComparisonCreate": {
+    "additionalProperties": false,
+    "properties": {
+      "first_job_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "First Job Id",
+        "type": "string"
+      },
+      "second_job_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Second Job Id",
+        "type": "string"
+      },
+      "same_climber_confirmed": {
+        "default": false,
+        "title": "Same Climber Confirmed",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "first_job_id",
+      "second_job_id"
+    ],
+    "title": "ReplayComparisonCreate",
+    "type": "object"
+  },
+  "ReplaySegmentReview": {
+    "additionalProperties": false,
+    "properties": {
+      "limb": {
+        "enum": [
+          "left_hand",
+          "right_hand",
+          "left_foot",
+          "right_foot"
+        ],
+        "title": "Limb",
+        "type": "string"
+      },
+      "source_route_hold_id": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Source Route Hold Id",
+        "type": "string"
+      },
+      "target_route_hold_id": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Target Route Hold Id",
+        "type": "string"
+      },
+      "start_time_seconds": {
+        "minimum": 0,
+        "title": "Start Time Seconds",
+        "type": "number"
+      },
+      "end_time_seconds": {
+        "exclusiveMinimum": 0,
+        "title": "End Time Seconds",
+        "type": "number"
+      },
+      "technique_label": {
+        "anyOf": [
+          {
+            "enum": [
+              "高抬脚",
+              "锁臂",
+              "旗式",
+              "脚上方重心转移",
+              "动态点",
+              "跳跃",
+              "主动摆荡换点",
+              "抓点后制摆",
+              "开门摆动"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Technique Label"
+      }
+    },
+    "required": [
+      "limb",
+      "source_route_hold_id",
+      "target_route_hold_id",
+      "start_time_seconds",
+      "end_time_seconds"
+    ],
+    "title": "ReplaySegmentReview",
+    "type": "object"
+  },
+  "ReplayHoldPoint": {
+    "additionalProperties": false,
+    "properties": {
+      "point_xy": {
+        "items": {
+          "type": "number"
+        },
+        "maxItems": 2,
+        "minItems": 2,
+        "title": "Point Xy",
+        "type": "array"
+      },
+      "time_seconds": {
+        "minimum": 0,
+        "title": "Time Seconds",
+        "type": "number"
+      },
+      "region_xyxy": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Xyxy"
+      },
+      "proposal_id": {
+        "anyOf": [
+          {
+            "maxLength": 32,
+            "minLength": 32,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposal Id"
+      }
+    },
+    "required": [
+      "point_xy",
+      "time_seconds"
+    ],
+    "title": "ReplayHoldPoint",
+    "type": "object"
+  }
+}
