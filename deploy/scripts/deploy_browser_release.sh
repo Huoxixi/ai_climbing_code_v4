@@ -16,6 +16,11 @@ if [[ "$release_mode" == ssh-maintenance ]]; then
   exit 0
 fi
 [[ "$release_mode" == browser ]] || exit 1
+# A reviewed companion-only release leaves the climbing code release untouched.
+if [[ -f "$source_dir/deploy/study-companion/release.json" ]] && python3.12 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("tag")==sys.argv[2] else 1)' "$source_dir/deploy/study-companion/release.json" "$tag"; then
+  python3.12 -I "$source_dir/deploy/study-companion/publish.py" "$tag"
+  exit 0
+fi
 release_root=/opt/ai-climbing/releases
 current=/opt/ai-climbing/current
 building="$release_root/.$tag.building"
