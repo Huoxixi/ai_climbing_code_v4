@@ -10,5 +10,7 @@
     "sha256": "6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6",
     "sourceManifest": "https://nodejs.org/dist/v24.22.1/SHASUMS256.txt"
   },
-  "tag": "pilot-v2026.11.16-rc1"
+  "tag": "pilot-v2026.11.16-rc2",
+  "recoverRelease": "e5b3eb78a10e",
+  "expectedSnippetSHA256": "8884061d02ee9d99ad54301138fc080a098c4603aa825bf19ea46a3cf8ad7813"
 }

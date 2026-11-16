@@ -1,12 +1,22 @@
 """Initial independent installation. Dry-run by default; never changes climbing code/data."""
-import argparse,hashlib,json,os,re,shutil,socket,subprocess,tempfile,urllib.request,zipfile
+import argparse,hashlib,json,os,re,shutil,socket,subprocess,tempfile,time,urllib.request,zipfile
 from datetime import datetime,timezone
 from pathlib import Path,PurePosixPath
 VHOST=Path('/etc/nginx/conf.d/panyandingxian-public.conf');BASE=Path('/opt/study-friends');DATA=Path('/var/lib/study-friends');SNIPPET=Path('/etc/nginx/snippets/study-friends.conf');UNIT=Path('/etc/systemd/system/study-friends.service');ENV=Path('/etc/study-friends.env');PORT=18876;ORIGIN='https://www.panyandingxian.cn'
 def run(*args):return subprocess.run(args,check=True,capture_output=True,text=True).stdout.strip()
 def digest(b):return hashlib.sha256(b).hexdigest()
 def request(path):
- with urllib.request.urlopen(ORIGIN+path,timeout=20) as r:return r.read()
+ with urllib.request.urlopen(urllib.request.Request(ORIGIN+path,headers={'Cache-Control':'no-cache'}),timeout=20) as r:return r.read()
+
+def wait_publication(attempts=20,delay=.5):
+ last={}
+ for attempt in range(attempts):
+  try:
+   home=request('/');health=request('/study/api/health');last={'homeSHA256':digest(home),'studyHealthSHA256':digest(health)}
+   if b'/study/' in home and json.loads(health).get('app')=='study-friends' and json.loads(health).get('ok'):return
+  except Exception as e:last={'type':type(e).__name__}
+  if attempt+1<attempts:time.sleep(delay)
+ raise RuntimeError('Public portal did not become ready: '+json.dumps(last))
 def atomic(path,data,mode=0o644):
  f=tempfile.NamedTemporaryFile(dir=path.parent,delete=False);name=f.name
  try:f.write(data);f.close();os.chmod(name,mode);os.replace(name,path)
@@ -101,9 +111,9 @@ location ^~ /study/ {{
     time.sleep(.2)
   if VHOST.read_bytes()!=original:raise RuntimeError('Virtual host changed during preparation')
   atomic(SNIPPET,snippet.encode());atomic(VHOST,edited);changed=True;run('nginx','-t');run('systemctl','reload','nginx')
+  wait_publication()
   after={'climbingHome':digest(request('/?project=climbing')),'health':digest(request('/api/health')),'ai41':digest(request('/ai41/'))}
   if before!=after:raise RuntimeError('Original project verification failed')
-  assert b'/study/' in request('/') and json.loads(request('/study/api/health'))['ok']
   run('systemctl','enable','study-friends');report.update(status='published',after=after,backup=str(backup),registrationURL=ORIGIN+'/study/#register');atomic(backup/'receipt.json',json.dumps(report,ensure_ascii=False,indent=2).encode(),0o600);return report
  except Exception:
   if changed:atomic(VHOST,original);run('nginx','-t');run('systemctl','reload','nginx')
