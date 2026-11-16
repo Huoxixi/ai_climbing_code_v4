@@ -49,6 +49,12 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Verify study companion package and account isolation
+        if: hashFiles('deploy/study-companion/release.json') != ''
+        run: |
+          python deploy/study-companion/check_bundle.py
+          python -m unittest discover -s deploy/study-companion -p 'test_publish.py' -v
+          node --test deploy/study-companion/api.test.mjs
       - name: Verify frontend
         if: hashFiles('deploy/browser/profile.json') == ''
         working-directory: frontend
