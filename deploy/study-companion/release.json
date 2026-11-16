@@ -2,8 +2,8 @@
   "schema": 1,
   "mode": "study-companion",
   "expectedClimbingCommit": "0225be90a911acdb7e8b3fa847fd14bfd0ba8024",
-  "archiveSHA256": "cfc9bd53d23fb0c1887d317e35d1bb7b1a229470d7b57c0328126e43af16eae8",
-  "release": "f5826b476a20",
+  "archiveSHA256": "d93bdc2c591de7c9157f6bfc69b7b10a1dc855f9a85e678af728114552273420",
+  "release": "e5b3eb78a10e",
   "runtime": {
     "version": "24.22.1",
     "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz",

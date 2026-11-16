@@ -1,11 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync,copyFileSync,mkdirSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApp} from './candidate/server.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {scryptSync} from 'node:crypto';
+import {spawn} from 'node:child_process';
+
+test('production CLI starts through the current release directory symlink',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'study-symlink-')),release=join(dir,'release'),current=join(dir,'current');mkdirSync(release);
+ copyFileSync(new URL('./candidate/server.mjs',import.meta.url),join(release,'server.mjs'));symlinkSync(release,current,process.platform==='win32'?'junction':'dir');
+ const child=spawn(process.execPath,[join(current,'server.mjs')],{env:{...process.env,PORT:'0',PUBLIC_ORIGIN:'',DATA_DIR:join(dir,'data')},stdio:['ignore','pipe','pipe']});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
+ try{
+  const origin=await new Promise((resolve,reject)=>{let output='';const timeout=setTimeout(()=>reject(new Error('CLI did not listen: '+stderr)),8000);child.once('error',err=>{clearTimeout(timeout);reject(err);});child.once('exit',code=>{clearTimeout(timeout);reject(new Error('CLI exited before listening: '+code+' '+stderr));});child.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/http:\/\/127\.0\.0\.1:(\d+)\/study\//);if(match){clearTimeout(timeout);resolve('http://127.0.0.1:'+match[1]);}});});
+  assert.equal((await(await fetch(origin+'/study/api/health')).json()).ok,true);
+ }finally{if(child.exitCode===null){const done=new Promise(resolve=>child.once('exit',resolve));child.kill();await done;}rmSync(dir,{recursive:true,force:true});}
+});
 
 test('legacy five-column account survives nickname migration',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'study-legacy-')),db=new DatabaseSync(join(dir,'study.sqlite')),password='legacy private password',salt='legacy-fixture-salt';
